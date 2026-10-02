@@ -278,6 +278,12 @@ The Work tab in the Control UI answers, at a glance:
 6. **Untracked activity** — things agents did that no Task explains.
 7. **Areas and Projects** — the browsable structure, with derived status and Milestone progress.
 
+**Look.** Work is a native Control UI page that looks built in: it uses only the Control UI's
+theme variables, fonts and full-width page layout, with no palette, fonts or page frame of its
+own, and the host's own components (dialogs, pickers, agent avatars, session summaries) wherever
+they exist. It follows light/dark mode and any theme the human picks. The sidebar icon is
+`listChecks`. Screens are designed in Stitch first, starting from the Control UI's theme.
+
 *(Follow-on)* The same views are available as native widgets the agent can pin to a session
 dashboard — **Needs you**, **Objective progress**, a single **Task** or **Project** — so the view
 reaches into the sessions where the work happens.
@@ -309,3 +315,5 @@ transcripts (OpenClaw owns sessions; Work links to them) · runtime permission e
 5. Work stays separate from OpenClaw's Workboard. From it Work takes: Add to Work from a session,
    live session state, and Warnings (5.0); evidence trust levels, dashboard widgets and durable
    event subscriptions (follow-on).
+6. Work's sidebar icon is `listChecks`. The UI is designed in Stitch first, on OpenClaw's own
+   theme. The `falcon_work` command list waits until the UI design is settled.
