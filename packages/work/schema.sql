@@ -195,7 +195,8 @@ CREATE TABLE ask (
 	subject_kind TEXT NOT NULL,
 	subject_id TEXT NOT NULL,
 	addressed_to TEXT NOT NULL,
-	conversation TEXT NOT NULL,
+	session_key TEXT,                            -- linked OpenClaw session; NULL = Work tab only
+	session_linked_by TEXT,                      -- agent or person who set the current link
 	prompt TEXT NOT NULL,
 	status TEXT NOT NULL CHECK (status IN ('pending','answered','dismissed')),
 	created_at TEXT NOT NULL,

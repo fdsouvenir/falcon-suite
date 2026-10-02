@@ -332,14 +332,14 @@ w.decision({
 	consequence: 'Two automations keep failing nightly.',
 	at: '2026-09-20T20:00:00Z',
 	targets: [['task', tCron]],
-	ask: 'webchat'
+	ask: 'agent:main:dashboard:2faf394d'
 });
 w.question({
 	prompt: 'Which model should I fall back to when Anthropic session limits black me out?',
 	impact: 'During a limit blackout I stop working entirely, as on 09-21.',
 	hypothesis: 'openai/gpt-5.5 as a single fallback leg.',
 	at: '2026-09-21T16:00:00Z',
-	ask: 'webchat'
+	ask: 'agent:main:dashboard:2faf394d'
 });
 w.task({
 	area: aVerl, status: 'completed',
@@ -361,7 +361,7 @@ w.question({
 	prompt: 'Did you authorize the "OpenClaw GitHub Tools" OAuth app?',
 	impact: 'If not, it is an unexplained grant on your GitHub account.',
 	at: '2026-09-17T16:00:00Z',
-	ask: 'webchat'
+	ask: true
 });
 
 // ── Core Improvements: upstream OpenClaw ─────────────────────────────────────────────────────
@@ -520,7 +520,7 @@ w.question({
 	impact: 'The whole Territory Engine is held on this answer.',
 	at: '2026-09-02T00:00:00Z',
 	targets: [['task', tT1a], ['task', tT1b], ['project', territory.id]],
-	ask: 'webchat'
+	ask: true
 });
 w.decision({
 	prompt: 'What should I do next for Home AI Solutions?',
@@ -533,7 +533,7 @@ w.decision({
 	consequence: 'The Objective stays at zero progress; it has had no activity for six weeks.',
 	at: '2026-10-01T14:00:00Z',
 	targets: [['objective', oRevenue], ['project', has.id]],
-	ask: 'webchat'
+	ask: 'agent:main:dashboard:2faf394d'
 });
 
 // ── Betting (stale in 4.x) ───────────────────────────────────────────────────────────────────

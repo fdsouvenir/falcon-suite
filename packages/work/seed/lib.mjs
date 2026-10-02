@@ -311,12 +311,13 @@ export function open(path, schemaPath) {
 		},
 		ask(a) {
 			run(
-				'INSERT INTO ask(id,subject_kind,subject_id,addressed_to,conversation,prompt,status,created_at) VALUES (?,?,?,?,?,?,?,?)',
+				'INSERT INTO ask(id,subject_kind,subject_id,addressed_to,session_key,session_linked_by,prompt,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
 				id(),
 				a.kind,
 				a.id,
 				a.to ?? FRED,
-				a.conversation,
+				typeof a.conversation === 'string' ? a.conversation : null,
+				typeof a.conversation === 'string' ? AGENT : null,
 				a.prompt,
 				'pending',
 				a.at

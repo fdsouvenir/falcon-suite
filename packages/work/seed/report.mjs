@@ -129,7 +129,7 @@ p();
 const asks = all("SELECT * FROM ask WHERE status='pending' ORDER BY created_at");
 const askedIn = (kind, sid) => {
 	const a = asks.find((x) => x.subject_kind === kind && x.subject_id === sid);
-	return a ? ` · _asked in ${a.conversation}_` : ' · _not yet asked_';
+	return a?.session_key ? ` · _linked to session ${a.session_key}_` : ' · _Work tab only_';
 };
 const qs = all("SELECT * FROM question WHERE status='open' ORDER BY created_at");
 const ds = all("SELECT * FROM decision WHERE status='pending' ORDER BY created_at");
@@ -147,7 +147,7 @@ for (const q of qs) {
 	if (q.hypothesis) p(`  - Agent's hypothesis meanwhile: ${q.hypothesis}`);
 }
 for (const a of asks.filter((x) => !['question', 'decision'].includes(x.subject_kind)))
-	p(`- **Ask** to ${who(a.addressed_to)} in ${a.conversation} (${day(a.created_at)}): ${a.prompt}`);
+	p(`- **Ask** to ${who(a.addressed_to)} in ${a.session_key ?? 'Work tab'} (${day(a.created_at)}): ${a.prompt}`);
 if (!asks.length && !qs.length && !ds.length) p('_Nothing._');
 p();
 

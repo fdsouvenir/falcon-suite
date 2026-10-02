@@ -179,12 +179,18 @@ or Project.
 ## 8. Ask
 
 An Ask is the delivery mechanism, not a kind of Work. It records that one specific person or agent
-has been asked for input, in a specific OpenClaw conversation, about one subject.
+has been asked for input about one subject.
 
 - Created for: a Question or Decision addressed to a human; a Task handover to another agent;
   each unfinished item during Project abandonment.
-- **Always shown in the Work tab** under "Needs you". Whether it is also sent into a chat
-  conversation, and which one, is the agent's judgement; the Ask records where it was sent.
+- **Always shown in the Work tab** under "Needs you".
+- **Optionally linked to one OpenClaw session.** The agent may link it when creating the Ask; the
+  human can link, change or remove the session from the Work tab. A linked Ask is posted into that
+  session, and the discussion about it happens there. Whether to link, and to which session, is
+  the agent's judgement; the human's choice always wins. Every link change is recorded with who
+  made it.
+- It can be answered from the Work tab or in its linked session; either way the answer is
+  recorded once.
 - Answering it resubmits the underlying command, which is revalidated; nothing is half-applied
   while waiting.
 
@@ -236,7 +242,7 @@ transcripts (OpenClaw owns sessions; Work links to them) · runtime permission e
 ## 13. Settled with Fred (2026-10-02)
 
 1. Strict mode is off by default; the end-of-turn nudge is the baseline.
-2. Asks always appear in the Work tab; the agent decides whether and where to also send them in
-   chat.
+2. Asks always appear in the Work tab. An Ask can be linked to an OpenClaw session by the agent
+   when it is created, and the human can set or change that link in the UI.
 3. Objective reviews run daily by default.
 4. No effort-share metric. Objectives show when they last made progress instead.

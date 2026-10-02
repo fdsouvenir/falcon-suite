@@ -21,8 +21,8 @@ Owner: fred · Autonomy: **propose** · Last progress: **none since it was set o
 - Sources: Recorded activity, 2026-08-19 to 2026-10-01
 
 Serving it:
-- Project **Home AI Solutions: first paid pilot** — open · 0/0 Tasks completed
 - Project **Territory Engine** — open · 0/2 Tasks completed
+- Project **Home AI Solutions: first paid pilot** — open · 0/0 Tasks completed
 
 ### #2 Fredbot runs customer Offices on its own platform — _active_
 
@@ -56,23 +56,23 @@ Serving it:
 
 ## 2. Needs you
 
-- **Decision** (2026-09-08): Install sharp into the global OpenClaw install? · _not yet asked_
+- **Decision** (2026-09-08): Install sharp into the global OpenClaw install? · _Work tab only_
   - Options: Install it · Skip; keep sending images as attachments
   - Recommended: Install it — Small, reversible, and fixes image attachments.
   - If nobody decides: Image attachments stay broken.
-- **Decision** (2026-09-20): Apply --clear-tools to the two failing automations? · _asked in webchat_
+- **Decision** (2026-09-20): Apply --clear-tools to the two failing automations? · _linked to session agent:main:dashboard:2faf394d_
   - Options: Apply --clear-tools · Wait for the upstream fix
   - Recommended: Apply --clear-tools — Neither job needs tools; the fix is reversible.
   - If nobody decides: Two automations keep failing nightly.
-- **Decision** (2026-10-01): What should I do next for Home AI Solutions? · _asked in webchat_
+- **Decision** (2026-10-01): What should I do next for Home AI Solutions? · _linked to session agent:main:dashboard:2faf394d_
   - Options: Draft the thesis and pilot offer for your review · Wait for Territory 1 and push the Territory Engine · Pause this Objective while the Platform is the priority
   - Recommended: Draft the thesis and pilot offer for your review — It needs nothing from you to start and unblocks the first two milestones.
   - If nobody decides: The Objective stays at zero progress; it has had no activity for six weeks.
-- **Question** (2026-09-02): Which area is Territory 1? · _asked in webchat_
+- **Question** (2026-09-02): Which area is Territory 1? · _Work tab only_
   - Holding up: The whole Territory Engine is held on this answer.
-- **Question** (2026-09-17): Did you authorize the "OpenClaw GitHub Tools" OAuth app? · _asked in webchat_
+- **Question** (2026-09-17): Did you authorize the "OpenClaw GitHub Tools" OAuth app? · _Work tab only_
   - Holding up: If not, it is an unexplained grant on your GitHub account.
-- **Question** (2026-09-21): Which model should I fall back to when Anthropic session limits black me out? · _asked in webchat_
+- **Question** (2026-09-21): Which model should I fall back to when Anthropic session limits black me out? · _linked to session agent:main:dashboard:2faf394d_
   - Holding up: During a limit blackout I stop working entirely, as on 09-21.
   - Agent's hypothesis meanwhile: openai/gpt-5.5 as a single fallback leg.
 
