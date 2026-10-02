@@ -1,6 +1,6 @@
 # Work — seeded view
 
-_Generated from `work-seed.db`. This is the Work tab's content rendered as text (spec §11)._
+_Generated from `work-seed.db`. This is the Work tab's content rendered as text (spec §12)._
 
 ## 1. Objectives
 
@@ -21,8 +21,8 @@ Owner: fred · Autonomy: **propose** · Last progress: **none since it was set o
 - Sources: Recorded activity, 2026-08-19 to 2026-10-01
 
 Serving it:
-- Project **Home AI Solutions: first paid pilot** — open · 0/0 Tasks completed
 - Project **Territory Engine** — open · 0/2 Tasks completed
+- Project **Home AI Solutions: first paid pilot** — open · 0/0 Tasks completed
 
 ### #2 Fredbot runs customer Offices on its own platform — _active_
 
@@ -42,8 +42,8 @@ Owner: fred · Autonomy: **act** (limits: No spending, no customer-facing messag
 - Sources: fredbot-backend#271; fredbot-backend#378; fredbot-backend#330
 
 Serving it:
-- Project **Configure, test and stamp the Platform template** — open · 5/7 Tasks completed
 - Project **Backend 2.0: Job Dispatcher first build** — open · 2/5 Tasks completed
+- Project **Configure, test and stamp the Platform template** — open · 5/7 Tasks completed
 
 ### #3 Land a role at a frontier AI lab — _active_
 
@@ -55,6 +55,17 @@ Serving it:
 - Project **Apply: OpenAI Forward Deployed Engineer (SF)** — open · 0/2 Tasks completed
 
 ## 2. Needs you
+
+- ⚠ **Stalled Task**: Fix cron exec admission failures — no recorded activity since 2026-09-20
+- ⚠ **Stalled Task**: Restore Schwab CLI authentication — no recorded activity since 2026-09-05
+- ⚠ **Stalled Task**: Revise the résumé and application packet — no recorded activity since 2026-09-08
+- ⚠ **Unanswered**: Which model should I fall back to when Anthropic session limits black me out? — open since 2026-09-21
+- ⚠ **Unanswered**: Did you authorize the "OpenClaw GitHub Tools" OAuth app? — open since 2026-09-17
+- ⚠ **Unanswered**: Which area is Territory 1? — open since 2026-09-02
+- ⚠ **Unanswered**: Apply --clear-tools to the two failing automations? — open since 2026-09-20
+- ⚠ **Unanswered**: Install sharp into the global OpenClaw install? — open since 2026-09-08
+- ⚠ **Objective without progress**: Home AI Solutions reaches $10K monthly revenue — no progress since it was set on 2026-08-19
+- ⚠ **Objective without progress**: Land a role at a frontier AI lab — no progress since it was set on 2026-09-08
 
 - **Decision** (2026-09-08): Install sharp into the global OpenClaw install? · _Work tab only_
   - Options: Install it · Skip; keep sending images as attachments

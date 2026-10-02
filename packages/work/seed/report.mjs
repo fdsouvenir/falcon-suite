@@ -1,4 +1,4 @@
-// Render the human's view (spec §11) from a Work 5 database as Markdown.
+// Render the human's view (spec §12) from a Work 5 database as Markdown.
 //   node report.mjs <db> > view.md
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
@@ -80,7 +80,7 @@ const projectStatus = (pr) => {
 
 p('# Work — seeded view');
 p();
-p(`_Generated from \`${process.argv[2] ?? 'work-seed.db'}\`. This is the Work tab's content rendered as text (spec §11)._`);
+p(`_Generated from \`${process.argv[2] ?? 'work-seed.db'}\`. This is the Work tab's content rendered as text (spec §12)._`);
 p();
 
 // 1. Objectives
@@ -152,6 +152,30 @@ for (const o of all("SELECT * FROM objective ORDER BY status<>'active', rank")) 
 // 2. Needs you
 p('## 2. Needs you');
 p();
+// Warnings (spec §11), computed from the data alone.
+const hours = (t) => (Date.parse(today + 'T23:59:59Z') - Date.parse(t)) / 36e5;
+const warnings = [];
+for (const t of all("SELECT * FROM task WHERE status='in_progress'")) {
+	const last = one('SELECT max(at) at FROM activity WHERE task_id=?', t.id).at ?? t.updated_at;
+	if (hours(last) > 48) warnings.push(['Stalled Task', `${title(t.id)} — no recorded activity since ${day(last)}`]);
+}
+for (const t of all("SELECT * FROM task WHERE status='waiting' AND follow_up_at IS NOT NULL"))
+	if (hours(t.follow_up_at) > 0) warnings.push(['Follow-up overdue', `${title(t.id)} — follow-up was due ${day(t.follow_up_at)}`]);
+for (const q of all("SELECT prompt, created_at FROM question WHERE status='open' UNION ALL SELECT prompt, created_at FROM decision WHERE status='pending'"))
+	if (hours(q.created_at) > 7 * 24) warnings.push(['Unanswered', `${q.prompt} — open since ${day(q.created_at)}`]);
+for (const o of all("SELECT * FROM objective WHERE status='active'")) {
+	const at = lastProgress.get(o.id) ?? o.created_at;
+	if (hours(at) > 7 * 24) warnings.push(['Objective without progress', `${o.title} — ${lastProgress.has(o.id) ? `last progress ${day(at)}` : `no progress since it was set on ${day(at)}`}`]);
+}
+const recentUntracked = all('SELECT at FROM activity WHERE task_id IS NULL').filter((a) => hours(a.at) <= 24).length;
+if (recentUntracked) warnings.push(['Untracked activity', `${recentUntracked} action(s) in the last 24 hours that no Task explains`]);
+for (const m of all("SELECT m.*, p.title pt FROM milestone m JOIN project p ON p.id=m.project_id WHERE m.status='open'")) {
+	const ts = all('SELECT status FROM task WHERE milestone_id=?', m.id);
+	if (ts.length && ts.every((t) => ['completed', 'abandoned'].includes(t.status)))
+		warnings.push(['Milestone ready', `${m.pt}: “${m.title}” — every Task is finished but it is not achieved`]);
+}
+for (const [kind, text] of warnings) p(`- ⚠ **${kind}**: ${text}`);
+if (warnings.length) p();
 const asks = all("SELECT * FROM ask WHERE status='pending' ORDER BY created_at");
 const askedIn = (kind, sid) => {
 	const a = asks.find((x) => x.subject_kind === kind && x.subject_id === sid);

@@ -37,6 +37,7 @@ These are the only domain words. The UI, the agent tool and this document use th
 | **Decision** | A choice between options that a named decider has to make. | When decided |
 | **Finding** | Something learned that is worth keeping. | Can be retracted or superseded |
 | **Ask** | A pending request for one specific person's or agent's input, delivered into a conversation. | When answered |
+| **Warning** | Something the plugin noticed from the data itself that needs attention (§11). | When the condition clears |
 
 Parts of a Task: **Definition** (title, description, done-when), **Plan** (how it will be done),
 **Result** (what was produced, with evidence). Relationships: **serves**, **depends on**,
@@ -137,6 +138,10 @@ reason; the Task points at the current one. Revising a finished Task requires re
   before completion (for review or handoff); completion accepts one.
 - When a Definition is revised, earlier Plans and Results are shown as written for an older
   definition; they are never silently re-pinned.
+- *(Follow-on)* Each source on a Result says how far it can be trusted: **reported** by the agent,
+  **captured** by the hooks (§10), or **verified** by the plugin checking it exists (a commit in
+  the repository, a published release, a reachable URL). The human sees at a glance how much of a
+  "done" rests on the agent's word.
 
 ### Dependencies
 
@@ -212,6 +217,16 @@ object. There can be many; nobody sets them by hand, and they are never edited.
 - A session that no longer exists stays visible as missing; it is never silently dropped or
   replaced.
 
+**Add to Work.** From any session's header, the human (or the agent) can turn the conversation
+into a Task: titled from the session's label or opening prompt, its description seeded from the
+conversation, and its discussion session set to that session. The session header then shows the
+linked Task, so a conversation and its Work open from each other.
+
+**Live session state.** Wherever a discussion session is shown, its current state is shown with
+it — running, idle, done, failed, missing — kept current by OpenClaw's completion hooks and a
+periodic check. Work **never changes a Task's status to match its session**: the status is what was
+recorded. A mismatch becomes a Warning (§11) instead.
+
 ## 10. Enforcement and evidence
 
 This is what makes Work a record rather than a diary.
@@ -229,38 +244,68 @@ config, external APIs). Chat-only turns and read-only tool use are exempt.
 Evidence captured by hooks is stored as activity on the Task with its source; the agent never has
 to restate it. Results cite it.
 
-## 11. The human's view
+## 11. Warnings
+
+Warnings are computed by the plugin from Work's own data and session state. They need nobody to
+report anything, which is the point: they catch what the record should say but doesn't. Each
+names the object, what is wrong and since when, and clears itself when the condition no longer
+holds.
+
+| Warning | Condition (thresholds configurable) |
+| --- | --- |
+| Stalled Task | In progress with no recorded activity for 48 hours. |
+| Session mismatch | In progress, but its discussion session has been idle for 48 hours, has failed, or is missing. |
+| Follow-up overdue | Waiting past its `follow_up_at`. |
+| Unanswered | A Question or Decision open for more than 7 days. |
+| Objective without progress | An active Objective with no completed serving Task for 7 days. |
+| Untracked activity | Activity no Task explains, in the last 24 hours. |
+| Milestone ready | Every associated Task is finished but the Milestone is not achieved. |
+
+Warnings appear in **Needs you** and feed the agent's daily Objective review.
+
+## 12. The human's view
 
 The Work tab in the Control UI answers, at a glance:
 
 1. **Objectives** — each active Objective by rank: KPI readings against target, latest review,
    Work in flight serving it, and when it last made progress (the most recent completed Task
    serving it).
-2. **Needs you** — Questions, Decisions and Asks addressed to you, oldest first.
+2. **Needs you** — Questions, Decisions and Asks addressed to you, and Warnings (§11), oldest
+   first.
 3. **Now** — what each agent has in progress.
 4. **Waiting** — Tasks waiting, on whom, and which follow-ups are due.
 5. **Recently completed** — with Results and their evidence.
 6. **Untracked activity** — things agents did that no Task explains.
 7. **Areas and Projects** — the browsable structure, with derived status and Milestone progress.
 
-## 12. Persistence and agent interface
+*(Follow-on)* The same views are available as native widgets the agent can pin to a session
+dashboard — **Needs you**, **Objective progress**, a single **Task** or **Project** — so the view
+reaches into the sessions where the work happens.
+
+## 13. Persistence and agent interface
 
 - One private SQLite database per Gateway. Immutable revisions for Definitions, Plans, Results,
   KPI readings and reviews. Append-only event log of every command: actor, time, before/after.
 - Optimistic versions on every mutable object; idempotency keys on every command.
 - One agent tool, `falcon_work`, with typed commands and compact read projections. Exact command
   list follows this spec once the model is agreed.
+- *(Follow-on)* Durable event subscriptions with a read position, so an agent or automation
+  resumes without missing or double-reading changes (for example "a Question you raised was
+  answered"). The brief in §10 is built from these.
 
-## 13. Not in Work
+## 14. Not in Work
 
 Schedules and recurrence (OpenClaw automations own them) · Tags (Area and Project are the only
 classification) · Phases · standalone Change Requests, Reviews or Blockers · documents and files ·
 transcripts (OpenClaw owns sessions; Work links to them) · runtime permission enforcement.
 
-## 14. Settled with Fred (2026-10-02)
+## 15. Settled with Fred (2026-10-02)
 
 1. Strict mode is off by default; the end-of-turn nudge is the baseline.
 2. Asks always appear in the Work tab. Objectives, Projects, Tasks and Asks can each have one
    discussion session, set by the agent at creation or by the human in the UI (§9).
 3. Objective reviews run daily by default.
 4. No effort-share metric. Objectives show when they last made progress instead.
+5. Work stays separate from OpenClaw's Workboard. From it Work takes: Add to Work from a session,
+   live session state, and Warnings (5.0); evidence trust levels, dashboard widgets and durable
+   event subscriptions (follow-on).
