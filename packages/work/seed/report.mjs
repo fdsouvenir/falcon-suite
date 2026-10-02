@@ -60,17 +60,25 @@ p();
 // 1. Objectives
 p('## 1. Objectives');
 p();
-const totalActivity = one('SELECT count(*) n FROM activity').n || 1;
-const effort = new Map();
-for (const a of all('SELECT task_id FROM activity WHERE task_id IS NOT NULL'))
-	for (const o of servesOf(a.task_id)) effort.set(o, (effort.get(o) ?? 0) + 1);
+// Last progress: the most recent completed Task serving the Objective, directly or via its Project.
+const today = '2026-10-01';
+const lastProgress = new Map();
+for (const t of all("SELECT id, updated_at FROM task WHERE status='completed'"))
+	for (const o of servesOf(t.id))
+		if ((lastProgress.get(o) ?? '') < t.updated_at) lastProgress.set(o, t.updated_at);
+const since = (o) => {
+	const at = lastProgress.get(o.id);
+	if (!at) return `none since it was set on ${day(o.created_at)}`;
+	const days = Math.round((Date.parse(today) - Date.parse(day(at))) / 864e5);
+	return `${day(at)} (${days} days ago)`;
+};
 for (const o of all("SELECT * FROM objective ORDER BY status<>'active', rank")) {
 	p(`### ${o.rank ? `#${o.rank} ` : ''}${o.title} — _${o.status}_`);
 	p();
 	p(`> ${o.statement}`);
 	p();
 	p(
-		`Owner: ${who(o.owner)} · Autonomy: **${o.autonomy}**${o.limits ? ` (limits: ${o.limits})` : ''} · Share of recorded agent activity: **${Math.round((100 * (effort.get(o.id) ?? 0)) / totalActivity)}%**`
+		`Owner: ${who(o.owner)} · Autonomy: **${o.autonomy}**${o.limits ? ` (limits: ${o.limits})` : ''} · Last progress: **${since(o)}**`
 	);
 	p();
 	const kpis = all('SELECT * FROM kpi WHERE objective_id=?', o.id);

@@ -8,7 +8,7 @@ _Generated from `work-seed.db`. This is the Work tab's content rendered as text 
 
 > Home AI Solutions sustains at least $10,000 in monthly revenue for two consecutive months.
 
-Owner: fred · Autonomy: **propose** · Share of recorded agent activity: **0%**
+Owner: fred · Autonomy: **propose** · Last progress: **none since it was set on 2026-08-19**
 
 | KPI | Latest | Target | Readings |
 | --- | --- | --- | --- |
@@ -28,7 +28,7 @@ Serving it:
 
 > [Inferred by Verl, needs Fred's wording] Fredbot Platform hosts, operates and recovers customer Offices without hand-holding, so the business can sell them.
 
-Owner: fred · Autonomy: **act** (limits: No spending, no customer-facing messages, no destructive changes to Platform-01 without Fred's approval.) · Share of recorded agent activity: **50%**
+Owner: fred · Autonomy: **act** (limits: No spending, no customer-facing messages, no destructive changes to Platform-01 without Fred's approval.) · Last progress: **2026-09-30 (1 days ago)**
 
 | KPI | Latest | Target | Readings |
 | --- | --- | --- | --- |
@@ -42,14 +42,14 @@ Owner: fred · Autonomy: **act** (limits: No spending, no customer-facing messag
 - Sources: fredbot-backend#271; fredbot-backend#378; fredbot-backend#330
 
 Serving it:
-- Project **Configure, test and stamp the Platform template** — open · 5/7 Tasks completed
 - Project **Backend 2.0: Job Dispatcher first build** — open · 2/5 Tasks completed
+- Project **Configure, test and stamp the Platform template** — open · 5/7 Tasks completed
 
 ### #3 Land a role at a frontier AI lab — _active_
 
 > [Inferred by Verl from the open applications, needs Fred's wording] Fred is hired into an applied-AI role at OpenAI or Anthropic.
 
-Owner: fred · Autonomy: **propose** · Share of recorded agent activity: **0%**
+Owner: fred · Autonomy: **propose** · Last progress: **none since it was set on 2026-09-08**
 
 Serving it:
 - Project **Apply: OpenAI Forward Deployed Engineer (SF)** — open · 0/2 Tasks completed

@@ -69,8 +69,8 @@ Fields:
 
 **Reviews**: the agent periodically writes a review of each active Objective: what moved, what did
 not and why, what it proposes next. A review cites the Work and sources it rests on and is
-immutable once written. The schedule is an OpenClaw automation (for example weekly); Work never
-schedules anything itself. A review with proposals creates Decisions addressed to the owner.
+immutable once written. Reviews are **daily by default**; the schedule is an OpenClaw automation,
+and Work never schedules anything itself. A review with proposals creates Decisions addressed to the owner.
 
 ## 4. Area
 
@@ -183,7 +183,8 @@ has been asked for input, in a specific OpenClaw conversation, about one subject
 
 - Created for: a Question or Decision addressed to a human; a Task handover to another agent;
   each unfinished item during Project abandonment.
-- Delivered into the named conversation (chat, Discord, etc.) and shown in the human's view.
+- **Always shown in the Work tab** under "Needs you". Whether it is also sent into a chat
+  conversation, and which one, is the agent's judgement; the Ask records where it was sent.
 - Answering it resubmits the underlying command, which is revalidated; nothing is half-applied
   while waiting.
 
@@ -196,7 +197,7 @@ This is what makes Work a record rather than a diary.
 | `before_prompt_build` | Injects a **short** live brief instead of a schema: active Objectives by rank, the agent's in-progress Tasks, Questions/Decisions answered since its last turn, what is waiting on it. |
 | `after_tool_call` | Attaches what the agent actually did — command run, file changed, message sent, commit made, session link — to its in-progress Task. With no in-progress Task, it is recorded as **untracked activity**, visible to the human. |
 | `before_agent_finalize` | If the turn changed something and touched no Work, asks the model for one more pass to record it. |
-| `before_tool_call` *(strict mode, per agent, off by default)* | Refuses tools that change things until the agent has a Task in progress. |
+| `before_tool_call` *(strict mode, per agent, **off by default**)* | Refuses tools that change things until the agent has a Task in progress. |
 
 What counts as work: any tool call that changes something (files, commands, outgoing messages,
 config, external APIs). Chat-only turns and read-only tool use are exempt.
@@ -209,7 +210,8 @@ to restate it. Results cite it.
 The Work tab in the Control UI answers, at a glance:
 
 1. **Objectives** — each active Objective by rank: KPI readings against target, latest review,
-   Work in flight serving it, and the share of recent agent effort that went to it.
+   Work in flight serving it, and when it last made progress (the most recent completed Task
+   serving it).
 2. **Needs you** — Questions, Decisions and Asks addressed to you, oldest first.
 3. **Now** — what each agent has in progress.
 4. **Waiting** — Tasks waiting, on whom, and which follow-ups are due.
@@ -231,10 +233,10 @@ Schedules and recurrence (OpenClaw automations own them) · Tags (Area and Proje
 classification) · Phases · standalone Change Requests, Reviews or Blockers · documents and files ·
 transcripts (OpenClaw owns sessions; Work links to them) · runtime permission enforcement.
 
-## 13. Open questions for Fred
+## 13. Settled with Fred (2026-10-02)
 
-1. **Strict mode default.** Off for every agent, with the end-of-turn nudge as the baseline?
-2. **Where Asks reach you.** In the Work tab only, or also delivered into chat?
-3. **Objective reviews.** Weekly by default? Same cadence for every Objective?
-4. **Effort share.** Is "share of agent effort per Objective" useful, and is counting recorded
-   activity a fair measure of effort?
+1. Strict mode is off by default; the end-of-turn nudge is the baseline.
+2. Asks always appear in the Work tab; the agent decides whether and where to also send them in
+   chat.
+3. Objective reviews run daily by default.
+4. No effort-share metric. Objectives show when they last made progress instead.
