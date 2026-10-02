@@ -183,18 +183,36 @@ has been asked for input about one subject.
 
 - Created for: a Question or Decision addressed to a human; a Task handover to another agent;
   each unfinished item during Project abandonment.
-- **Always shown in the Work tab** under "Needs you".
-- **Optionally linked to one OpenClaw session.** The agent may link it when creating the Ask; the
-  human can link, change or remove the session from the Work tab. A linked Ask is posted into that
-  session, and the discussion about it happens there. Whether to link, and to which session, is
-  the agent's judgement; the human's choice always wins. Every link change is recorded with who
-  made it.
-- It can be answered from the Work tab or in its linked session; either way the answer is
-  recorded once.
+- **Always shown in the Work tab** under "Needs you". If it has a session (§9), it is also posted
+  there and discussed there.
+- It can be answered from the Work tab or in its session; either way the answer is recorded once.
 - Answering it resubmits the underlying command, which is revalidated; nothing is half-applied
   while waiting.
 
-## 9. Enforcement and evidence
+## 9. Sessions
+
+OpenClaw owns sessions. Work relates to them in two separate ways.
+
+**Where the work happened** — automatic history. Every session in which an agent worked on a Task,
+or raised a Question, Decision or Finding, is captured by the hooks in §10 as evidence on that
+object. There can be many; nobody sets them by hand, and they are never edited.
+
+**Where it is discussed** — one optional session per **Objective, Project, Task and Ask**.
+
+- The agent may set it when it creates the object. The human can set, change or remove it from the
+  Work tab. The human's choice always wins, and every change records who made it.
+- What it means: an Objective's daily review is posted there; a Project or Task is worked and
+  talked about there; an Ask is posted there.
+- **Fallback:** a Task with no session uses its Project's. An Ask with no session uses the session
+  of what it is about: the Task it hands over, or the Task or Project its Question or Decision
+  targets (which may in turn fall back to the Project's). So linking a Project to a thread puts
+  all of its Tasks and Asks there unless one says otherwise.
+- Questions, Decisions and Findings have no discussion session of their own: Questions and
+  Decisions are discussed through their Ask, and Findings are reference material.
+- A session that no longer exists stays visible as missing; it is never silently dropped or
+  replaced.
+
+## 10. Enforcement and evidence
 
 This is what makes Work a record rather than a diary.
 
@@ -211,7 +229,7 @@ config, external APIs). Chat-only turns and read-only tool use are exempt.
 Evidence captured by hooks is stored as activity on the Task with its source; the agent never has
 to restate it. Results cite it.
 
-## 10. The human's view
+## 11. The human's view
 
 The Work tab in the Control UI answers, at a glance:
 
@@ -225,7 +243,7 @@ The Work tab in the Control UI answers, at a glance:
 6. **Untracked activity** — things agents did that no Task explains.
 7. **Areas and Projects** — the browsable structure, with derived status and Milestone progress.
 
-## 11. Persistence and agent interface
+## 12. Persistence and agent interface
 
 - One private SQLite database per Gateway. Immutable revisions for Definitions, Plans, Results,
   KPI readings and reviews. Append-only event log of every command: actor, time, before/after.
@@ -233,16 +251,16 @@ The Work tab in the Control UI answers, at a glance:
 - One agent tool, `falcon_work`, with typed commands and compact read projections. Exact command
   list follows this spec once the model is agreed.
 
-## 12. Not in Work
+## 13. Not in Work
 
 Schedules and recurrence (OpenClaw automations own them) · Tags (Area and Project are the only
 classification) · Phases · standalone Change Requests, Reviews or Blockers · documents and files ·
 transcripts (OpenClaw owns sessions; Work links to them) · runtime permission enforcement.
 
-## 13. Settled with Fred (2026-10-02)
+## 14. Settled with Fred (2026-10-02)
 
 1. Strict mode is off by default; the end-of-turn nudge is the baseline.
-2. Asks always appear in the Work tab. An Ask can be linked to an OpenClaw session by the agent
-   when it is created, and the human can set or change that link in the UI.
+2. Asks always appear in the Work tab. Objectives, Projects, Tasks and Asks can each have one
+   discussion session, set by the agent at creation or by the human in the UI (§9).
 3. Objective reviews run daily by default.
 4. No effort-share metric. Objectives show when they last made progress instead.

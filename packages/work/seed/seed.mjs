@@ -193,6 +193,7 @@ w.finding({
 // ── Fredbot Platform: Backend 2.0 and the Job Dispatcher ─────────────────────────────────────
 const backend = w.project({
 	title: 'Backend 2.0: Job Dispatcher first build',
+	session: 'agent:main:dashboard:f7a19055-2d39-47e4-bbd8-937bd8fc0fa6',
 	outcome: 'The Job Dispatcher runs a real Job end to end on the management Building, under the Backend 2.0 design.',
 	area: aPlatform,
 	serves: [oPlatform],
@@ -230,6 +231,7 @@ w.task({
 const tNocAuth = w.task({
 	project: backend.id, milestone: backend.ms.job, status: 'in_progress', serves: [oPlatform],
 	title: 'Authenticate the NOC backend to the API independently of Verl',
+	session: 'agent:main:dashboard:0ac08262-f9cf-442e-bad3-b6fde542637d',
 	description: 'Permanent NOC-backend → API authentication that does not route through my session.',
 	done_when: 'The NOC backend calls the API with its own credential and the call is audited.',
 	at: '2026-10-01T15:00:00Z',
@@ -317,6 +319,7 @@ w.question({
 const tCron = w.task({
 	area: aVerl, status: 'in_progress',
 	title: 'Fix cron exec admission failures',
+	session: 'agent:main:dashboard:4c069a99-f4e1-4b30-9933-ff64d264b2d8',
 	description: 'Two automations fail exec admission (upstream #142271/#145753).',
 	done_when: 'Both automations run their exec steps for a week without admission failures.',
 	at: '2026-09-20T15:00:00Z',
@@ -332,14 +335,14 @@ w.decision({
 	consequence: 'Two automations keep failing nightly.',
 	at: '2026-09-20T20:00:00Z',
 	targets: [['task', tCron]],
-	ask: 'agent:main:dashboard:2faf394d'
+	ask: true
 });
 w.question({
 	prompt: 'Which model should I fall back to when Anthropic session limits black me out?',
 	impact: 'During a limit blackout I stop working entirely, as on 09-21.',
 	hypothesis: 'openai/gpt-5.5 as a single fallback leg.',
 	at: '2026-09-21T16:00:00Z',
-	ask: 'agent:main:dashboard:2faf394d'
+	ask: 'agent:main:dashboard:2faf394d-f265-43bd-94de-8cf18ba5ab92'
 });
 w.task({
 	area: aVerl, status: 'completed',
@@ -368,6 +371,7 @@ w.question({
 w.task({
 	area: aCore, status: 'waiting',
 	title: 'Route Portals through the gateway listener',
+	session: 'agent:main:dashboard:73d91193-3bfa-4e5d-b885-1519a7143854',
 	description: 'Patch first, PR later (Fred). Build 2026.9.5-1 carries the fix.',
 	done_when: 'The patched build is installed and Portals load through the gateway; the PR is filed upstream.',
 	at: '2026-09-19T15:00:00Z', updated: '2026-09-20T20:00:00Z',
@@ -383,6 +387,7 @@ w.finding({
 // ── Home: cold plunge ────────────────────────────────────────────────────────────────────────
 const plunge = w.project({
 	title: 'Reactive cold plunge controller',
+	session: 'agent:main:dashboard:02f954fb-dee9-4aff-8f6f-09a4063a0dad',
 	outcome: 'The plunge holds the requested temperature by reacting to the tub sensor, with a 35.0 freeze floor.',
 	area: aHome,
 	at: '2026-09-18T15:00:00Z',
@@ -450,6 +455,7 @@ w.task({
 // ── Personal ─────────────────────────────────────────────────────────────────────────────────
 const openai = w.project({
 	title: 'Apply: OpenAI Forward Deployed Engineer (SF)',
+	session: 'agent:main:openai-application-watch',
 	outcome: 'A tailored, truthful application is submitted.',
 	area: aPersonal,
 	serves: [oCareer],
@@ -474,6 +480,7 @@ w.task({
 w.task({
 	area: aPersonal, status: 'completed',
 	title: 'Advise on the Shough + Lemon for Deebo + Allgeier trade',
+	session: 'agent:main:dashboard:21ea60b8-9931-4090-9e6b-6b4847e2cefd',
 	description: 'ESPN league 309524 trade offer.',
 	done_when: 'Fred has a recommendation with reasoning.',
 	at: '2026-09-24T15:00:00Z',
@@ -533,7 +540,7 @@ w.decision({
 	consequence: 'The Objective stays at zero progress; it has had no activity for six weeks.',
 	at: '2026-10-01T14:00:00Z',
 	targets: [['objective', oRevenue], ['project', has.id]],
-	ask: 'agent:main:dashboard:2faf394d'
+	ask: 'agent:main:dashboard:2faf394d-f265-43bd-94de-8cf18ba5ab92'
 });
 
 // ── Betting (stale in 4.x) ───────────────────────────────────────────────────────────────────

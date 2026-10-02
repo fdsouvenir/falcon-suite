@@ -11,6 +11,8 @@ CREATE TABLE objective (
 	autonomy TEXT NOT NULL DEFAULT 'propose' CHECK (autonomy IN ('propose','act')),
 	limits TEXT,
 	owner TEXT NOT NULL,
+	session_key TEXT,                            -- discussion session (spec §9); NULL = none
+	session_linked_by TEXT,                      -- agent or person who set the current session
 	created_at TEXT NOT NULL,
 	version INTEGER NOT NULL DEFAULT 1,
 	CHECK (autonomy = 'propose' OR limits IS NOT NULL)
@@ -62,6 +64,8 @@ CREATE TABLE project (
 	area_id TEXT NOT NULL REFERENCES area(id),
 	accountable_human TEXT NOT NULL,
 	abandoned_at TEXT,                           -- status is derived; only abandonment is stored
+	session_key TEXT,                            -- discussion session (spec §9); NULL = none
+	session_linked_by TEXT,                      -- agent or person who set the current session
 	created_at TEXT NOT NULL,
 	version INTEGER NOT NULL DEFAULT 1
 ) STRICT;
@@ -93,6 +97,8 @@ CREATE TABLE task (
 	waiting_on_ref TEXT,
 	resume_when TEXT,
 	follow_up_at TEXT,
+	session_key TEXT,                            -- discussion session (spec §9); NULL = none
+	session_linked_by TEXT,                      -- agent or person who set the current session
 	created_at TEXT NOT NULL,
 	updated_at TEXT NOT NULL,
 	version INTEGER NOT NULL DEFAULT 1,
@@ -134,7 +140,7 @@ CREATE TABLE task_result (
 	at TEXT NOT NULL
 ) STRICT;
 
--- What the agent actually did, captured by hooks (spec §9). task_id NULL = untracked activity.
+-- What the agent actually did, captured by hooks (spec §10). task_id NULL = untracked activity.
 CREATE TABLE activity (
 	id TEXT PRIMARY KEY,
 	task_id TEXT REFERENCES task(id),
@@ -195,8 +201,8 @@ CREATE TABLE ask (
 	subject_kind TEXT NOT NULL,
 	subject_id TEXT NOT NULL,
 	addressed_to TEXT NOT NULL,
-	session_key TEXT,                            -- linked OpenClaw session; NULL = Work tab only
-	session_linked_by TEXT,                      -- agent or person who set the current link
+	session_key TEXT,                            -- discussion session (spec §9); NULL = none
+	session_linked_by TEXT,                      -- agent or person who set the current session
 	prompt TEXT NOT NULL,
 	status TEXT NOT NULL CHECK (status IN ('pending','answered','dismissed')),
 	created_at TEXT NOT NULL,

@@ -33,6 +33,8 @@ export function open(path, schemaPath) {
 		);
 	const AGENT = 'agent:verl';
 	const FRED = 'person:fred';
+	const sessionOf = (table, oid, key) =>
+		key && run(`UPDATE ${table} SET session_key=?, session_linked_by=? WHERE id=?`, key, AGENT, oid);
 
 	const api = {
 		db,
@@ -51,6 +53,7 @@ export function open(path, schemaPath) {
 				o.at
 			);
 			ev(o.at, FRED, 'create', 'objective', oid);
+			sessionOf('objective', oid, o.session);
 			for (const k of o.kpis ?? []) {
 				const kid = id();
 				run(
@@ -115,6 +118,7 @@ export function open(path, schemaPath) {
 				pr.at
 			);
 			ev(pr.at, pr.by ?? AGENT, 'create', 'project', pid);
+			sessionOf('project', pid, pr.session);
 			for (const o of pr.serves ?? []) link('serves', 'project', pid, 'objective', o);
 			const ms = {};
 			(pr.milestones ?? []).forEach((m, i) => {
@@ -170,6 +174,7 @@ export function open(path, schemaPath) {
 				at
 			);
 			ev(at, t.by ?? AGENT, 'create', 'task', tid);
+			sessionOf('task', tid, t.session);
 			(t.revisions ?? []).forEach((r, i) => {
 				run(
 					'INSERT INTO task_definition(task_id,rev,title,description,done_when,reason,author,at) VALUES (?,?,?,?,?,?,?,?)',

@@ -1,6 +1,10 @@
-// Render the human's view (spec §10) from a Work 5 database as Markdown.
+// Render the human's view (spec §11) from a Work 5 database as Markdown.
 //   node report.mjs <db> > view.md
 import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+
+// Session titles come from OpenClaw in the real UI; here a captured map stands in for it.
+const sessionTitles = JSON.parse(readFileSync(new URL('./sessions.json', import.meta.url), 'utf8'));
 
 const db = new DatabaseSync(process.argv[2] ?? 'work-seed.db', { readOnly: true });
 const all = (sql, ...a) => db.prepare(sql).all(...a);
@@ -8,6 +12,28 @@ const one = (sql, ...a) => db.prepare(sql).get(...a);
 const out = [];
 const p = (s = '') => out.push(s);
 const who = (ref) => ref.replace(/^(person|agent):/, '');
+
+// Discussion session with fallback (spec §9). Returns { key, from } or null.
+const projectSession = (pid) => {
+	const r = pid && one('SELECT session_key FROM project WHERE id=?', pid);
+	return r?.session_key ? { key: r.session_key, from: 'Project' } : null;
+};
+const taskSession = (tid) => {
+	const t = one('SELECT session_key, project_id FROM task WHERE id=?', tid);
+	if (!t) return null;
+	return t.session_key ? { key: t.session_key, from: null } : projectSession(t.project_id);
+};
+const subjectSession = (kind, sid) => {
+	if (kind === 'task') return taskSession(sid);
+	for (const l of all(`SELECT target_kind k, target_id id FROM link WHERE kind='targets' AND source_id=?`, sid)) {
+		const r = l.k === 'task' ? taskSession(l.id) : l.k === 'project' ? projectSession(l.id) : null;
+		if (r) return { key: r.key, from: l.k === 'task' ? 'its Task' : 'its Project' };
+	}
+	return null;
+};
+const sessionLabel = (r) =>
+	r ? `session “${sessionTitles[r.key] ?? r.key}”${r.from ? ` (from ${r.from})` : ''}` : null;
+const sessionNote = (r) => (r ? ` · ${sessionLabel(r)}` : '');
 const day = (t) => (t ? t.slice(0, 10) : '');
 const title = (id) => one('SELECT title FROM task_definition WHERE task_id=? ORDER BY rev DESC', id)?.title;
 const src = (json) =>
@@ -54,7 +80,7 @@ const projectStatus = (pr) => {
 
 p('# Work — seeded view');
 p();
-p(`_Generated from \`${process.argv[2] ?? 'work-seed.db'}\`. This is the Work tab's content rendered as text (spec §10)._`);
+p(`_Generated from \`${process.argv[2] ?? 'work-seed.db'}\`. This is the Work tab's content rendered as text (spec §11)._`);
 p();
 
 // 1. Objectives
@@ -78,7 +104,7 @@ for (const o of all("SELECT * FROM objective ORDER BY status<>'active', rank")) 
 	p(`> ${o.statement}`);
 	p();
 	p(
-		`Owner: ${who(o.owner)} · Autonomy: **${o.autonomy}**${o.limits ? ` (limits: ${o.limits})` : ''} · Last progress: **${since(o)}**`
+		`Owner: ${who(o.owner)} · Autonomy: **${o.autonomy}**${o.limits ? ` (limits: ${o.limits})` : ''} · Last progress: **${since(o)}**${o.session_key ? ` · reviews posted to ${sessionLabel({ key: o.session_key })}` : ''}`
 	);
 	p();
 	const kpis = all('SELECT * FROM kpi WHERE objective_id=?', o.id);
@@ -129,7 +155,8 @@ p();
 const asks = all("SELECT * FROM ask WHERE status='pending' ORDER BY created_at");
 const askedIn = (kind, sid) => {
 	const a = asks.find((x) => x.subject_kind === kind && x.subject_id === sid);
-	return a?.session_key ? ` · _linked to session ${a.session_key}_` : ' · _Work tab only_';
+	const r = a?.session_key ? { key: a.session_key, from: null } : subjectSession(kind, sid);
+	return r ? ` · _posted to ${sessionLabel(r)}_` : ' · _Work tab only_';
 };
 const qs = all("SELECT * FROM question WHERE status='open' ORDER BY created_at");
 const ds = all("SELECT * FROM decision WHERE status='pending' ORDER BY created_at");
@@ -156,7 +183,7 @@ p('## 3. Now — in progress');
 p();
 for (const t of all("SELECT * FROM task WHERE status='in_progress' ORDER BY agent, updated_at DESC")) {
 	const b = blockers(t.id);
-	p(`- **${who(t.agent)}** — ${title(t.id)}${b.length ? ` _(blocked: ${b.join('; ')})_` : ''}`);
+	p(`- **${who(t.agent)}** — ${title(t.id)}${sessionNote(taskSession(t.id))}${b.length ? ` _(blocked: ${b.join('; ')})_` : ''}`);
 }
 p();
 
@@ -164,7 +191,7 @@ p();
 p('## 4. Waiting');
 p();
 for (const t of all("SELECT * FROM task WHERE status='waiting' ORDER BY follow_up_at")) {
-	p(`- ${title(t.id)} — waiting on **${who(t.waiting_on_ref)}** (${t.waiting_on_kind})`);
+	p(`- ${title(t.id)} — waiting on **${who(t.waiting_on_ref)}** (${t.waiting_on_kind})${sessionNote(taskSession(t.id))}`);
 	p(`  - ${t.waiting_for}`);
 	p(`  - Resume when: ${t.resume_when}${t.follow_up_at ? ` · follow up ${day(t.follow_up_at)}` : ''}`);
 }
@@ -175,7 +202,7 @@ p('## 5. Recently completed');
 p();
 for (const t of all("SELECT * FROM task WHERE status='completed' ORDER BY updated_at DESC LIMIT 25")) {
 	const r = one('SELECT * FROM task_result WHERE task_id=? AND accepted=1', t.id);
-	p(`- **${title(t.id)}** (${day(t.updated_at)}, ${t.agent ? who(t.agent) : 'unassigned'})`);
+	p(`- **${title(t.id)}** (${day(t.updated_at)}, ${t.agent ? who(t.agent) : 'unassigned'})${sessionNote(taskSession(t.id))}`);
 	if (r) p(`  - Result: ${r.content}`);
 	if (r) p(`  - Evidence: ${src(r.sources)}`);
 }
@@ -199,7 +226,7 @@ for (const a of all("SELECT * FROM area WHERE status='active' ORDER BY title")) 
 	p();
 	for (const pr of all('SELECT * FROM project WHERE area_id=? ORDER BY created_at', a.id)) {
 		const ms = all('SELECT * FROM milestone WHERE project_id=? ORDER BY ord', pr.id);
-		p(`- **Project: ${pr.title}** — ${projectStatus(pr)}`);
+		p(`- **Project: ${pr.title}** — ${projectStatus(pr)}${pr.session_key ? sessionNote({ key: pr.session_key }) : ''}`);
 		p(`  - Outcome: ${pr.outcome}`);
 		for (const m of ms) {
 			p(`  - Milestone ${m.ord}. ${m.title} — ${m.status}`);

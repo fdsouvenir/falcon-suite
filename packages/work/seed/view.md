@@ -1,6 +1,6 @@
 # Work — seeded view
 
-_Generated from `work-seed.db`. This is the Work tab's content rendered as text (spec §10)._
+_Generated from `work-seed.db`. This is the Work tab's content rendered as text (spec §11)._
 
 ## 1. Objectives
 
@@ -21,8 +21,8 @@ Owner: fred · Autonomy: **propose** · Last progress: **none since it was set o
 - Sources: Recorded activity, 2026-08-19 to 2026-10-01
 
 Serving it:
-- Project **Territory Engine** — open · 0/2 Tasks completed
 - Project **Home AI Solutions: first paid pilot** — open · 0/0 Tasks completed
+- Project **Territory Engine** — open · 0/2 Tasks completed
 
 ### #2 Fredbot runs customer Offices on its own platform — _active_
 
@@ -42,8 +42,8 @@ Owner: fred · Autonomy: **act** (limits: No spending, no customer-facing messag
 - Sources: fredbot-backend#271; fredbot-backend#378; fredbot-backend#330
 
 Serving it:
-- Project **Backend 2.0: Job Dispatcher first build** — open · 2/5 Tasks completed
 - Project **Configure, test and stamp the Platform template** — open · 5/7 Tasks completed
+- Project **Backend 2.0: Job Dispatcher first build** — open · 2/5 Tasks completed
 
 ### #3 Land a role at a frontier AI lab — _active_
 
@@ -60,11 +60,11 @@ Serving it:
   - Options: Install it · Skip; keep sending images as attachments
   - Recommended: Install it — Small, reversible, and fixes image attachments.
   - If nobody decides: Image attachments stay broken.
-- **Decision** (2026-09-20): Apply --clear-tools to the two failing automations? · _linked to session agent:main:dashboard:2faf394d_
+- **Decision** (2026-09-20): Apply --clear-tools to the two failing automations? · _posted to session “cron exec admission rejected — diagnosis” (from its Task)_
   - Options: Apply --clear-tools · Wait for the upstream fix
   - Recommended: Apply --clear-tools — Neither job needs tools; the fix is reversible.
   - If nobody decides: Two automations keep failing nightly.
-- **Decision** (2026-10-01): What should I do next for Home AI Solutions? · _linked to session agent:main:dashboard:2faf394d_
+- **Decision** (2026-10-01): What should I do next for Home AI Solutions? · _posted to session “Falcon Dash”_
   - Options: Draft the thesis and pilot offer for your review · Wait for Territory 1 and push the Territory Engine · Pause this Objective while the Platform is the priority
   - Recommended: Draft the thesis and pilot offer for your review — It needs nothing from you to start and unblocks the first two milestones.
   - If nobody decides: The Objective stays at zero progress; it has had no activity for six weeks.
@@ -72,15 +72,15 @@ Serving it:
   - Holding up: The whole Territory Engine is held on this answer.
 - **Question** (2026-09-17): Did you authorize the "OpenClaw GitHub Tools" OAuth app? · _Work tab only_
   - Holding up: If not, it is an unexplained grant on your GitHub account.
-- **Question** (2026-09-21): Which model should I fall back to when Anthropic session limits black me out? · _linked to session agent:main:dashboard:2faf394d_
+- **Question** (2026-09-21): Which model should I fall back to when Anthropic session limits black me out? · _posted to session “Falcon Dash”_
   - Holding up: During a limit blackout I stop working entirely, as on 09-21.
   - Agent's hypothesis meanwhile: openai/gpt-5.5 as a single fallback leg.
 
 ## 3. Now — in progress
 
-- **verl** — Authenticate the NOC backend to the API independently of Verl
-- **verl** — Fix cron exec admission failures _(blocked: pending Decision: Apply --clear-tools to the two failing automations?)_
-- **verl** — Revise the résumé and application packet
+- **verl** — Authenticate the NOC backend to the API independently of Verl · session “Build Fredbot Backend 2.0 Manager”
+- **verl** — Fix cron exec admission failures · session “cron exec admission rejected — diagnosis” _(blocked: pending Decision: Apply --clear-tools to the two failing automations?)_
+- **verl** — Revise the résumé and application packet · session “OpenAI application watch” (from Project)
 - **verl** — Restore Schwab CLI authentication
 
 ## 4. Waiting
@@ -88,13 +88,13 @@ Serving it:
 - Build and stamp the provisional Platform template — waiting on **fred** (person)
   - Fred deferred this until he buys a server for Platform-02.
   - Resume when: Fred has the Platform-02 hardware.
-- Add impact numbers for the TDL submission — waiting on **fred** (person)
+- Add impact numbers for the TDL submission — waiting on **fred** (person) · session “OpenAI application watch” (from Project)
   - Only Fred has the TDL outcome numbers.
   - Resume when: Fred supplies the numbers or says to drop the claim.
-- Reconnect GitHub OAuth for the Building Manager — waiting on **fred** (person)
+- Reconnect GitHub OAuth for the Building Manager — waiting on **fred** (person) · session “Building Manager + Job Dispatcher” (from Project)
   - Only an operator can reconnect the GitHub OAuth grant.
   - Resume when: Fred has reconnected GitHub in the operator settings. · follow up 2026-10-02
-- Route Portals through the gateway listener — waiting on **fred** (person)
+- Route Portals through the gateway listener — waiting on **fred** (person) · session “Portal Fix”
   - Fred wants to test the patched build himself before it is installed.
   - Resume when: Fred has tested 2026.9.5-1. · follow up 2026-10-03
 - Find out what the two April reimbursements covered — waiting on **adrien** (person)
@@ -103,13 +103,13 @@ Serving it:
 
 ## 5. Recently completed
 
-- **Prepare building-903 as management-test** (2026-09-30, verl)
+- **Prepare building-903 as management-test** (2026-09-30, verl) · session “Building Manager + Job Dispatcher” (from Project)
   - Result: VM1003 prepared and renamed management-test.
   - Evidence: fredbot-backend#378
-- **Bootstrap Firestore for the Dispatcher** (2026-09-28, verl)
+- **Bootstrap Firestore for the Dispatcher** (2026-09-28, verl) · session “Building Manager + Job Dispatcher” (from Project)
   - Result: dispatcher-staging bootstrapped; 60 checks pass.
   - Evidence: commit:5be4a2d
-- **Advise on the Shough + Lemon for Deebo + Allgeier trade** (2026-09-24, verl)
+- **Advise on the Shough + Lemon for Deebo + Allgeier trade** (2026-09-24, verl) · session “ESPN Fantasy”
   - Result: Lean accept. Note: the ESPN cookies on hand are Michael's, not Fred's.
   - Evidence: notes:2026-09-24
 - **Trim USER.md below the load limit** (2026-09-24, verl)
@@ -121,10 +121,10 @@ Serving it:
 - **Raise the gateway memory ceiling** (2026-09-20, verl)
   - Result: Transient 10G/11G on 09-19, made persistent on 09-20 under Fred's delegation correction.
   - Evidence: resources.conf (backup kept)
-- **Set the freeze floor to 35.0** (2026-09-19, verl)
+- **Set the freeze floor to 35.0** (2026-09-19, verl) · session “Cold plunge cooling system troubleshooting” (from Project)
   - Result: v4.1.0 deployed; 57 tests pass.
   - Evidence: repo:cold-plunge-controller v4.1.0
-- **Rewrite the plunge controller to react to the tub sensor** (2026-09-19, verl)
+- **Rewrite the plunge controller to react to the tub sensor** (2026-09-19, verl) · session “Cold plunge cooling system troubleshooting” (from Project)
   - Result: v4.0.0 deployed, then v4.0.1 (median capacity, MIN_NET_RATE 0.5) after Fred caught a run outside the window.
   - Evidence: commit:f6daeec; commit:b84f5aa
 - **Qualify boot and recovery** (2026-09-17, verl)
@@ -194,7 +194,7 @@ _Platform-01, Buildings, Offices and the Backend that runs them._ — accountabl
     - [open] Re-evaluate the backup lifecycle after the prune failure
   - Milestone 3. Stamp and reproduce the Platform baseline — open
     - [waiting] Build and stamp the provisional Platform template
-- **Project: Backend 2.0: Job Dispatcher first build** — open
+- **Project: Backend 2.0: Job Dispatcher first build** — open · session “Building Manager + Job Dispatcher”
   - Outcome: The Job Dispatcher runs a real Job end to end on the management Building, under the Backend 2.0 design.
   - Milestone 1. Architecture decisions settled — achieved
   - Milestone 2. Dispatcher installed on the management Building — achieved
@@ -209,7 +209,7 @@ _Platform-01, Buildings, Offices and the Backend that runs them._ — accountabl
 
 _House systems: Home Assistant, cold plunge, lighting, climate, voice._ — accountable: fred
 
-- **Project: Reactive cold plunge controller** — completed
+- **Project: Reactive cold plunge controller** — completed · session “Cold plunge cooling system troubleshooting”
   - Outcome: The plunge holds the requested temperature by reacting to the tub sensor, with a 35.0 freeze floor.
   - Milestone 1. Reactive v4 controller live — achieved
     - [completed] Rewrite the plunge controller to react to the tub sensor
@@ -235,7 +235,7 @@ _Getting customers for Fred's businesses: sites, funnels, territory sales._ — 
 
 _Fred's own errands, career, family and leisure._ — accountable: fred
 
-- **Project: Apply: OpenAI Forward Deployed Engineer (SF)** — open
+- **Project: Apply: OpenAI Forward Deployed Engineer (SF)** — open · session “OpenAI application watch”
   - Outcome: A tailored, truthful application is submitted.
   - Milestone 1. Application submitted — open
     - [in_progress] Revise the résumé and application packet
