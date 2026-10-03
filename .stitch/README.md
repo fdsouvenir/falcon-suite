@@ -15,3 +15,5 @@
 | Work overview, dark | `b096ab84af9e4f48862dc4d87b5c07a6` | colour-only remap to the dark host tokens; some text left too dim (mockup artifact) |
 | Areas & Projects | `ed1c650d99aa4640a49c394362a6b2e0` | generated, 1 correction round, then Area chip row replacing the Area pane |
 | Project page + Task panel | `e390e417ff9c47718183ff72dd451ebc` | generated, 2 correction rounds (second restored panel content an edit had replaced with placeholders) |
+| Objectives tab | `fc3e9f9e40a54548a51624f588aeda2e` | generated, 1 correction round |
+| Objective page | `cfe0d614345a4d5c918c053c5a567b7d` | generated, 1 correction round |
