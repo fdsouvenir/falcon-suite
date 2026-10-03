@@ -1,0 +1,8 @@
+node_modules/
+*.db
+*.db-*
+# Real personal data — local only, never published
+packages/work/seed/seed.mjs
+packages/work/seed/view.md
+packages/work/seed/sessions.json
+.stitch/screens/
