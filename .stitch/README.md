@@ -12,3 +12,4 @@
 | Screen | Stitch id | Rounds |
 | --- | --- | --- |
 | Work overview | `e4517724fd104f13919c2c738eac0ac7` | generated, 2 correction rounds |
+| Work overview, dark | `b096ab84af9e4f48862dc4d87b5c07a6` | colour-only remap to the dark host tokens; some text left too dim (mockup artifact) |
