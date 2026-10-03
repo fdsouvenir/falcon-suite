@@ -17,3 +17,4 @@
 | Project page + Task panel | `e390e417ff9c47718183ff72dd451ebc` | generated, 2 correction rounds (second restored panel content an edit had replaced with placeholders) |
 | Objectives tab | `fc3e9f9e40a54548a51624f588aeda2e` | generated, 1 correction round |
 | Objective page | `cfe0d614345a4d5c918c053c5a567b7d` | generated, 1 correction round |
+| Activity tab | `9fb33c0fc8924755b0dfff69b7a9b12b` | generated, 1 correction round |
