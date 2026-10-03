@@ -168,12 +168,20 @@ or Project.
 - `open` → `answered` (answer, confidence `tentative`/`supported`/`confirmed`, sources) or
   `withdrawn` (reason). An answer can be superseded by a later answer; history is kept.
 - An agent may record a **hypothesis** while waiting; it is shown as such, never as the answer.
+- **Answering in the Work tab:** a text field and **Answer** submit immediately, recorded as the
+  human's answer with `confirmed` confidence; a brief Undo follows, and a later answer can replace
+  it with history kept. When the agent recorded a hypothesis, **Use <agent>'s hypothesis** records
+  that hypothesis as the human's confirmed answer, attributed to the human as accepting it. With a
+  session, **Discuss in session** opens it.
 
 **Decision** — a choice with consequences.
 - `prompt`, `options` (two or more: label, summary, risks, trade-offs), `recommendation`
   (option + rationale), `deciders`, `consequence_of_no_decision`.
-- `pending` → `decided` (option, rationale, decider) · `deferred` (until a date) · `withdrawn`
-  · `superseded` (by another Decision).
+- `pending` → `decided` (option, decider, rationale) · `deferred` (until a date) · `withdrawn`
+  · `superseded` (by another Decision). Rationale is required when an agent decides and
+  optional when a human does.
+- **Deciding in the Work tab:** clicking an option selects it (it does not decide); a row then
+  offers an optional "Why?" and **Decide**. The recommended option is labelled, not preselected.
 - Uses: approval of consequential steps (§6), agent proposals toward an Objective (§3), and
   genuine design choices.
 
@@ -317,3 +325,6 @@ transcripts (OpenClaw owns sessions; Work links to them) · runtime permission e
    event subscriptions (follow-on).
 6. Work's sidebar icon is `listChecks`. The UI is designed in Stitch first, on OpenClaw's own
    theme. The `falcon_work` command list waits until the UI design is settled.
+7. Answering a Question submits immediately (with Undo); "Use <agent>'s hypothesis" accepts the
+   hypothesis as the human's answer. Choosing a Decision option only selects it; Decide commits,
+   with an optional reason when a human decides.
