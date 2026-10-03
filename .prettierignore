@@ -1,0 +1,8 @@
+dist/
+packages/*/dist/
+.stitch/screens/
+packages/work/seed/
+*.db
+# Written by `openclaw plugins build`
+packages/*/openclaw.plugin.json
+packages/*/package.json

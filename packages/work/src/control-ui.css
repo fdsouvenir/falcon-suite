@@ -1,0 +1,18 @@
+/* Host theme variables only: no colours, fonts or page frame of our own (spec §12, Look). */
+.falcon-work-page {
+	display: grid;
+	gap: var(--space-4);
+	padding: var(--space-6) var(--space-7);
+	color: var(--text);
+}
+.falcon-work-title {
+	margin: 0;
+	color: var(--text-strong);
+	font-size: calc(var(--control-ui-text-lg) * 1.5);
+	font-weight: 600;
+	line-height: 1.25;
+}
+.falcon-work-empty {
+	margin: 0;
+	color: var(--muted);
+}

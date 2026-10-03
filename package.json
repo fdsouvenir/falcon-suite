@@ -1,0 +1,21 @@
+{
+	"name": "falcon-suite",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"packages/*"
+	],
+	"scripts": {
+		"build": "npm run build --workspaces",
+		"validate": "npm run validate --workspaces",
+		"test": "npm test --workspaces",
+		"format": "prettier --write .",
+		"format:check": "prettier --check ."
+	},
+	"devDependencies": {
+		"prettier": "^3.6.0"
+	},
+	"engines": {
+		"node": ">=24.16"
+	}
+}

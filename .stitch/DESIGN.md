@@ -10,24 +10,24 @@ These values are taken from the installed Control UI stylesheet (OpenClaw 2026.9
 
 ## Color (light theme)
 
-| Token | Value | Use |
-| --- | --- | --- |
-| `--bg` | `#faf9f7` | Page background (warm off-white) |
-| `--bg-content` | `#f4f1ec` | Content area behind lists |
-| `--bg-elevated` / `--card` | `#ffffff` | Cards, rows, dialogs |
-| `--bg-hover` | `#efebe4` | Row hover, active toggles |
-| `--text` | `#403c35` | Body text |
-| `--text-strong` | `#211e1a` | Titles, item names |
-| `--muted` | `#6e6960` | Secondary text, metadata, section labels |
-| `--border` | `#e8e4dc` | Hairline separators and card borders |
-| `--border-strong` | `#d6d0c5` | Inputs, emphasised separators |
-| `--accent` | `#bd4531` | Primary buttons, links, focus (brick red) |
-| `--accent-subtle` | `#bd453114` | Selected/attention background tint |
-| `--accent-2` | `#0d9488` | Secondary highlight (teal), selected items |
-| `--ok` | `#166534` | Completed, achieved |
-| `--warn` | `#92400e` | Warnings, waiting, overdue |
-| `--danger` | `#b91c1c` | Failed, destructive |
-| `--info` | `#1d4ed8` | Informational |
+| Token                      | Value       | Use                                        |
+| -------------------------- | ----------- | ------------------------------------------ |
+| `--bg`                     | `#faf9f7`   | Page background (warm off-white)           |
+| `--bg-content`             | `#f4f1ec`   | Content area behind lists                  |
+| `--bg-elevated` / `--card` | `#ffffff`   | Cards, rows, dialogs                       |
+| `--bg-hover`               | `#efebe4`   | Row hover, active toggles                  |
+| `--text`                   | `#403c35`   | Body text                                  |
+| `--text-strong`            | `#211e1a`   | Titles, item names                         |
+| `--muted`                  | `#6e6960`   | Secondary text, metadata, section labels   |
+| `--border`                 | `#e8e4dc`   | Hairline separators and card borders       |
+| `--border-strong`          | `#d6d0c5`   | Inputs, emphasised separators              |
+| `--accent`                 | `#bd4531`   | Primary buttons, links, focus (brick red)  |
+| `--accent-subtle`          | `#bd453114` | Selected/attention background tint         |
+| `--accent-2`               | `#0d9488`   | Secondary highlight (teal), selected items |
+| `--ok`                     | `#166534`   | Completed, achieved                        |
+| `--warn`                   | `#92400e`   | Warnings, waiting, overdue                 |
+| `--danger`                 | `#b91c1c`   | Failed, destructive                        |
+| `--info`                   | `#1d4ed8`   | Informational                              |
 
 Dark theme equivalents: bg `#0e1015`, card `#161920`, text `#bcbcc0`, text-strong `#f4f4f5`,
 muted `#8b8b94`, border `#1e2028`, accent `#ff5c5c`.

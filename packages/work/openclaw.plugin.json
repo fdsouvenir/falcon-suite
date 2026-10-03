@@ -1,0 +1,26 @@
+{
+  "id": "falcon-work",
+  "name": "Falcon Work",
+  "description": "A record of what your agents do, why, and what needs you.",
+  "version": "5.0.0-dev.0",
+  "categories": [
+    "agent-orchestration"
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "controlUi": {
+    "entry": "dist/control-ui/aefaae2781aab0d0a3c9310bf2aada82c5ee7268ee7c6daeb2d4877c43b405e4/index.js",
+    "styles": [
+      "dist/control-ui/aefaae2781aab0d0a3c9310bf2aada82c5ee7268ee7c6daeb2d4877c43b405e4/index.css"
+    ]
+  },
+  "contracts": {
+    "tools": []
+  }
+}

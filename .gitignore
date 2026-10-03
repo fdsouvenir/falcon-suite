@@ -1,4 +1,7 @@
 node_modules/
+dist/
+packages/*/dist/
+node_modules/
 *.db
 *.db-*
 # Real personal data — local only, never published

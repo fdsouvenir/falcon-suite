@@ -25,19 +25,19 @@ Per-person permissioning may come later and is out of scope here.
 
 These are the only domain words. The UI, the agent tool and this document use them exactly.
 
-| Word | What it is | Ends? |
-| --- | --- | --- |
-| **Objective** | A north star the human constantly wants progress toward. | Only when the human says so |
-| **KPI** | An optional measure of an Objective, with a target. | With its Objective |
-| **Area** | A standing responsibility that has to keep running. | No (can be retired) |
-| **Project** | A bounded outcome, reached through ordered Milestones. | Yes |
-| **Milestone** | A checkpoint inside one Project, with an observable success condition. | Yes |
-| **Task** | One piece of executable work with a definition of done. | Yes |
-| **Question** | Missing knowledge that someone has to supply. | When answered |
-| **Decision** | A choice between options that a named decider has to make. | When decided |
-| **Finding** | Something learned that is worth keeping. | Can be retracted or superseded |
-| **Ask** | A pending request for one specific person's or agent's input, delivered into a conversation. | When answered |
-| **Warning** | Something the plugin noticed from the data itself that needs attention (§11). | When the condition clears |
+| Word          | What it is                                                                                   | Ends?                          |
+| ------------- | -------------------------------------------------------------------------------------------- | ------------------------------ |
+| **Objective** | A north star the human constantly wants progress toward.                                     | Only when the human says so    |
+| **KPI**       | An optional measure of an Objective, with a target.                                          | With its Objective             |
+| **Area**      | A standing responsibility that has to keep running.                                          | No (can be retired)            |
+| **Project**   | A bounded outcome, reached through ordered Milestones.                                       | Yes                            |
+| **Milestone** | A checkpoint inside one Project, with an observable success condition.                       | Yes                            |
+| **Task**      | One piece of executable work with a definition of done.                                      | Yes                            |
+| **Question**  | Missing knowledge that someone has to supply.                                                | When answered                  |
+| **Decision**  | A choice between options that a named decider has to make.                                   | When decided                   |
+| **Finding**   | Something learned that is worth keeping.                                                     | Can be retracted or superseded |
+| **Ask**       | A pending request for one specific person's or agent's input, delivered into a conversation. | When answered                  |
+| **Warning**   | Something the plugin noticed from the data itself that needs attention (§11).                | When the condition clears      |
 
 Parts of a Task: **Definition** (title, description, done-when), **Plan** (how it will be done),
 **Result** (what was produced, with evidence). Relationships: **serves**, **depends on**,
@@ -46,7 +46,7 @@ Parts of a Task: **Definition** (title, description, done-when), **Plan** (how i
 
 ## 3. Objective
 
-An Objective is the *why*. Projects and Tasks link to the Objectives they **serve**. Upkeep in an
+An Objective is the _why_. Projects and Tasks link to the Objectives they **serve**. Upkeep in an
 Area may serve no Objective; that is normal, and the human can see the split.
 
 Fields:
@@ -138,7 +138,7 @@ reason; the Task points at the current one. Revising a finished Task requires re
   before completion (for review or handoff); completion accepts one.
 - When a Definition is revised, earlier Plans and Results are shown as written for an older
   definition; they are never silently re-pinned.
-- *(Follow-on)* Each source on a Result says how far it can be trusted: **reported** by the agent,
+- _(Follow-on)_ Each source on a Result says how far it can be trusted: **reported** by the agent,
   **captured** by the hooks (§10), or **verified** by the plugin checking it exists (a commit in
   the repository, a published release, a reachable URL). The human sees at a glance how much of a
   "done" rests on the agent's word.
@@ -164,6 +164,7 @@ All three may **target** Objectives, Projects, Milestones or Tasks, and may be p
 or Project.
 
 **Question** — missing knowledge.
+
 - `prompt`, `impact` (what is held up), `answerable_by` (people/agents).
 - `open` → `answered` (answer, confidence `tentative`/`supported`/`confirmed`, sources) or
   `withdrawn` (reason). An answer can be superseded by a later answer; history is kept.
@@ -175,6 +176,7 @@ or Project.
   session, **Discuss in session** opens it.
 
 **Decision** — a choice with consequences.
+
 - `prompt`, `options` (two or more: label, summary, risks, trade-offs), `recommendation`
   (option + rationale), `deciders`, `consequence_of_no_decision`.
 - `pending` → `decided` (option, decider, rationale) · `deferred` (until a date) · `withdrawn`
@@ -186,6 +188,7 @@ or Project.
   genuine design choices.
 
 **Finding** — something learned.
+
 - `conclusion`, `confidence`, at least one source.
 - `current` → `retracted` (reason) or `superseded` (by another Finding).
 
@@ -239,12 +242,12 @@ recorded. A mismatch becomes a Warning (§11) instead.
 
 This is what makes Work a record rather than a diary.
 
-| OpenClaw hook | What Work does |
-| --- | --- |
-| `before_prompt_build` | Injects a **short** live brief instead of a schema: active Objectives by rank, the agent's in-progress Tasks, Questions/Decisions answered since its last turn, what is waiting on it. |
-| `after_tool_call` | Attaches what the agent actually did — command run, file changed, message sent, commit made, session link — to its in-progress Task. With no in-progress Task, it is recorded as **untracked activity**, visible to the human. |
-| `before_agent_finalize` | If the turn changed something and touched no Work, asks the model for one more pass to record it. |
-| `before_tool_call` *(strict mode, per agent, **off by default**)* | Refuses tools that change things until the agent has a Task in progress. |
+| OpenClaw hook                                                     | What Work does                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `before_prompt_build`                                             | Injects a **short** live brief instead of a schema: active Objectives by rank, the agent's in-progress Tasks, Questions/Decisions answered since its last turn, what is waiting on it.                                         |
+| `after_tool_call`                                                 | Attaches what the agent actually did — command run, file changed, message sent, commit made, session link — to its in-progress Task. With no in-progress Task, it is recorded as **untracked activity**, visible to the human. |
+| `before_agent_finalize`                                           | If the turn changed something and touched no Work, asks the model for one more pass to record it.                                                                                                                              |
+| `before_tool_call` _(strict mode, per agent, **off by default**)_ | Refuses tools that change things until the agent has a Task in progress.                                                                                                                                                       |
 
 What counts as work: any tool call that changes something (files, commands, outgoing messages,
 config, external APIs). Chat-only turns and read-only tool use are exempt.
@@ -259,15 +262,15 @@ report anything, which is the point: they catch what the record should say but d
 names the object, what is wrong and since when, and clears itself when the condition no longer
 holds.
 
-| Warning | Condition (thresholds configurable) |
-| --- | --- |
-| Stalled Task | In progress with no recorded activity for 48 hours. |
-| Session mismatch | In progress, but its discussion session has been idle for 48 hours, has failed, or is missing. |
-| Follow-up overdue | Waiting past its `follow_up_at`. |
-| Unanswered | A Question or Decision open for more than 7 days. |
-| Objective without progress | An active Objective with no completed serving Task for 7 days. |
-| Untracked activity | Activity no Task explains, in the last 24 hours. |
-| Milestone ready | Every associated Task is finished but the Milestone is not achieved. |
+| Warning                    | Condition (thresholds configurable)                                                            |
+| -------------------------- | ---------------------------------------------------------------------------------------------- |
+| Stalled Task               | In progress with no recorded activity for 48 hours.                                            |
+| Session mismatch           | In progress, but its discussion session has been idle for 48 hours, has failed, or is missing. |
+| Follow-up overdue          | Waiting past its `follow_up_at`.                                                               |
+| Unanswered                 | A Question or Decision open for more than 7 days.                                              |
+| Objective without progress | An active Objective with no completed serving Task for 7 days.                                 |
+| Untracked activity         | Activity no Task explains, in the last 24 hours.                                               |
+| Milestone ready            | Every associated Task is finished but the Milestone is not achieved.                           |
 
 Warnings appear in **Needs you** and feed the agent's daily Objective review.
 
@@ -301,7 +304,7 @@ own, and the host's own components (dialogs, pickers, agent avatars, session sum
 they exist. It follows light/dark mode and any theme the human picks. The sidebar icon is
 `listChecks`. Screens are designed in Stitch first, starting from the Control UI's theme.
 
-*(Follow-on)* The same views are available as native widgets the agent can pin to a session
+_(Follow-on)_ The same views are available as native widgets the agent can pin to a session
 dashboard — **Needs you**, **Objective progress**, a single **Task** or **Project** — so the view
 reaches into the sessions where the work happens.
 
@@ -312,7 +315,7 @@ reaches into the sessions where the work happens.
 - Optimistic versions on every mutable object; idempotency keys on every command.
 - One agent tool, `falcon_work`, with typed commands and compact read projections. Exact command
   list follows this spec once the model is agreed.
-- *(Follow-on)* Durable event subscriptions with a read position, so an agent or automation
+- _(Follow-on)_ Durable event subscriptions with a read position, so an agent or automation
   resumes without missing or double-reading changes (for example "a Question you raised was
   answered"). The brief in §10 is built from these.
 
