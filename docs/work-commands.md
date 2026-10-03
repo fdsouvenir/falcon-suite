@@ -180,10 +180,9 @@ These have no command; the plugin writes them so nobody has to report them (spec
 `archive`/`restore` — replaced by the commands above or dropped with the concepts they served
 (change control, review targets, archive state).
 
-## 10. Open questions for Fred
+## 10. Settled with Fred (2026-10-03)
 
-1. **Agents and Objectives.** Agents cannot create, rank or change Objectives; they propose them as
-   Decisions. Agents also need a Decision before creating Work toward a *propose* Objective. Right?
-2. **`expected_version` optional for agents.** Agents rarely race; requiring versions made 4.x
-   brittle. The UI always sends it. OK?
-3. **Retiring Areas.** Human only, and only when empty. OK?
+1. Agents cannot create, rank or change Objectives; they propose them as Decisions, and need a
+   decided Decision before creating Work toward a *propose* Objective.
+2. `expected_version` is optional for agents and always sent by the UI.
+3. Retiring an Area is human only, and only when it holds no unfinished Work.
