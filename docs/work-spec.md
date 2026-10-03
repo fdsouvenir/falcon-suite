@@ -286,6 +286,15 @@ The Work tab in the Control UI answers, at a glance:
 6. **Untracked activity** — things agents did that no Task explains.
 7. **Areas and Projects** — the browsable structure, with derived status and Milestone progress.
 
+**Navigation.** Areas are a row of filter chips under the tabs ("All" by default, grouping
+Projects under Area headings), never a second sidebar. Objectives, Projects and Areas open as full
+pages with a breadcrumb and Back. Tasks, Questions, Decisions and Findings open in a side panel
+over the current page, with "Open as page". Session chips open the session; evidence chips open
+the commit, PR or file. A Project page shows its header (status, serves, accountable, session with
+live state; Edit, Change session, Abandon), outcome, ordered Milestones with their Tasks and
+achievement basis — **Mark achieved** is disabled with the reason while the closure guard holds —
+the Questions, Decisions and Findings about it, and its history.
+
 **Look.** Work is a native Control UI page that looks built in: it uses only the Control UI's
 theme variables, fonts and full-width page layout, with no palette, fonts or page frame of its
 own, and the host's own components (dialogs, pickers, agent avatars, session summaries) wherever

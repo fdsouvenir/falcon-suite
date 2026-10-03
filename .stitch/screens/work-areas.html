@@ -299,88 +299,19 @@
 </nav>
 </header>
 <!-- Page Body (Two Panes on page background #faf9f7, padding 24px-32px) -->
-<main class="flex-1 p-6 md:p-8 flex gap-8 items-start max-w-[1400px]">
+<main class="flex-1 p-6 md:p-8 flex flex-col gap-6 max-w-[1400px] w-full">
 <!-- LEFT PANE: Dense list of Areas (~260px width) -->
-<section class="w-64 flex-shrink-0 flex flex-col select-none">
-<div class="flex items-center justify-between pb-2 mb-1 border-b border-border">
-<span class="font-headline-sm text-headline-sm font-semibold text-muted">Areas</span>
-<span class="text-label-xs font-code text-muted">8</span>
-</div>
-<div class="flex flex-col gap-0.5">
-<!-- Betting -->
-<a class="px-3 py-2 rounded-lg hover:bg-bg-hover text-text transition-colors flex items-center justify-between group" href="#">
-<span class="font-body-md text-body-md text-text group-hover:text-text-strong">Betting</span>
-<span class="font-label-xs text-label-xs text-muted">1 Task</span>
-</a>
-<!-- Core Improvements -->
-<a class="px-3 py-2 rounded-lg hover:bg-bg-hover text-text transition-colors flex items-center justify-between group" href="#">
-<span class="font-body-md text-body-md text-text group-hover:text-text-strong">Core Improvements</span>
-<span class="font-label-xs text-label-xs text-muted">1 Task</span>
-</a>
-<!-- Finances -->
-<a class="px-3 py-2 rounded-lg hover:bg-bg-hover text-text transition-colors flex items-center justify-between group" href="#">
-<span class="font-body-md text-body-md text-text group-hover:text-text-strong">Finances</span>
-<span class="font-label-xs text-label-xs text-muted">1 Project · 2 Tasks</span>
-</a>
-<!-- Fredbot Platform (SELECTED) -->
-<a class="px-3 py-2 rounded-lg bg-bg-hover text-text-strong font-medium transition-colors flex items-center justify-between" href="#">
-<span class="font-body-md text-body-md font-semibold text-text-strong">Fredbot Platform</span>
-<span class="font-label-xs text-label-xs text-text-strong font-medium">2 Projects · 11 Tasks</span>
-</a>
-<!-- Home -->
-<a class="px-3 py-2 rounded-lg hover:bg-bg-hover text-text transition-colors flex items-center justify-between group" href="#">
-<span class="font-body-md text-body-md text-text group-hover:text-text-strong">Home</span>
-<span class="font-label-xs text-label-xs text-muted">1 Project</span>
-</a>
-<!-- Marketing -->
-<a class="px-3 py-2 rounded-lg hover:bg-bg-hover text-text transition-colors flex items-center justify-between group" href="#">
-<span class="font-body-md text-body-md text-text group-hover:text-text-strong">Marketing</span>
-<span class="font-label-xs text-label-xs text-muted">2 Projects</span>
-</a>
-<!-- Personal -->
-<a class="px-3 py-2 rounded-lg hover:bg-bg-hover text-text transition-colors flex items-center justify-between group" href="#">
-<span class="font-body-md text-body-md text-text group-hover:text-text-strong">Personal</span>
-<span class="font-label-xs text-label-xs text-muted">1 Project · 1 Task</span>
-</a>
-<!-- Verl -->
-<a class="px-3 py-2 rounded-lg hover:bg-bg-hover text-text transition-colors flex items-center justify-between group" href="#">
-<span class="font-body-md text-body-md text-text group-hover:text-text-strong">Verl</span>
-<span class="font-label-xs text-label-xs text-muted">5 Tasks</span>
-</a>
-</div>
-<!-- + New Area Action -->
-<button class="mt-3 px-3 py-1.5 flex items-center gap-1.5 text-muted hover:text-text-strong font-body-sm text-body-sm transition-colors text-left rounded-lg hover:bg-bg-hover">
-<span class="material-symbols-outlined" style="font-size: 16px;">add</span>
-<span>New Area</span>
-</button>
-</section>
 <!-- RIGHT PANE: Selected Area Details (flex-1) -->
-<section class="flex-1 flex flex-col min-w-0">
+<div class="flex items-center gap-2 flex-wrap pb-1 border-b border-border"><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>All</span><span class="text-muted">8</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Betting</span><span class="text-muted">1</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Core Improvements</span><span class="text-muted">1</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Finances</span><span class="text-muted">3</span></button><button class="px-2.5 py-1 rounded-full text-body-sm bg-bg-hover text-text-strong font-semibold border border-border-strong flex items-center gap-1.5"><span>Fredbot Platform</span><span class="text-muted font-normal">13</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Home</span><span class="text-muted">1</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Marketing</span><span class="text-muted">2</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Personal</span><span class="text-muted">2</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Verl</span><span class="text-muted">5</span></button><button class="px-2 py-1 text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover rounded flex items-center gap-1 transition-colors"><span class="material-symbols-outlined" style="font-size: 15px;">add</span><span>Area</span></button></div><section class="flex-1 flex flex-col min-w-0">
 <!-- Area Header -->
-<div class="flex items-start justify-between pb-6 border-b border-border mb-6">
-<div>
-<div class="flex items-center gap-3">
-<h2 class="text-[20px] leading-7 font-semibold text-text-strong">Fredbot Platform</h2>
-</div>
-<p class="font-body-sm text-body-sm text-muted mt-0.5">Platform-01, Buildings, Offices and the Backend that runs them.</p>
-<div class="flex items-center gap-1.5 mt-2 font-body-sm text-body-sm text-muted">
-<span>Accountable:</span>
-<div class="w-4 h-4 rounded-full bg-[#bd4531] text-white flex items-center justify-center font-semibold text-[10px]">f</div>
-<span class="text-text font-medium">fred</span>
-</div>
-</div>
-<!-- Action: New Project -->
-<button class="border border-border-strong bg-card hover:bg-bg-hover text-text px-3 py-1.5 rounded-lg font-headline-sm text-headline-sm transition-colors">
-              New Project
-            </button>
-</div>
+<div class="flex items-center justify-between py-2 border-b border-border mb-5 gap-4 flex-wrap"><div class="flex items-center gap-2.5 flex-wrap min-w-0"><h2 class="text-[15px] font-semibold text-text-strong leading-normal">Fredbot Platform</h2><span class="text-muted text-body-sm">·</span><p class="font-body-sm text-[13px] text-muted truncate">Platform-01, Buildings, Offices and the Backend that runs them.</p><span class="text-muted text-body-sm">·</span><div class="flex items-center gap-1.5 font-body-sm text-[13px] text-muted"><span class="text-muted">Accountable:</span><div class="w-4 h-4 rounded-full bg-[#bd4531] text-white flex items-center justify-center font-semibold text-[10px]">f</div><span class="text-text-strong font-medium">fred</span></div></div><button class="border border-border bg-card hover:bg-bg-hover text-text px-3 py-1 rounded font-body-sm text-[13px] transition-colors flex-shrink-0">New Project</button></div>
 <!-- PROJECT CARD 1 -->
 <div class="bg-card border border-border rounded-lg p-5 mb-5 shadow-none">
 <!-- Card Header -->
 <div class="flex items-start justify-between gap-4">
 <div class="flex flex-col">
 <div class="flex items-center flex-wrap gap-2">
-<h3 class="font-headline-sm text-[15px] font-semibold text-text-strong">Backend 2.0: Job Dispatcher first build</h3>
+<h3 class="font-headline-sm text-[15px] font-semibold text-text-strong flex items-center gap-1 cursor-pointer hover:text-primary transition-colors"><span>Backend 2.0: Job Dispatcher first build</span><span class="material-symbols-outlined text-muted" style="font-size: 18px;">chevron_right</span></h3>
 <span class="bg-bg-hover text-muted font-body-sm text-body-sm px-2 py-0.5 rounded">open</span>
 <span class="bg-bg-hover text-muted font-body-sm text-body-sm px-2 py-0.5 rounded">serves #2 Fredbot runs customer Offices</span>
 </div>
