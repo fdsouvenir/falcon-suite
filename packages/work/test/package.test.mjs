@@ -19,3 +19,8 @@ test('stylesheet uses host theme variables only', () => {
 	assert.doesNotMatch(css, /font-family|@font-face/i, 'own font');
 	assert.doesNotMatch(css, /max-width/i, 'page frame');
 });
+
+test('the source identity is the production one', async () => {
+	const { PLUGIN_ID } = await import('../dist/identity.js');
+	assert.equal(PLUGIN_ID, manifest.id);
+});

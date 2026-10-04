@@ -9,3 +9,4 @@ packages/work/seed/seed.mjs
 packages/work/seed/view.md
 packages/work/seed/sessions.json
 .stitch/screens/
+.stage/

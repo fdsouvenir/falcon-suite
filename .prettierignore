@@ -6,3 +6,4 @@ packages/work/seed/
 # Written by `openclaw plugins build`
 packages/*/openclaw.plugin.json
 packages/*/package.json
+.stage/

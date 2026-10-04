@@ -1,10 +1,11 @@
 import { defineControlUiPlugin } from 'openclaw/plugin-sdk/control-ui';
 import './control-ui.css';
+import { PLUGIN_ID } from './identity.js';
 
 export const PAGE_ID = 'work';
 
 export default defineControlUiPlugin({
-	id: 'falcon-work',
+	id: PLUGIN_ID,
 	activate(host) {
 		host.ui.registerPage({
 			id: PAGE_ID,

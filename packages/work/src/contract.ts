@@ -1,5 +1,6 @@
 import { Type } from 'typebox';
 import { defineFeatureContract } from 'openclaw/plugin-sdk/feature-contract';
+import { PLUGIN_ID } from './identity.js';
 
 // Browser-safe: shared by the plugin backend, the agent tools and the native UI.
 // The command names below must match the store's commands (a test checks this).
@@ -41,7 +42,7 @@ const Lit = (values: readonly string[]) => Type.Union(values.map((v) => Type.Lit
 const Id = Type.String({ maxLength: 128 });
 
 export const contract = defineFeatureContract({
-	pluginId: 'falcon-work',
+	pluginId: PLUGIN_ID,
 	operations: {
 		read: {
 			kind: 'query',

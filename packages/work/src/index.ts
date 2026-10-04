@@ -4,6 +4,7 @@ import {
 	type FeatureInvocationContext
 } from 'openclaw/plugin-sdk/feature-plugin';
 import { contract, KINDS } from './contract.js';
+import { PLUGIN_ID } from './identity.js';
 import { Work } from './store/work.js';
 import type { Actor, Envelope } from './store/types.js';
 import type { Kind } from './store/engine.js';
@@ -51,10 +52,10 @@ const feature = defineFeaturePlugin({
 		};
 
 		api.registerService({
-			id: 'falcon-work',
+			id: PLUGIN_ID,
 			async start(ctx) {
 				// Feature plugins take no config in this SDK, so the location and owner are fixed.
-				work = new Work(path.join(ctx.stateDir, 'falcon-work', 'work.db'), 'person:gateway-owner');
+				work = new Work(path.join(ctx.stateDir, PLUGIN_ID, 'work.db'), 'person:gateway-owner');
 			},
 			async stop() {
 				work?.close();
@@ -103,7 +104,7 @@ const feature = defineFeaturePlugin({
 				retry: {
 					instruction:
 						'You changed things this turn that no Task explains. Record them in Falcon Work now: start or create the Task they belong to (falcon_work), or attach the untracked activity to an existing Task. Then finish your reply.',
-					idempotencyKey: `falcon-work-nudge:${event.runId}`,
+					idempotencyKey: `${PLUGIN_ID}-nudge:${event.runId}`,
 					maxAttempts: 1
 				}
 			};
