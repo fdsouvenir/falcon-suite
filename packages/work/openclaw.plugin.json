@@ -21,6 +21,9 @@
     ]
   },
   "contracts": {
-    "tools": []
+    "tools": [
+      "falcon_work",
+      "falcon_work_read"
+    ]
   }
 }

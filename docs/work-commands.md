@@ -4,18 +4,20 @@ Status: **draft for Fred's review**, 2026-10-03. Companion to [work-spec.md](wor
 vocabulary only. Every button in the Stitch screens (`.stitch/screens/`) maps to a command below
 (§8).
 
-## 1. One tool, two verbs
+## 1. Two tools
 
-Agents use one tool, `falcon_work`, with two actions:
+Agents use two tools:
 
-- **`read`** — compact projections (§3). Never changes anything.
-- **`do`** — exactly one command (§4–§6), validated, committed atomically, logged as an event.
+- **`falcon_work_read`** — compact projections (§3). Never changes anything; needs only read access.
+- **`falcon_work`** — exactly one command (§4–§6), validated, committed atomically, logged as an event.
 
-The Control UI calls the same commands through the same validation. There is no second path.
+They are the plugin's two feature operations (`read`, `do`), so the Control UI calls the same
+operations through the same validation. There is no second path. (The draft had one tool with two
+verbs; OpenClaw's feature contracts give each operation its own tool and access level.)
 
 **Keeping the agent's context small.** 4.x put every command's full schema in the system prompt on
 every turn. Work 5 does not. The tool description lists command names with one line each; the full
-input shape of any command is available on demand (`read help <command>`). What the agent sees every
+input shape of any command is available on demand (`falcon_work_read` with `view: help`). What the agent sees every
 turn is the short brief from the `before_prompt_build` hook (spec §10), not a schema.
 
 ## 2. Every command
