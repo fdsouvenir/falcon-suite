@@ -13,19 +13,19 @@ type Client = {
 };
 
 /**
- * The person behind the current Control UI request, from the Gateway's authenticated connection.
- * Never taken from request parameters. Null when the caller is not a verified human operator.
+ * The person behind a Control UI request, from the Gateway's authenticated connection — never from
+ * request parameters. Work is shared per Gateway (spec §1), so a verified operator connection with no
+ * named profile (a paired browser, or the gateway token) is the Gateway owner.
  */
-export function currentHuman(): Actor | null {
-	const client = getPluginRuntimeGatewayRequestScope()?.client as Client | undefined;
+export function humanFromClient(client: Client | undefined): Actor | null {
 	if (!client || client.invalidated || client.internal?.syntheticClient) return null;
 	if (client.connect?.role && client.connect.role !== 'operator') return null;
 	const role = client.internal?.operatorRoleActor;
-	if (role?.kind === 'system') return null;
-	const profile =
-		client.authenticatedUserProfile?.profileId ??
-		(role?.kind === 'operator' ? role.profileId : undefined);
-	if (!profile) return null;
-	if (role?.kind === 'operator' && role.profileId && role.profileId !== profile) return null;
-	return { kind: 'human', id: `person:${profile}` };
+	if (role?.kind && role.kind !== 'operator') return null;
+	const named = client.authenticatedUserProfile?.profileId;
+	if (named && role?.profileId && role.profileId !== named) return null;
+	return { kind: 'human', id: `person:${named ?? role?.profileId ?? 'gateway-owner'}` };
 }
+
+export const currentHuman = (): Actor | null =>
+	humanFromClient(getPluginRuntimeGatewayRequestScope()?.client as Client | undefined);

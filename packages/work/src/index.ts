@@ -1,11 +1,11 @@
-import path from 'node:path';
 import {
 	defineFeaturePlugin,
 	type FeatureInvocationContext
 } from 'openclaw/plugin-sdk/feature-plugin';
 import { contract, KINDS } from './contract.js';
 import { PLUGIN_ID } from './identity.js';
-import { Work } from './store/work.js';
+import type { Work } from './store/work.js';
+import { currentWork, startWork } from './plugin/runtime.js';
 import type { Actor, Envelope } from './store/types.js';
 import type { Kind } from './store/engine.js';
 import { classify } from './plugin/activity.js';
@@ -32,13 +32,18 @@ const feature = defineFeaturePlugin({
 	name: 'Falcon Work',
 	description: 'A record of what your agents do, why, and what needs you.',
 	setup(api, events) {
-		let work: Work | null = null;
 		const runs = new Map<string, RunState>();
 		const lastBrief = new Map<string, string>();
 
-		const ready = (): Work => {
-			if (!work) throw new Error('Falcon Work is starting; try again in a moment');
-			return work;
+		const ready = (): Work => currentWork();
+		/** Hooks never throw: if the store cannot open, the turn goes on without Work. */
+		const maybe = (): Work | null => {
+			try {
+				return currentWork();
+			} catch (error) {
+				api.logger?.warn?.(`Falcon Work unavailable: ${(error as Error).message}`);
+				return null;
+			}
 		};
 		const runState = (id: string | undefined): RunState | null => {
 			if (!id) return null;
@@ -55,16 +60,14 @@ const feature = defineFeaturePlugin({
 			id: PLUGIN_ID,
 			async start(ctx) {
 				// Feature plugins take no config in this SDK, so the location and owner are fixed.
-				work = new Work(path.join(ctx.stateDir, PLUGIN_ID, 'work.db'), 'person:gateway-owner');
-			},
-			async stop() {
-				work?.close();
-				work = null;
+				startWork(ctx.stateDir);
 			}
+			// No stop: the store is shared with the registration that replaces this one.
 		});
 
 		// The guidance (static, so it caches) and the agent's brief, every turn (spec §10).
 		api.on('before_prompt_build', (_event, ctx) => {
+			const work = ctx.agentId ? maybe() : null;
 			if (!work || !ctx.agentId) return { prependSystemContext: GUIDANCE };
 			const agent = `agent:${ctx.agentId}`;
 			const key = ctx.sessionKey ?? agent;
@@ -76,6 +79,7 @@ const feature = defineFeaturePlugin({
 
 		// What the agent actually did: attached to its in-progress Task, or kept as untracked.
 		api.on('after_tool_call', (event, ctx) => {
+			const work = ctx.agentId ? maybe() : null;
 			if (!work || !ctx.agentId) return;
 			const state = runState(event.runId ?? ctx.runId);
 			if (event.toolName === 'falcon_work' && !event.error) {

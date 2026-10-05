@@ -9,6 +9,8 @@ import plugin from '../dist/index.js';
 import { COMMANDS } from '../dist/store/work.js';
 import { COMMAND_NAMES } from '../dist/contract.js';
 import { classify } from '../dist/plugin/activity.js';
+import { resetWork } from '../dist/plugin/runtime.js';
+import { humanFromClient } from '../dist/plugin/identity.js';
 
 function load() {
 	const reg = { services: [], hooks: {}, tools: {}, actions: {} };
@@ -31,6 +33,7 @@ function load() {
 }
 
 async function started() {
+	resetWork();
 	const reg = load();
 	const stateDir = mkdtempSync(join(tmpdir(), 'falcon-work-plugin-'));
 	for (const s of reg.services) await s.start?.({ stateDir, gatewayEvents: { emit() {} } });
@@ -132,4 +135,47 @@ test('a retried tool call with the same id does not apply twice', async () => {
 	const a = await tool.execute('same-call', params);
 	const b = await tool.execute('same-call', params);
 	assert.deepEqual(a.details ?? a.content, b.details ?? b.content);
+});
+
+test('a reloaded registration uses the same store without its own service starting', async () => {
+	const { call } = await started(); // first registration: service started
+	const area = (
+		await call('falcon_work', {
+			command: 'create_area',
+			input: { title: 'Home', description: 'd' }
+		})
+	).id;
+	const second = load(); // hot reload: new registration, its service never starts
+	const tool = second.tools.falcon_work_read({ agentId: 'verl' });
+	const r = await tool.execute('after-reload', { view: 'list', kind: 'area' });
+	const out = r.details ?? JSON.parse(r.content[0].text);
+	assert.deepEqual(
+		out.items.map((a) => a.id),
+		[area]
+	);
+});
+
+test('a paired browser or token login on the Gateway counts as the Gateway owner', () => {
+	assert.deepEqual(humanFromClient({ connect: { role: 'operator' } }), {
+		kind: 'human',
+		id: 'person:gateway-owner'
+	});
+	assert.deepEqual(
+		humanFromClient({
+			connect: { role: 'operator' },
+			authenticatedUserProfile: { profileId: 'fred' }
+		}),
+		{ kind: 'human', id: 'person:fred' }
+	);
+	assert.equal(humanFromClient({ connect: { role: 'node' } }), null);
+	assert.equal(humanFromClient({ internal: { syntheticClient: true } }), null);
+	assert.equal(humanFromClient({ internal: { operatorRoleActor: { kind: 'system' } } }), null);
+	assert.equal(
+		humanFromClient({
+			authenticatedUserProfile: { profileId: 'a' },
+			internal: { operatorRoleActor: { kind: 'operator', profileId: 'b' } }
+		}),
+		null
+	);
+	assert.equal(humanFromClient(undefined), null);
 });

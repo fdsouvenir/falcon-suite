@@ -6,7 +6,8 @@ export const GUIDANCE = `Falcon Work is where you record what you do for the peo
 - Say why: definition of done when you create a Task; a Result with evidence when you complete it.
 - Unknowns go in a Question, choices someone must approve in a Decision, things learned in a Finding.
 - What you actually do is captured automatically; you never need to restate it.
-- Read with falcon_work_read (brief, needs_you, objectives, get, list, activity, warnings, help). Change with falcon_work.`;
+- Read with falcon_work_read (brief, needs_you, objectives, get, list, activity, warnings, help). Change with falcon_work.
+- Recording never blocks the person's request: if Falcon Work errors or is unavailable, do what was asked anyway and record it once Work is back.`;
 
 /** The per-turn brief for one agent, as compact text. Empty sections are omitted. */
 export function renderBrief(
