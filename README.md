@@ -1,12 +1,11 @@
 # Falcon Suite
 
-Separately installable OpenClaw plugins: **Work** first, then **Vault**; Integrations later.
-A clean rebuild — nothing here carries code or data from Falcon Dash 4.x.
+A set of separately installable OpenClaw plugins. Each package in `packages/` is its own plugin,
+installed and configured on its own.
 
-Status: **design stage.** Nothing is implemented yet.
-
-- `docs/work-spec.md` — the Work 5 specification draft.
-- `packages/work/schema.sql` — the draft data model behind it.
+- `docs/work-spec.md` — the Work 5 specification.
+- `docs/work-commands.md` — the Work command list.
+- `packages/work/src/store/schema.ts` — the Work data model.
 - `packages/work/seed/` — tooling for an evaluation database: `lib.mjs` (a builder over the draft
   schema) and `report.mjs` (renders the Work tab's content as text). The seed data itself was real
   personal work and is kept local, so it is not in this repository.
