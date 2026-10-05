@@ -106,10 +106,14 @@ export function warningRow(c: Ctx, w: any) {
 				' · ',
 				h('span', { class: 'fw-strong' }, w.title)
 			),
-			h('div', { class: 'fw-muted' }, w.detail)
+			h('div', { class: 'fw-muted' }, readableDates(w.detail))
 		)
 	);
 }
+
+/** Warning details name exact timestamps for agents; people read them as dates. */
+const readableDates = (text: string) =>
+	(text ?? '').replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z/g, (iso) => day(iso));
 
 const labelFor = (kind: string) =>
 	({

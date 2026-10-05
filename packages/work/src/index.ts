@@ -160,7 +160,8 @@ const feature = defineFeaturePlugin({
 					case 'needs_you':
 						return w.reads.needsYou(actorFor(context).id, w.now());
 					case 'objectives':
-						return w.reads.objectives(!!f.include_inactive);
+						// The tab's shape: what serves each Objective comes with its Task counts.
+						return w.views.objectivesTab(!!f.include_inactive);
 					case 'get':
 						return input.id
 							? (w.reads.get(input.id) ?? { error: 'not_found' })

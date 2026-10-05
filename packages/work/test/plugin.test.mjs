@@ -138,6 +138,32 @@ test('untracked changes get exactly one nudge; recorded work gets none', async (
 	assert.match(hook('before_prompt_build', {}).prependContext, /In progress: Fix plunge/);
 });
 
+test('the objectives read carries Task counts for what serves each Objective', async () => {
+	const { reg } = await started();
+	const act = (payload) =>
+		reg.actions.do.handler({ payload, client: { connId: 'c', scopes: ['operator.write'] } });
+	const read = (payload) =>
+		reg.actions.read.handler({ payload, client: { connId: 'c', scopes: ['operator.read'] } });
+	const unwrap = async (p) => {
+		const r = await p;
+		return r.result ?? r;
+	};
+	const o = (
+		await unwrap(act({ command: 'create_objective', input: { title: 'Grow', statement: 's' } }))
+	).id;
+	const area = (
+		await unwrap(act({ command: 'create_area', input: { title: 'Home', description: 'd' } }))
+	).id;
+	await unwrap(
+		act({ command: 'create_project', input: { title: 'P', outcome: 'o', area, serves: [o] } })
+	);
+	const list = await unwrap(read({ view: 'objectives' }));
+	assert.deepEqual(
+		list.map((x) => [x.serving.projects[0].tasks_done, x.serving.projects[0].tasks_total]),
+		[[0, 0]]
+	);
+});
+
 test('a retried tool call with the same id does not apply twice', async () => {
 	const { reg } = await started();
 	const tool = reg.tools.falcon_work({ agentId: 'verl' });
