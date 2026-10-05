@@ -86,7 +86,12 @@ const feature = defineFeaturePlugin({
 				if (state) state.recorded = true;
 				return;
 			}
-			const c = classify(event.toolName, event.params ?? {}, event.error, ctx.toolKind);
+			const e = event as typeof event & { toolKind?: string; toolInputKind?: string };
+			const kind =
+				e.toolKind ??
+				ctx.toolKind ??
+				(e.toolInputKind || ctx.toolInputKind ? 'code_mode_exec' : undefined);
+			const c = classify(event.toolName, event.params ?? {}, event.error, kind);
 			if (!c) return;
 			const r = work.recordActivity({
 				agent: `agent:${ctx.agentId}`,
