@@ -7,7 +7,15 @@
 // Preview and production differ only in identity: plugin id, display name and npm package name.
 // The staged copy lives in .stage/ (gitignored) inside the repository, so the workspace's
 // node_modules still resolve. The source tree is never edited.
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync
+} from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,6 +61,10 @@ cpSync(source, stage, {
 	recursive: true,
 	filter: (p) => !/(^|\/)(node_modules|dist|seed)(\/|$)/.test(path.relative(source, p))
 });
+
+// The package's own dependencies (npm may not hoist them to the workspace root).
+if (existsSync(path.join(source, 'node_modules')))
+	symlinkSync(path.join(source, 'node_modules'), path.join(stage, 'node_modules'), 'dir');
 
 // Identity: one source constant, the npm package, and the manifest.
 writeFileSync(
