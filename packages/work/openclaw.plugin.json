@@ -20,6 +20,7 @@
       "dist/control-ui/0940244b726a58863c65849bd4fe02a894137e72b751935a84669e0819c4cb11/index.css"
     ]
   },
+  "icon": "https://raw.githubusercontent.com/fdsouvenir/falcon-suite/main/assets/falcon-work-icon.png",
   "contracts": {
     "tools": [
       "falcon_work",
