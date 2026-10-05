@@ -4,38 +4,39 @@ import { PLUGIN_ID } from '../identity.js';
 import { Work } from '../store/work.js';
 
 /**
- * One Work store per Gateway process, shared by every registration of this plugin.
+ * The Work store, opened lazily by whichever registration of this plugin needs it first.
  *
  * OpenClaw re-registers a plugin on every hot reload (config changes, plugin updates) and retires
- * the old registration later. A store held in one registration's closure is invisible to the next,
- * and closing it on retirement breaks the registration that replaced it. So the store lives on the
- * process, opens on first use, and is never closed by a retiring registration.
+ * the old registration later, and the new registration's service may not start. So the store is
+ * not tied to a registration: it opens on first use and is never closed by a retiring one.
+ *
+ * Only the data location is shared across the process. The store itself belongs to this copy of
+ * the code: a plugin update loads new code into the same process, and sharing the store object
+ * would keep running the old version's commands and views until the Gateway restarts. Each
+ * version opens its own connection to the same database (WAL with a busy timeout, so they
+ * coexist while the old registration drains).
  */
-type Runtime = { work: Work | null; stateDir: string | null };
-const KEY = Symbol.for(`${PLUGIN_ID}.runtime`);
-const shared = (): Runtime =>
-	((globalThis as Record<symbol, Runtime | undefined>)[KEY] ??= { work: null, stateDir: null });
+const KEY = Symbol.for(`${PLUGIN_ID}.stateDir`);
+const shared = globalThis as Record<symbol, string | undefined>;
+let work: Work | null = null;
 
 /** Called by the service with the Gateway's real state directory. */
 export function startWork(stateDir: string): Work {
-	const r = shared();
-	r.stateDir = stateDir;
-	return (r.work ??= new Work(path.join(stateDir, PLUGIN_ID, 'work.db'), 'person:gateway-owner'));
+	shared[KEY] = stateDir;
+	return (work ??= new Work(path.join(stateDir, PLUGIN_ID, 'work.db'), 'person:gateway-owner'));
 }
 
 /** The store, opening it if this registration's service has not started yet. */
 export function currentWork(): Work {
-	const r = shared();
-	if (r.work) return r.work;
+	if (work) return work;
 	return startWork(
-		r.stateDir ?? process.env.OPENCLAW_STATE_DIR ?? path.join(os.homedir(), '.openclaw')
+		shared[KEY] ?? process.env.OPENCLAW_STATE_DIR ?? path.join(os.homedir(), '.openclaw')
 	);
 }
 
-/** For tests: forget the process-wide store. */
+/** For tests: forget the store and its location. */
 export function resetWork(): void {
-	const r = shared();
-	r.work?.close();
-	r.work = null;
-	r.stateDir = null;
+	work?.close();
+	work = null;
+	shared[KEY] = undefined;
 }

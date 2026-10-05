@@ -165,6 +165,26 @@ test('a reloaded registration uses the same store without its own service starti
 	);
 });
 
+test('an updated copy of the code uses its own store on the same data', async () => {
+	const { call } = await started();
+	const area = (
+		await call('falcon_work', {
+			command: 'create_area',
+			input: { title: 'Home', description: 'd' }
+		})
+	).id;
+	const old = (await import('../dist/plugin/runtime.js')).currentWork();
+	// A plugin update loads the new version's modules into the same process.
+	const updated = await import(`../dist/plugin/runtime.js?update=${Date.now()}`);
+	const fresh = updated.currentWork();
+	assert.notEqual(fresh, old, 'the new code must not run the old version’s store');
+	assert.deepEqual(
+		fresh.reads.list('area', {}).items.map((a) => a.id),
+		[area]
+	);
+	fresh.close();
+});
+
 test('a paired browser or token login on the Gateway counts as the Gateway owner', () => {
 	assert.deepEqual(humanFromClient({ connect: { role: 'operator' } }), {
 		kind: 'human',
