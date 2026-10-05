@@ -41,9 +41,12 @@ const str = (v: unknown) => (typeof v === 'string' ? v : '');
 export function classify(
 	toolName: string,
 	params: Record<string, unknown>,
-	error?: string
+	error?: string,
+	toolKind?: string
 ): Classified {
 	if (error) return null; // a failed call is taken to have changed nothing
+	// A code-mode script is a wrapper: the tools it calls report their own after_tool_call events.
+	if (toolKind === 'code_mode_exec') return null;
 	if (RECORDING_TOOLS.has(toolName)) return null;
 	if (READ_ONLY_TOOLS.has(toolName)) return null;
 

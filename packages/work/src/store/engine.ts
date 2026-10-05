@@ -203,10 +203,16 @@ export function execute(
 	const input = envelope.input ?? {};
 	if (!Check(def.input, input)) {
 		const first = [...Errors(def.input, input)][0];
+		// Say exactly what the command takes, so an agent that guessed a field name fixes it in one go.
+		const props =
+			(def.input as { properties?: Record<string, unknown>; required?: string[] }).properties ?? {};
+		const required = new Set((def.input as { required?: string[] }).required ?? []);
+		const fields = Object.keys(props).map((k) => (required.has(k) ? k : `${k}?`));
+		const unknown = Object.keys(input).filter((k) => !(k in props));
 		return rejected(
 			'invalid_input',
-			`${def.name}: ${first ? `${first.instancePath || 'input'} ${first.message}` : 'invalid input'}`,
-			[`read help ${def.name}`]
+			`${def.name}: ${unknown.length ? `unknown field${unknown.length > 1 ? 's' : ''} ${unknown.join(', ')}; ` : ''}${first ? `${first.instancePath || 'input'} ${first.message}` : 'invalid input'}. Fields: ${fields.join(', ') || 'none'}`,
+			[`falcon_work_read view=help command=${def.name}`]
 		);
 	}
 

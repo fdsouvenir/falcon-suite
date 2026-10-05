@@ -68,6 +68,16 @@ test('read-only tool calls are not work; changes are', () => {
 	assert.equal(classify('falcon_work', { command: 'start' }), null);
 	assert.equal(classify('write', { path: 'x' }, 'EACCES'), null, 'failed calls changed nothing');
 	assert.equal(classify('some_new_tool', {}).kind, 'api', 'unknown tools count as changes');
+	assert.equal(
+		classify(
+			'exec',
+			{ script: 'return await falcon_work_read({view:"help"})' },
+			undefined,
+			'code_mode_exec'
+		),
+		null,
+		'code-mode wrappers are not activity'
+	);
 });
 
 test('registers both tools, the UI operations and the three hooks', async () => {

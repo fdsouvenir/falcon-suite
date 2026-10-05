@@ -86,7 +86,7 @@ const feature = defineFeaturePlugin({
 				if (state) state.recorded = true;
 				return;
 			}
-			const c = classify(event.toolName, event.params ?? {}, event.error);
+			const c = classify(event.toolName, event.params ?? {}, event.error, ctx.toolKind);
 			if (!c) return;
 			const r = work.recordActivity({
 				agent: `agent:${ctx.agentId}`,
@@ -181,7 +181,12 @@ const feature = defineFeaturePlugin({
 				};
 				const outcome = w.do(envelope, actorFor(context));
 				if (outcome.outcome !== 'rejected' && outcome.outcome !== 'noop')
-					events.emit('changed', { at: w.now() });
+					// Best effort: the change is already committed; a failed notice must not make it look failed.
+					try {
+						events.emit('changed', { at: w.now() });
+					} catch (error) {
+						api.logger?.warn?.(`Falcon Work change notice failed: ${(error as Error).message}`);
+					}
 				return outcome;
 			}
 		};
