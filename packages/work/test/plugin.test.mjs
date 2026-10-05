@@ -189,3 +189,24 @@ test('a paired browser or token login on the Gateway counts as the Gateway owner
 	);
 	assert.equal(humanFromClient(undefined), null);
 });
+
+test('a Control UI call with operator scopes is the Gateway owner even without a visible connection', async () => {
+	const { reg } = await started();
+	const r = await reg.actions.do.handler({
+		pluginId: 'falcon-work',
+		actionId: 'do',
+		payload: { command: 'create_area', input: { title: 'Home', description: 'd' } },
+		client: { connId: 'c1', scopes: ['operator.write'] }
+	});
+	const out = r.result ?? r;
+	assert.ok(['committed', 'committed_with_warnings'].includes(out.outcome), JSON.stringify(r));
+	await assert.rejects(
+		reg.actions.read.handler({
+			pluginId: 'falcon-work',
+			actionId: 'read',
+			payload: { view: 'overview' },
+			client: { connId: 'c2', scopes: [] }
+		}),
+		/signed-in person/
+	);
+});

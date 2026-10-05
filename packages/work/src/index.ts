@@ -23,8 +23,17 @@ function actorFor(context: FeatureInvocationContext): Actor {
 		return { kind: 'agent', id: `agent:${agentId}` };
 	}
 	const human = currentHuman();
-	if (!human) throw new Error('Falcon Work needs a signed-in person');
-	return human;
+	if (human) return human;
+	// The Gateway only admits operator connections with the operation's scope to a plugin session
+	// action, so a caller that reached here is a signed-in operator even when the request scope does
+	// not expose the connection (as with paired browsers on OpenClaw 2026.9.6). Work is shared per
+	// Gateway, so that operator is the Gateway owner.
+	if (context.source === 'session-action') {
+		const scopes = context.action.client?.scopes ?? [];
+		if (scopes.some((s) => s.startsWith('operator.')))
+			return { kind: 'human', id: 'person:gateway-owner' };
+	}
+	throw new Error('Falcon Work needs a signed-in person');
 }
 
 const feature = defineFeaturePlugin({
