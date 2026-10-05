@@ -16,8 +16,8 @@ test('stylesheet uses host theme variables only', () => {
 	const css = read('src/control-ui.css').replace(/\/\*[\s\S]*?\*\//g, '');
 	assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b/i, 'hard-coded hex colour');
 	assert.doesNotMatch(css, /\b(rgb|rgba|hsl|hsla|oklch)\(/i, 'hard-coded colour function');
-	assert.doesNotMatch(css, /font-family|@font-face/i, 'own font');
-	assert.doesNotMatch(css, /max-width/i, 'page frame');
+	assert.doesNotMatch(css, /@font-face|font-family:(?!\s*var\(--)/i, 'own font');
+	assert.doesNotMatch(css, /[;{]\s*max-width\s*:/i, 'page frame'); // media queries are fine
 });
 
 test('the source identity is the production one', async () => {
