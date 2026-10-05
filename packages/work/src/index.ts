@@ -115,6 +115,24 @@ const feature = defineFeaturePlugin({
 				const w = ready();
 				const f = input.filters ?? {};
 				switch (input.view) {
+					case 'overview':
+						return w.views.overview(actorFor(context).id, w.now());
+					case 'areas':
+						return w.views.areas(actorFor(context).id, f.area);
+					case 'project':
+						return input.id
+							? (w.views.project(input.id, actorFor(context).id) ?? { error: 'not_found' })
+							: { error: 'id_required' };
+					case 'objective':
+						return input.id
+							? (w.views.objective(input.id, actorFor(context).id) ?? { error: 'not_found' })
+							: { error: 'id_required' };
+					case 'panel':
+						return input.id
+							? (w.views.panel(input.id, actorFor(context).id) ?? { error: 'not_found' })
+							: { error: 'id_required' };
+					case 'feed':
+						return w.views.feed({ filter: f.feed, area: f.area, limit: f.limit });
 					case 'brief': {
 						const actor = actorFor(context);
 						return actor.kind === 'agent'

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { openWorkDatabase } from './db.js';
 import { execute, type CommandDef } from './engine.js';
 import { Reads, DEFAULT_THRESHOLDS, type Thresholds } from './reads.js';
+import { Views } from './views.js';
 import { objectiveCommands } from './commands/objectives.js';
 import { structureCommands } from './commands/structure.js';
 import { taskCommands } from './commands/tasks.js';
@@ -32,6 +33,7 @@ export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 export class Work {
 	readonly db: DatabaseSync;
 	readonly reads: Reads;
+	readonly views: Views;
 	private readonly commands = new Map(COMMANDS.map((c) => [c.name, c]));
 
 	constructor(
@@ -43,6 +45,7 @@ export class Work {
 	) {
 		this.db = openWorkDatabase(file);
 		this.reads = new Reads(this.db, thresholds);
+		this.views = new Views(this.db, this.reads);
 	}
 
 	do(envelope: Envelope, actor: Actor): Outcome {

@@ -16,6 +16,14 @@ export const COMMAND_NAMES = [
 	.split(' ');
 
 export const VIEWS = [
+	// Screen projections for the Control UI.
+	'overview',
+	'areas',
+	'project',
+	'objective',
+	'feed',
+	'panel',
+	// Agent and general reads.
 	'brief',
 	'needs_you',
 	'objectives',
@@ -67,7 +75,8 @@ export const contract = defineFeatureContract({
 								include_inactive: Type.Optional(Type.Boolean()),
 								limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
 								offset: Type.Optional(Type.Integer({ minimum: 0 })),
-								before: Type.Optional(Type.Integer({ minimum: 1 }))
+								before: Type.Optional(Type.Integer({ minimum: 1 })),
+								feed: Type.Optional(Lit(['all', 'changes', 'activity', 'untracked']))
 							},
 							{ additionalProperties: false }
 						)

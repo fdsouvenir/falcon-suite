@@ -1,0 +1,528 @@
+import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
+import type { Reads } from './reads.js';
+
+// Screen projections for the native UI: each screen gets its data in one read.
+// They compose Reads; nothing here writes.
+
+type Row = Record<string, any>;
+const parse = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v);
+
+export type SessionRef = { key: string; from: 'own' | 'project' | 'task' } | null;
+
+export class Views {
+	constructor(
+		private readonly db: DatabaseSync,
+		private readonly reads: Reads
+	) {}
+
+	private all(sql: string, ...a: SQLInputValue[]): Row[] {
+		return this.db.prepare(sql).all(...a) as Row[];
+	}
+	private one(sql: string, ...a: SQLInputValue[]): Row | undefined {
+		return this.db.prepare(sql).get(...a) as Row | undefined;
+	}
+
+	/** A Task's discussion session, falling back to its Project's (spec §9). */
+	taskSession(taskId: string): SessionRef {
+		const t = this.one('SELECT session_key, project_id FROM task WHERE id = ?', taskId);
+		if (!t) return null;
+		if (t.session_key) return { key: t.session_key, from: 'own' };
+		const p =
+			t.project_id && this.one('SELECT session_key FROM project WHERE id = ?', t.project_id);
+		return p?.session_key ? { key: p.session_key, from: 'project' } : null;
+	}
+
+	/** Where a Task lives, for display. */
+	place(t: Row): { kind: 'area' | 'project'; id: string; title: string } {
+		if (t.project_id) {
+			const p = this.one('SELECT title FROM project WHERE id = ?', t.project_id);
+			return { kind: 'project', id: t.project_id, title: p?.title ?? '' };
+		}
+		const a = this.one('SELECT title FROM area WHERE id = ?', t.area_id);
+		return { kind: 'area', id: t.area_id, title: a?.title ?? '' };
+	}
+
+	taskCard(t: Row) {
+		return {
+			id: t.id,
+			title: this.reads.taskTitle(t.id),
+			status: t.status,
+			agent: t.agent,
+			place: this.place(t),
+			session: this.taskSession(t.id),
+			blocked_by: this.reads.blockedBy(t.id),
+			waiting_for: t.waiting_for,
+			waiting_on: t.waiting_on_kind ? { kind: t.waiting_on_kind, ref: t.waiting_on_ref } : null,
+			resume_when: t.resume_when,
+			follow_up_at: t.follow_up_at,
+			updated_at: t.updated_at,
+			version: t.version
+		};
+	}
+
+	private askFor(subjectId: string, person: string) {
+		return this.one(
+			"SELECT id, session_key, version FROM ask WHERE subject_id = ? AND addressed_to = ? AND status = 'pending'",
+			subjectId,
+			person
+		);
+	}
+
+	/** Session a Question or Decision is discussed in: its Ask's, else what it targets. */
+	private knowledgeSession(id: string, person: string): SessionRef {
+		const ask = this.askFor(id, person);
+		if (ask?.session_key) return { key: ask.session_key, from: 'own' };
+		for (const l of this.all(
+			"SELECT target_kind, target_id FROM link WHERE kind = 'targets' AND source_id = ?",
+			id
+		)) {
+			if (l.target_kind === 'task') {
+				const s = this.taskSession(l.target_id);
+				if (s) return { key: s.key, from: 'task' };
+			}
+			if (l.target_kind === 'project' || l.target_kind === 'objective') {
+				const r = this.one(`SELECT session_key FROM ${l.target_kind} WHERE id = ?`, l.target_id);
+				if (r?.session_key) return { key: r.session_key, from: 'project' };
+			}
+		}
+		return null;
+	}
+
+	decisionCard(d: Row, person: string) {
+		return {
+			kind: 'decision' as const,
+			id: d.id,
+			prompt: d.prompt,
+			options: parse(d.options),
+			recommendation: parse(d.recommendation),
+			consequence_of_no_decision: d.consequence_of_no_decision,
+			status: d.status,
+			created_at: d.created_at,
+			created_by: d.created_by,
+			can_decide: (parse(d.deciders) as string[]).includes(person),
+			session: this.knowledgeSession(d.id, person),
+			version: d.version
+		};
+	}
+
+	questionCard(q: Row, person: string) {
+		return {
+			kind: 'question' as const,
+			id: q.id,
+			prompt: q.prompt,
+			impact: q.impact,
+			hypothesis: q.hypothesis,
+			hypothesis_by: q.hypothesis_by,
+			created_at: q.created_at,
+			created_by: q.created_by,
+			can_answer: (parse(q.answerable_by) as string[]).includes(person),
+			holds: this.all(
+				"SELECT count(*) AS n FROM link WHERE kind = 'targets' AND source_id = ? AND target_kind = 'task'",
+				q.id
+			)[0].n,
+			session: this.knowledgeSession(q.id, person),
+			version: q.version
+		};
+	}
+
+	/** Everything on the Overview tab (spec §12). */
+	overview(person: string, now: string) {
+		const decisions = this.all(
+			"SELECT * FROM decision WHERE status IN ('pending','deferred') ORDER BY created_at"
+		)
+			.map((d) => this.decisionCard(d, person))
+			.filter((d) => d.can_decide);
+		const questions = this.all("SELECT * FROM question WHERE status = 'open' ORDER BY created_at")
+			.map((q) => this.questionCard(q, person))
+			.filter((q) => q.can_answer);
+		const handovers = this.all(
+			"SELECT * FROM ask WHERE addressed_to = ? AND status = 'pending' AND subject_kind = 'task' ORDER BY created_at",
+			person
+		).map((a) => ({
+			kind: 'ask' as const,
+			id: a.id,
+			prompt: a.prompt,
+			task: a.subject_id,
+			created_at: a.created_at,
+			version: a.version
+		}));
+		const tasks = (status: string, order = 'updated_at DESC', limit = 50) =>
+			this.all(`SELECT * FROM task WHERE status = ? ORDER BY ${order} LIMIT ${limit}`, status).map(
+				(t) => this.taskCard(t)
+			);
+		const completed = this.all(
+			"SELECT * FROM task WHERE status = 'completed' ORDER BY updated_at DESC LIMIT 5"
+		).map((t) => {
+			const r = this.one(
+				'SELECT content, sources, at FROM task_result WHERE id = ?',
+				t.accepted_result_id
+			);
+			return {
+				...this.taskCard(t),
+				result: r ? { content: r.content, sources: parse(r.sources), at: r.at } : null
+			};
+		});
+		const untracked = this.all(
+			'SELECT * FROM activity WHERE task_id IS NULL ORDER BY at DESC LIMIT 10'
+		);
+		const warnings = this.reads.warnings(now);
+		return {
+			needs_you: {
+				warnings,
+				decisions,
+				questions,
+				handovers,
+				count: warnings.length + decisions.length + questions.length + handovers.length
+			},
+			now: tasks('in_progress'),
+			waiting: tasks('waiting', 'follow_up_at IS NULL, follow_up_at'),
+			completed,
+			untracked: {
+				count: this.one('SELECT count(*) AS n FROM activity WHERE task_id IS NULL')!.n,
+				items: untracked
+			},
+			objectives: this.objectivesTab()
+		};
+	}
+
+	/** The Objectives tab: ranked Objectives with KPIs, latest review and what serves them. */
+	objectivesTab(includeInactive = false) {
+		return this.reads.objectives(includeInactive).map((o) => ({
+			...o,
+			statement: this.one('SELECT statement FROM objective WHERE id = ?', o.id)?.statement,
+			serving: {
+				projects: o.serving.projects.map((p) => ({ ...p, ...this.taskCounts('project_id', p.id) })),
+				tasks: o.serving.tasks
+			}
+		}));
+	}
+
+	private taskCounts(column: 'project_id' | 'milestone_id', id: string) {
+		const r = this.one(
+			`SELECT count(*) AS total, sum(status = 'completed') AS done FROM task WHERE ${column} = ? AND status <> 'abandoned'`,
+			id
+		)!;
+		return { tasks_total: r.total as number, tasks_done: (r.done as number) ?? 0 };
+	}
+
+	private projectCard(p: Row, person: string) {
+		const serves = this.all(
+			"SELECT o.id, o.rank, o.title FROM link l JOIN objective o ON o.id = l.target_id WHERE l.kind = 'serves' AND l.source_id = ?",
+			p.id
+		);
+		return {
+			id: p.id,
+			title: p.title,
+			outcome: p.outcome,
+			area: p.area_id,
+			status: this.reads.projectStatus(p),
+			accountable_human: p.accountable_human,
+			serves,
+			session: p.session_key ? { key: p.session_key, from: 'own' } : null,
+			milestones: this.all(
+				'SELECT * FROM milestone WHERE project_id = ? ORDER BY position',
+				p.id
+			).map((m) => ({
+				id: m.id,
+				position: m.position,
+				title: m.title,
+				success_condition: m.success_condition,
+				status: m.status,
+				achieved_at: m.achieved_at,
+				basis: m.basis,
+				sources: parse(m.sources),
+				...this.taskCounts('milestone_id', m.id),
+				tasks: this.all('SELECT * FROM task WHERE milestone_id = ? ORDER BY created_at', m.id).map(
+					(t) => ({
+						...this.taskCard(t),
+						depends_on: this.all(
+							"SELECT target_id FROM link WHERE kind = 'depends_on' AND source_id = ?",
+							t.id
+						).map((r) => ({ id: r.target_id, title: this.reads.taskTitle(r.target_id) }))
+					})
+				),
+				decisions: this.all(
+					"SELECT d.* FROM link l JOIN decision d ON d.id = l.source_id WHERE l.kind = 'targets' AND l.target_id = ? AND d.status = 'decided'",
+					m.id
+				).map((d) => this.decisionCard(d, person))
+			})),
+			tasks: this.all(
+				'SELECT * FROM task WHERE project_id = ? AND milestone_id IS NULL ORDER BY created_at',
+				p.id
+			).map((t) => this.taskCard(t)),
+			findings: this.all(
+				"SELECT count(*) AS n FROM link l JOIN finding f ON f.id = l.source_id WHERE l.kind = 'targets' AND l.target_id = ? AND f.status = 'current'",
+				p.id
+			)[0].n,
+			version: p.version
+		};
+	}
+
+	/** Areas & Projects: the Area chips with counts, and Projects grouped by Area. */
+	areas(person: string, area?: string) {
+		const areas = this.all("SELECT * FROM area WHERE status = 'active' ORDER BY title").map((a) => {
+			const projects = this.one(
+				'SELECT count(*) AS n FROM project WHERE area_id = ? AND abandoned_at IS NULL',
+				a.id
+			)!.n;
+			const tasks = this.one(
+				"SELECT count(*) AS n FROM task t LEFT JOIN project p ON p.id = t.project_id WHERE (t.area_id = ? OR p.area_id = ?) AND t.status NOT IN ('completed','abandoned')",
+				a.id,
+				a.id
+			)!.n;
+			return {
+				id: a.id,
+				title: a.title,
+				description: a.description,
+				accountable_human: a.accountable_human,
+				projects,
+				open_tasks: tasks,
+				version: a.version
+			};
+		});
+		const shown = area ? areas.filter((a) => a.id === area) : areas;
+		return {
+			areas,
+			groups: shown.map((a) => ({
+				area: a,
+				projects: this.all(
+					'SELECT * FROM project WHERE area_id = ? ORDER BY abandoned_at IS NOT NULL, created_at',
+					a.id
+				).map((p) => this.projectCard(p, person)),
+				tasks: this.all(
+					"SELECT * FROM task WHERE area_id = ? ORDER BY status = 'completed', updated_at DESC",
+					a.id
+				).map((t) => this.taskCard(t))
+			}))
+		};
+	}
+
+	/** About-links: Questions, Decisions and Findings targeting any of these ids. */
+	private about(ids: string[], person: string) {
+		if (!ids.length) return [];
+		const marks = ids.map(() => '?').join(',');
+		const links = this.all(
+			`SELECT DISTINCT source_kind, source_id FROM link WHERE kind = 'targets' AND target_id IN (${marks})`,
+			...ids
+		);
+		return links
+			.map((l) => {
+				if (l.source_kind === 'decision') {
+					const d = this.one('SELECT * FROM decision WHERE id = ?', l.source_id);
+					return (
+						d && {
+							...this.decisionCard(d, person),
+							chosen: d.chosen_option,
+							decided_by: d.decided_by,
+							resolved_at: d.resolved_at
+						}
+					);
+				}
+				if (l.source_kind === 'question') {
+					const q = this.one('SELECT * FROM question WHERE id = ?', l.source_id);
+					return q && { ...this.questionCard(q, person), status: q.status };
+				}
+				const f = this.one('SELECT * FROM finding WHERE id = ?', l.source_id);
+				return (
+					f && {
+						kind: 'finding' as const,
+						id: f.id,
+						conclusion: f.conclusion,
+						confidence: f.confidence,
+						sources: parse(f.sources),
+						status: f.status,
+						created_at: f.created_at
+					}
+				);
+			})
+			.filter(Boolean);
+	}
+
+	project(id: string, person: string) {
+		const p = this.one('SELECT * FROM project WHERE id = ?', id);
+		if (!p) return null;
+		const area = this.one('SELECT id, title FROM area WHERE id = ?', p.area_id);
+		const taskIds = this.all('SELECT id FROM task WHERE project_id = ?', id).map((r) => r.id);
+		const milestoneIds = this.all('SELECT id FROM milestone WHERE project_id = ?', id).map(
+			(r) => r.id
+		);
+		return {
+			...this.projectCard(p, person),
+			area: area,
+			about: this.about([id, ...taskIds, ...milestoneIds], person),
+			history: this.all(
+				`SELECT seq, at, actor, command, object_kind, object_id FROM event WHERE object_id IN (${[id, ...taskIds, ...milestoneIds].map(() => '?').join(',')}) ORDER BY seq DESC LIMIT 20`,
+				id,
+				...taskIds,
+				...milestoneIds
+			).map((e) => ({
+				...e,
+				title: e.object_kind === 'task' ? this.reads.taskTitle(e.object_id) : undefined
+			}))
+		};
+	}
+
+	objective(id: string, person: string) {
+		const o = this.one('SELECT * FROM objective WHERE id = ?', id);
+		if (!o) return null;
+		const projects = this.all(
+			"SELECT p.* FROM link l JOIN project p ON p.id = l.source_id WHERE l.kind = 'serves' AND l.target_id = ?",
+			id
+		).map((p) => ({
+			...this.projectCard(p, person),
+			area_title: this.one('SELECT title FROM area WHERE id = ?', p.area_id)?.title
+		}));
+		const tasks = this.all(
+			"SELECT t.* FROM link l JOIN task t ON t.id = l.source_id WHERE l.kind = 'serves' AND l.target_id = ? AND t.project_id IS NULL",
+			id
+		).map((t) => this.taskCard(t));
+		const related = [
+			id,
+			...projects.map((p) => p.id),
+			...projects.flatMap((p) => p.milestones.flatMap((m) => m.tasks.map((t) => t.id))),
+			...tasks.map((t) => t.id)
+		];
+		const about = this.about(related, person);
+		return {
+			id: o.id,
+			rank: o.rank,
+			title: o.title,
+			statement: o.statement,
+			status: o.status,
+			autonomy: o.autonomy,
+			limits: o.limits,
+			owner: o.owner,
+			session: o.session_key ? { key: o.session_key, from: 'own' } : null,
+			last_progress: this.reads.lastProgress(id),
+			created_at: o.created_at,
+			kpis: this.all('SELECT * FROM kpi WHERE objective_id = ? AND removed_at IS NULL', id).map(
+				(k) => ({
+					...k,
+					readings: this.all(
+						'SELECT value, at, source FROM kpi_reading WHERE kpi_id = ? ORDER BY at',
+						k.id
+					)
+				})
+			),
+			reviews: this.all('SELECT * FROM review WHERE objective_id = ? ORDER BY at DESC', id).map(
+				(r) => ({ ...r, sources: parse(r.sources) })
+			),
+			serving: { projects, tasks },
+			needs_you: about.filter(
+				(x: any) =>
+					(x.kind === 'decision' && x.status !== 'decided' && x.can_decide) ||
+					(x.kind === 'question' && x.status === 'open' && x.can_answer)
+			),
+			warnings: this.reads.warnings(new Date().toISOString()).filter((w) => w.object.id === id),
+			history: this.all(
+				'SELECT seq, at, actor, command FROM event WHERE object_id = ? ORDER BY seq DESC LIMIT 20',
+				id
+			),
+			version: o.version
+		};
+	}
+
+	/** One feed of recorded changes and captured activity, newest first. */
+	feed(f: {
+		filter?: 'all' | 'changes' | 'activity' | 'untracked';
+		area?: string;
+		limit?: number;
+	}) {
+		const limit = Math.min(f.limit ?? 100, 300);
+		const filter = f.filter ?? 'all';
+		const title = (kind: string, id: string): string => {
+			if (kind === 'task') return this.reads.taskTitle(id);
+			const table = [
+				'objective',
+				'area',
+				'project',
+				'milestone',
+				'question',
+				'decision',
+				'finding',
+				'ask',
+				'kpi'
+			].includes(kind)
+				? kind
+				: null;
+			if (!table) return '';
+			const r = this.one(`SELECT * FROM ${table} WHERE id = ?`, id);
+			return (r?.title ?? r?.prompt ?? r?.conclusion ?? r?.name ?? '') as string;
+		};
+		const items: Row[] = [];
+		if (filter === 'all' || filter === 'changes')
+			for (const e of this.all('SELECT * FROM event ORDER BY seq DESC LIMIT ?', limit))
+				items.push({
+					type: 'change',
+					at: e.at,
+					actor: e.actor,
+					command: e.command,
+					object: {
+						kind: e.object_kind,
+						id: e.object_id,
+						title: title(e.object_kind, e.object_id)
+					},
+					detail: parse(e.detail)
+				});
+		if (filter !== 'changes')
+			for (const a of this.all(
+				`SELECT * FROM activity ${filter === 'untracked' ? 'WHERE task_id IS NULL' : ''} ORDER BY at DESC LIMIT ?`,
+				limit
+			))
+				items.push({
+					type: 'activity',
+					id: a.id,
+					at: a.at,
+					actor: a.agent,
+					kind: a.kind,
+					summary: a.summary,
+					ref: a.ref,
+					untracked: !a.task_id,
+					object: a.task_id
+						? { kind: 'task', id: a.task_id, title: this.reads.taskTitle(a.task_id) }
+						: null
+				});
+		return {
+			untracked_count: this.one('SELECT count(*) AS n FROM activity WHERE task_id IS NULL')!.n,
+			items: items.sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0)).slice(0, limit)
+		};
+	}
+
+	/** Detail for the side panel: a Task, Question, Decision or Finding. */
+	panel(id: string, person: string) {
+		const d = this.reads.get(id);
+		if (!d) return null;
+		if (d.kind === 'task') {
+			const t = this.one('SELECT * FROM task WHERE id = ?', id)!;
+			const milestone = t.milestone_id
+				? this.one('SELECT id, title, position FROM milestone WHERE id = ?', t.milestone_id)
+				: null;
+			return {
+				...d,
+				card: this.taskCard(t),
+				milestone,
+				needed_by: (d.needed_by as string[]).map((x) => ({
+					id: x,
+					title: this.reads.taskTitle(x)
+				})),
+				depends_on: (d.depends_on as string[]).map((x) => ({
+					id: x,
+					title: this.reads.taskTitle(x)
+				})),
+				accepted_result: d.results.find((r: Row) => r.id === t.accepted_result_id) ?? null,
+				about: this.about([id], person)
+			};
+		}
+		if (d.kind === 'decision')
+			return {
+				...d,
+				card: this.decisionCard(this.one('SELECT * FROM decision WHERE id = ?', id)!, person)
+			};
+		if (d.kind === 'question')
+			return {
+				...d,
+				card: this.questionCard(this.one('SELECT * FROM question WHERE id = ?', id)!, person)
+			};
+		return d;
+	}
+}
