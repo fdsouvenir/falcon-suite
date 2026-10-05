@@ -84,7 +84,8 @@ if (existsSync(readmePath))
 		readmePath,
 		readFileSync(readmePath, 'utf8')
 			.replaceAll(IDENTITIES[pkgName].production.npm + '\n', identity.npm + '\n')
-			.replace(/^# .*$/m, `# ${identity.name}`) +
+			.replace(/^# .*$/m, `# ${identity.name}`)
+			.replaceAll('`falcon-work/work.db`', `\`${identity.id}/work.db\``) +
 			(channel === 'preview'
 				? `\n> This is the **preview** channel: early builds for testing. Production is \`${IDENTITIES[pkgName].production.npm}\`.\n`
 				: '')
