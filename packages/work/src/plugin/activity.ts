@@ -46,7 +46,12 @@ export function classify(
 ): Classified {
 	if (error) return null; // a failed call is taken to have changed nothing
 	// A code-mode script is a wrapper: the tools it calls report their own after_tool_call events.
-	if (toolKind === 'code_mode_exec') return null;
+	// Hosts that do not label it (2026.9.6) still pass a `script` rather than a shell `command`.
+	if (
+		toolKind === 'code_mode_exec' ||
+		(typeof params.script === 'string' && params.command === undefined)
+	)
+		return null;
 	if (RECORDING_TOOLS.has(toolName)) return null;
 	if (READ_ONLY_TOOLS.has(toolName)) return null;
 
