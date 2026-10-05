@@ -85,7 +85,8 @@ if (existsSync(readmePath))
 		readFileSync(readmePath, 'utf8')
 			.replaceAll(IDENTITIES[pkgName].production.npm + '\n', identity.npm + '\n')
 			.replace(/^# .*$/m, `# ${identity.name}`)
-			.replaceAll('`falcon-work/work.db`', `\`${identity.id}/work.db\``) +
+			.replaceAll('`falcon-work/work.db`', `\`${identity.id}/work.db\``)
+			.replaceAll('plugins.entries.falcon-work.', `plugins.entries.${identity.id}.`) +
 			(channel === 'preview'
 				? `\n> This is the **preview** channel: early builds for testing. Production is \`${IDENTITIES[pkgName].production.npm}\`.\n`
 				: '')
@@ -124,5 +125,7 @@ const args = [
 	'latest'
 ];
 run('clawhub', [...args, '--dry-run'], root);
-if (publish) run('clawhub', args, root);
+// --wait: a release only exists once ClawHub's security scan finishes; without waiting, a
+// submission can sit unpublished with no way to see it.
+if (publish) run('clawhub', [...args, '--wait', '--wait-timeout', '1200'], root);
 else console.log('\nDry run only. Re-run with --publish to publish.');

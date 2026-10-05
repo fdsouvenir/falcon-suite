@@ -30,8 +30,14 @@ Agents get two tools: `falcon_work_read` and `falcon_work`.
 openclaw plugins install clawhub:@fdsouvenir/falcon-work
 ```
 
-The Work page is native Control UI. Turn on **Settings → Labs → Custom plugin UI**
-(`gateway.controlUi.experimental.customPlugins: true`). The tools and recording work without it.
+Then allow two settings:
+
+- **The agent's brief and the end-of-turn nudge** need conversation access, which OpenClaw requires
+  you to grant to plugins you install yourself:
+  `openclaw config set plugins.entries.falcon-work.hooks.allowConversationAccess true`
+  Without it, the tools and activity capture still work, but the agent gets no brief and no nudge.
+- **The Work page** is native Control UI: turn on **Settings → Labs → Custom plugin UI**
+  (`gateway.controlUi.experimental.customPlugins: true`).
 
 Requires OpenClaw 2026.9.6 or later. Data is kept in a private SQLite database in the Gateway's
 state directory (`falcon-work/work.db`).
