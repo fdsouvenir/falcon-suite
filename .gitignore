@@ -10,3 +10,4 @@ packages/work/seed/view.md
 packages/work/seed/sessions.json
 .stitch/screens/
 .stage/
+.openclaw-build/

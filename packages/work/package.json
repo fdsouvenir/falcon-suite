@@ -10,8 +10,8 @@
     "directory": "packages/work"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && openclaw plugins build",
-    "validate": "openclaw plugins validate --json",
+    "build": "tsc -p tsconfig.json && OPENCLAW_STATE_DIR=../../.openclaw-build openclaw plugins build",
+    "validate": "OPENCLAW_STATE_DIR=../../.openclaw-build openclaw plugins validate --json",
     "test": "node --test \"test/**/*.test.mjs\""
   },
   "files": [
@@ -20,14 +20,14 @@
     "README.md"
   ],
   "peerDependencies": {
-    "openclaw": ">=2026.9.7"
+    "openclaw": ">=2026.9.6"
   },
   "dependencies": {
     "typebox": "^1.3.17"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
-    "openclaw": "2026.9.7",
+    "openclaw": "2026.9.6",
     "typescript": "7.0.2"
   },
   "openclaw": {
@@ -36,10 +36,10 @@
     ],
     "controlUi": "./src/control-ui.ts",
     "compat": {
-      "pluginApi": ">=2026.9.7"
+      "pluginApi": ">=2026.9.6"
     },
     "build": {
-      "openclawVersion": "2026.9.7"
+      "openclawVersion": "2026.9.6"
     }
   }
 }

@@ -7,3 +7,4 @@ packages/work/seed/
 packages/*/openclaw.plugin.json
 packages/*/package.json
 .stage/
+.openclaw-build/
