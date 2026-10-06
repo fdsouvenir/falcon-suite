@@ -210,7 +210,8 @@ function needRow(
 	return h(
 		'div',
 		{
-			class: `fw-row fw-line${c.params.panel === r.id ? ' is-selected' : ''}`,
+			class: 'fw-row fw-line',
+			'data-panel': r.id,
 			role: 'button',
 			tabindex: 0,
 			on: {
@@ -250,7 +251,8 @@ function happeningRow(c: Ctx, t: any) {
 	return h(
 		'div',
 		{
-			class: `fw-row fw-line${c.params.panel === t.id ? ' is-selected' : ''}`,
+			class: 'fw-row fw-line',
+			'data-panel': t.id,
 			role: 'button',
 			tabindex: 0,
 			on: { click: () => openPanel(c, t.id) }

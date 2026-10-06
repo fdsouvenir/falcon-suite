@@ -83,7 +83,7 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 			};
 			const r: any = await feature.invoke('do', request as any);
 			if (r?.outcome === 'rejected') throw new Error(r.reason);
-			render();
+			render(true);
 			return r;
 		},
 		go: (params, opts) =>
@@ -97,7 +97,7 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 			const agentId = /^agent:([^:]+):/.exec(key)?.[1];
 			context.host.sessions.open({ sessionKey: key, ...(agentId ? { agentId } : {}) } as any);
 		},
-		refresh: () => render()
+		refresh: () => render(true)
 	});
 
 	function header(c: Ctx) {
@@ -140,13 +140,10 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 		);
 	}
 
-	async function render() {
-		const mine = ++generation;
-		const c = ctx();
-		let body: Node;
+	async function page(c: Ctx): Promise<Node> {
 		try {
 			const p = c.params;
-			body = p.project
+			return p.project
 				? await projectView(c, p.project)
 				: p.objective
 					? await objectiveView(c, p.objective)
@@ -158,31 +155,75 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 								? await activityView(c)
 								: await overviewView(c, (n) => (needsYouCount = n));
 		} catch (error) {
-			body = h(
+			return h(
 				'div',
 				{ class: 'fw-error', role: 'alert' },
 				h('p', null, String((error as Error).message ?? error)),
-				h('button', { class: 'fw-btn', on: { click: () => render() } }, 'Retry')
+				h('button', { class: 'fw-btn', on: { click: () => render(true) } }, 'Retry')
 			);
 		}
-		const panel = c.params.panel
-			? await panelView(c, c.params.panel).catch((e) =>
-					h('aside', { class: 'fw-panel' }, String(e))
-				)
-			: null;
-		if (mine !== generation || context.signal.aborted) return;
-		root.replaceChildren(
-			header(c),
-			h(
-				'div',
-				{ class: `fw-body${panel ? ' has-panel' : ''}` },
-				h('main', { class: 'fw-main' }, body),
-				panel
-			)
-		);
 	}
 
-	const off = feature.on('changed', () => render());
+	// The header, page and drawer stay mounted. Opening or switching a panel redraws only the
+	// drawer; navigating redraws the page; a data change redraws both in place.
+	const main = h('main', { class: 'fw-main' });
+	const drawer = h('div', { class: 'fw-drawer' });
+	let head: HTMLElement | null = null;
+	let shownPage: string | null = null;
+	let shownPanel: string | null = null;
+	let stale = false; // data changed since the shown page and panel were read
+	root.append(h('div', { class: 'fw-body' }, main, drawer));
+
+	const pageKey = (p: Params) =>
+		JSON.stringify(
+			Object.entries(p)
+				.filter(([k]) => k !== 'panel')
+				.sort()
+		);
+
+	async function render(fresh = false) {
+		const mine = ++generation;
+		if (fresh) stale = true;
+		const c = ctx();
+		const key = pageKey(c.params);
+		const panelId = c.params.panel ?? null;
+		const newPage = stale || key !== shownPage;
+		const newPanel = panelId !== null && (newPage || panelId !== shownPanel);
+		if (newPanel && panelId !== shownPanel) drawer.classList.add('is-loading');
+		const [body, panel] = await Promise.all([
+			newPage ? page(c) : null,
+			newPanel
+				? panelView(c, panelId).catch((e) => h('aside', { class: 'fw-panel' }, String(e)))
+				: null
+		]);
+		if (mine !== generation || context.signal.aborted) return;
+		if (body) {
+			// Keep the search box (and what is typed in it) when only the data changed.
+			if (key !== shownPage || !head?.contains(document.activeElement)) {
+				const next = header(c);
+				head ? head.replaceWith(next) : root.prepend(next);
+				head = next;
+			}
+			main.replaceChildren(body);
+			shownPage = key;
+			stale = false;
+		}
+		if (panel) drawer.replaceChildren(panel);
+		else if (!panelId) drawer.replaceChildren();
+		drawer.classList.remove('is-loading');
+		drawer.classList.toggle('is-open', panelId !== null);
+		shownPanel = panelId;
+		for (const row of main.querySelectorAll<HTMLElement>('[data-panel]'))
+			row.classList.toggle('is-selected', row.dataset.panel === panelId);
+	}
+
+	const onKey = (e: KeyboardEvent) => {
+		const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select');
+		if (e.key === 'Escape' && context.props.panel && !typing)
+			ctx().go({ ...context.props, panel: undefined });
+	};
+	document.addEventListener('keydown', onKey);
+	const off = feature.on('changed', () => render(true));
 	render();
 	return {
 		update(next: ControlUiViewContext) {
@@ -191,6 +232,7 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 		},
 		dispose() {
 			off();
+			document.removeEventListener('keydown', onKey);
 			sessions.dispose();
 			root.remove();
 		}

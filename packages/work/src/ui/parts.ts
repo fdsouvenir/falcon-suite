@@ -33,11 +33,11 @@ export const evidence = (sources: { ref: string; label?: string }[] | null | und
 export const openPanel = (c: Ctx, id: string) => c.go({ ...c.params, panel: id });
 
 export function taskRow(c: Ctx, t: any, opts: { place?: boolean; muted?: boolean } = {}) {
-	const selected = c.params.panel === t.id;
 	return h(
 		'div',
 		{
-			class: `fw-row fw-task${selected ? ' is-selected' : ''}${t.status === 'completed' ? ' is-done' : ''}`,
+			class: `fw-row fw-task${t.status === 'completed' ? ' is-done' : ''}`,
+			'data-panel': t.id,
 			role: 'button',
 			tabindex: 0,
 			on: {
