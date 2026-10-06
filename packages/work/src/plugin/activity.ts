@@ -44,9 +44,9 @@ const RECORDING_TOOLS = new Set([
 const READ_ONLY_COMMAND =
 	/^\s*(ls|cat|head|tail|less|grep|rg|ugrep|find|fd|wc|stat|file|du|df|pwd|echo|printf|which|type|env|date|whoami|id|uname|ps|top|free|uptime|tree|jq|sort|uniq|cut|diff|cmp|sha256sum|md5sum|curl\s+-s?I|git\s+(status|log|diff|show|branch|remote|rev-parse|ls-files|grep|blame|describe|fetch)|gh\s+\S+\s+(view|list|status|diff|checks|watch)|gh\s+api\s+(?!.*-X\s*(POST|PATCH|PUT|DELETE))|npm\s+(ls|view|outdated|audit)|systemctl\s+(status|is-active|list-units|show)|journalctl|docker\s+(ps|logs|inspect|images)|kubectl\s+(get|describe|logs)|sqlite3\s+\S+\s+["']?select|openclaw\s+(status|--version|plugins\s+(list|inspect|validate))|clawhub\s+(whoami|inspect|search|explore))\b/i;
 
-/** Code Mode scripts are JavaScript that calls tools, e.g. `return await read({...})`. */
+/** Code Mode scripts are JavaScript that calls tools, e.g. `return await read({...})` or `const r = await t({...})`. */
 const CODE_MODE_SCRIPT =
-	/^\s*(return\s+)?await\s+[a-z_][a-z0-9_]*\s*\(|\breturn\s+await\s+[a-z_][a-z0-9_]*\s*\(/i;
+	/^\s*(return\s+)?await\s+[a-z_][a-z0-9_]*\s*\(|\breturn\s+await\s+[a-z_][a-z0-9_]*\s*\(|^\s*(const|let|var|for|if|try|text\s*\()[\s\S]*\bawait\s+[A-Za-z_$]/i;
 
 const clip = (s: string, n = 200) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 const str = (v: unknown) => (typeof v === 'string' ? v : '');

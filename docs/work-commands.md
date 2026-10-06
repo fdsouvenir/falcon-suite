@@ -12,11 +12,15 @@ what it does, so the agent learns Work from its tools rather than from rules in 
 - **`falcon_work_read`** — compact projections (§3). Never changes anything.
 - **`falcon_work_plan`** — plan a Project: a new one with its Milestones and Tasks, or more
   Milestones and Tasks for an existing one (`create_project` / `plan_project`).
-- **`falcon_work_task`** — track a Task: `create` (optionally `start` it at once), `start`, `wait`,
-  `resume`, `complete` (result and evidence), `abandon`.
-- **`falcon_work_ask`** — ask the person: a Question (with the agent's best guess) or a Decision
-  (options, recommendation, what happens if nobody decides). Addressed to the Gateway owner unless
-  `to` says otherwise; `about` takes ids of the things it concerns.
+- **`falcon_work_task`** — track a Task: `create` (optionally `start` it at once), `start`, `wait`
+  (always says who or what it waits on), `resume`, `complete` (result and evidence), `abandon`.
+- **`falcon_work_ask`** — ask the person: Questions (with the agent's best guess; `questions[]`
+  raises several at once, one per thing, each answerable on its own) or a Decision (options,
+  recommendation, what happens if nobody decides). Addressed to the Gateway owner unless `to` says
+  otherwise; `about` takes ids of the things it concerns; `holds` names Tasks that cannot go on
+  until it is answered, which then wait on the person asked. Its description says why to use it
+  over asking in chat: it stays under Needs you, survives the conversation, and the answer returns
+  in the agent's brief.
 - **`falcon_work_finding`** — record a Finding with evidence.
 - **`falcon_work`** — any other command (§4–§6): Objectives, KPIs, Areas, edits, moves, answering
   and deciding. One command per call.

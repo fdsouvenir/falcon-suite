@@ -394,3 +394,61 @@ test('Code Mode scripts passed as code, and progress cards, are not activity', (
 	assert.equal(classify('progress_card', { markdown: 'x' }), null);
 	assert.equal(classify('falcon_work_task', { action: 'start' }), null);
 });
+
+test('several Questions in one call, holding the Tasks they block on the person asked', async () => {
+	const { call } = await started();
+	const area = (
+		await call('falcon_work', {
+			command: 'create_area',
+			input: { title: 'Home', description: 'd' }
+		})
+	).id;
+	const task = (
+		await call('falcon_work_task', {
+			action: 'create',
+			title: 'Define sale goals',
+			description: 'd',
+			done_when: 'x',
+			area,
+			start: true
+		})
+	).id;
+	const r = await call('falcon_work_ask', {
+		kind: 'question',
+		questions: [
+			{ prompt: 'Where is the house?', impact: 'Sets the market' },
+			{ prompt: 'List or close by spring?', impact: 'Sets the dates', hypothesis: 'List' }
+		],
+		holds: [task]
+	});
+	assert.equal(r.outcome, 'committed', JSON.stringify(r));
+	assert.equal(r.questions.length, 2);
+	assert.equal(r.held[0].outcome, 'committed');
+	const t = await call('falcon_work_read', { view: 'get', id: task });
+	assert.equal(t.status, 'waiting');
+	assert.equal(t.waiting_on_ref, 'person:gateway-owner');
+	const q = await call('falcon_work_read', { view: 'get', id: r.questions[1] });
+	assert.deepEqual(
+		q.targets.map((x) => x.id),
+		[task],
+		'each Question is about the Task it holds'
+	);
+
+	const noWho = await call('falcon_work_task', {
+		action: 'wait',
+		id: task,
+		waiting_for: 'x',
+		resume_when: 'y'
+	});
+	assert.equal(noWho.code, 'invalid_input', 'a wait always says who or what');
+});
+
+test('Code Mode scripts are not activity however they start', () => {
+	for (const command of [
+		"const ts = await catalog.search('memory_search'); text(await ts[0]({}))",
+		'text(await falcon_work_read({view:"brief"}))',
+		'for (const id of ids) text(await falcon_work_read({view:"get", id}))'
+	])
+		assert.equal(classify('exec', { command }), null, command);
+	assert.equal(classify('exec', { command: 'for f in *.log; do rm "$f"; done' }).kind, 'command');
+});

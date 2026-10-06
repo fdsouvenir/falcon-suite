@@ -316,6 +316,7 @@ const feature = defineFeaturePlugin({
 					case 'start':
 						return on('start', { claim: true });
 					case 'wait':
+						if (!i.waiting_on) return invalid('wait: say who or what it waits on (waiting_on)');
 						return on('wait', {
 							waiting_for: i.waiting_for,
 							waiting_on: waitingOn(w, i.waiting_on),
@@ -336,26 +337,32 @@ const feature = defineFeaturePlugin({
 			},
 			ask(input, context) {
 				const w = ready();
+				const actor = actorFor(context);
 				const i = input as any;
-				const targets = targetsFor(w, i.about);
+				const holds: string[] = i.holds ?? [];
+				const targets = targetsFor(w, [...new Set([...(i.about ?? []), ...holds])]);
 				if ('error' in targets) return invalid(targets.error);
-				const to = i.to?.length ? i.to : [w.owner];
+				for (const id of holds)
+					if ((w.reads.get(id) as { kind?: string } | null)?.kind !== 'task')
+						return invalid(`holds: ${id} is not a Task`);
+				const to: string[] = i.to?.length ? i.to : [w.owner];
 				const about = targets.list.length ? { targets: targets.list } : {};
-				return commit(
-					w,
-					envelopeFor(
-						i.kind === 'question'
-							? {
-									command: 'raise_question',
-									input: {
-										prompt: i.prompt,
-										impact: i.impact,
-										answerable_by: to,
-										...(i.hypothesis ? { hypothesis: i.hypothesis } : {}),
-										...about
-									}
+				const asks =
+					i.kind === 'question'
+						? (
+								i.questions ?? [{ prompt: i.prompt, impact: i.impact, hypothesis: i.hypothesis }]
+							).map((q: any) => ({
+								command: 'raise_question',
+								input: {
+									prompt: q.prompt,
+									impact: q.impact,
+									answerable_by: to,
+									...(q.hypothesis ? { hypothesis: q.hypothesis } : {}),
+									...about
 								}
-							: {
+							}))
+						: [
+								{
 									command: 'raise_decision',
 									input: {
 										prompt: i.prompt,
@@ -365,11 +372,48 @@ const feature = defineFeaturePlugin({
 										consequence_of_no_decision: i.consequence_of_no_decision,
 										...about
 									}
-								},
-						context
-					),
-					actorFor(context)
+								}
+							];
+				const raised: { id: string; prompt: string }[] = [];
+				for (const [n, a] of asks.entries()) {
+					const r = commit(w, envelopeFor(a, context, n ? `:${n}` : ''), actor);
+					if (r.outcome === 'rejected')
+						return raised.length ? { ...r, raised_before_rejection: raised } : r;
+					raised.push({ id: (r as { id: string }).id, prompt: a.input.prompt });
+				}
+				const who = to[0];
+				const held = holds.map((id) =>
+					commit(
+						w,
+						envelopeFor(
+							{
+								command: 'wait',
+								id,
+								input: {
+									waiting_for:
+										raised.length === 1
+											? `${i.kind === 'question' ? 'Answer' : 'Decision'}: ${raised[0].prompt}`
+											: `Answers: ${raised.map((x) => x.prompt).join(' · ')}`,
+									waiting_on: { kind: who.startsWith('agent:') ? 'agent' : 'person', ref: who },
+									resume_when:
+										i.kind === 'question' ? 'Answered in Falcon Work' : 'Decided in Falcon Work'
+								}
+							},
+							context,
+							`:hold:${id}`
+						),
+						actor
+					)
 				);
+				return {
+					outcome: 'committed',
+					...(raised.length === 1 ? { id: raised[0].id } : {}),
+					[i.kind === 'question' ? 'questions' : 'decision']:
+						i.kind === 'question' ? raised.map((x) => x.id) : raised[0].id,
+					...(holds.length
+						? { held: holds.map((id, n) => ({ id, outcome: held[n].outcome })) }
+						: {})
+				};
 			},
 			finding(input, context) {
 				const w = ready();

@@ -198,7 +198,7 @@ export const contract = defineFeatureContract({
 		task: {
 			kind: 'action',
 			description:
-				'Track a Task in Falcon Work: a unit of work with a definition of done, placed in an Area or a Project (Milestone). action create (title, description, done_when, area or project, milestone?, depends_on?, start?) · start · wait (waiting_for, waiting_on, resume_when, follow_up_at?) · resume · complete (result, evidence: at least one source) · abandon (reason?).',
+				'Track a Task in Falcon Work: a unit of work with a definition of done, placed in an Area or a Project (Milestone). action create (title, description, done_when, area or project, milestone?, depends_on?, start?) · start · wait (waiting_for, waiting_on: who or what it waits on, resume_when, follow_up_at?) · resume · complete (result, evidence: at least one source) · abandon (reason?).',
 			input: Type.Object(
 				{
 					action: Lit(['create', 'start', 'wait', 'resume', 'complete', 'abandon']),
@@ -225,7 +225,9 @@ export const contract = defineFeatureContract({
 					waiting_on: Type.Optional(
 						Type.String({
 							maxLength: 1000,
-							...d('wait: person:<id>, agent:<id>, a Task id, or something external')
+							...d(
+								'wait: who or what it waits on: person:<id>, agent:<id>, a Task id, or a description of something external'
+							)
 						})
 					),
 					resume_when: Type.Optional(Str(12000, 'wait: what lets it continue')),
@@ -244,11 +246,24 @@ export const contract = defineFeatureContract({
 		ask: {
 			kind: 'action',
 			description:
-				'Ask the person in Falcon Work; it appears under Needs you. kind question: something you need to know (prompt, impact, hypothesis? = your best guess). kind decision: a choice for them to make (prompt, options, recommendation, consequence_of_no_decision). about: ids of the Tasks, Projects or Objectives it concerns.',
+				'Ask the person in Falcon Work. Unlike asking in chat, it stays under Needs you until they answer or decide, survives this conversation, and the answer comes back to you in your brief. kind question: things you need to know; pass questions[] to ask several at once, one per thing, so each can be answered on its own (prompt, impact, hypothesis = your best guess, which they can accept). kind decision: a choice for them to make (prompt, options, recommendation, consequence_of_no_decision). about: ids of what it concerns. holds: Tasks that cannot go on until it is answered; they wait on the person asked.',
 			input: Type.Object(
 				{
 					kind: Lit(['question', 'decision']),
-					prompt: Str(2000, 'The question, or the choice to make'),
+					questions: Type.Optional(
+						Type.Array(
+							Type.Object(
+								{
+									prompt: Str(2000, 'One thing you need to know'),
+									impact: Str(2000, 'Why the answer matters'),
+									hypothesis: Type.Optional(Str(12000, 'Your best guess, which they can accept'))
+								},
+								{ additionalProperties: false }
+							),
+							{ minItems: 1, maxItems: 20, ...d('question: several Questions at once') }
+						)
+					),
+					prompt: Type.Optional(Str(2000, 'The question, or the choice to make')),
 					impact: Type.Optional(Str(2000, 'question: why the answer matters')),
 					hypothesis: Type.Optional(Str(12000, 'question: your best guess, which they can accept')),
 					options: Type.Optional(
@@ -278,7 +293,8 @@ export const contract = defineFeatureContract({
 					to: Type.Optional(
 						Ids('Who answers or decides (person:<id>); the Gateway owner by default')
 					),
-					about: Type.Optional(Ids('Tasks, Projects, Milestones or Objectives it concerns'))
+					about: Type.Optional(Ids('Tasks, Projects, Milestones or Objectives it concerns')),
+					holds: Type.Optional(Ids('Tasks that wait on the person asked until this is answered'))
 				},
 				{ additionalProperties: false }
 			),
