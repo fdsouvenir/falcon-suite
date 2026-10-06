@@ -1,8 +1,9 @@
 import type { Reads } from '../store/reads.js';
 
 /** Static guidance, cacheable in the system prompt. Kept short on purpose (spec §10). */
-export const GUIDANCE = `Falcon Work is where you record what you do for the people you work for.
-- Before changing anything for a request, have a Task in progress (falcon_work: create_task, then start). Small read-only turns need nothing.
+export const GUIDANCE = `Falcon Work holds the plan and the record of everything you do for the people you work for: Objectives, Areas, Projects, Milestones, Tasks, and the Questions, Decisions and Findings around them. The person reads it as their view of your work.
+- When someone asks for a plan, a breakdown, a roadmap or a project, build it in Work: a Project with Milestones and Tasks (one call: falcon_work create_project with milestones[].tasks, or plan_project to add to an existing Project). Put it where it belongs: your brief lists the Areas and open Projects, so extend an existing Project rather than starting a parallel one. Reply with a short summary of what you put in Work. A document is only supporting material, never the plan itself.
+- Before changing anything for a request, have a Task in progress (create_task, then start). Small read-only turns need nothing.
 - Say why: definition of done when you create a Task; a Result with evidence when you complete it.
 - Unknowns go in a Question, choices someone must approve in a Decision, things learned in a Finding.
 - What you actually do is captured automatically; you never need to restate it.
@@ -28,6 +29,19 @@ export function renderBrief(
 					)
 					.join('; ')
 		);
+	if (b.structure.length) {
+		lines.push('Where work lives (Area › open Projects):');
+		for (const a of b.structure)
+			lines.push(
+				`- ${a.title} (${a.id})${a.projects.length ? '' : ': no open Projects'}` +
+					a.projects
+						.map(
+							(p) =>
+								`\n  · ${p.title} (${p.id})${p.serves.length ? ` serves ${p.serves.map((r) => `#${r}`).join(', ')}` : ''}${p.milestone ? `; at Milestone ${p.milestone.position}/${p.milestone.of} "${p.milestone.title}"` : ''}; ${p.open_tasks} open Task${p.open_tasks === 1 ? '' : 's'}`
+						)
+						.join('')
+			);
+	}
 	for (const t of b.in_progress)
 		lines.push(
 			`In progress: ${t.title} (${t.id})${t.blocked_by.length ? ` — blocked: ${t.blocked_by.join('; ')}` : ''}`

@@ -39,3 +39,27 @@ export const Empty = Type.Object({}, { additionalProperties: false });
 export const obj = <P extends Record<string, any>>(props: P) =>
 	Type.Object(props, { additionalProperties: false });
 export const opt = Type.Optional;
+
+/** A Task inside a plan: `key` names it so other Tasks in the same plan can depend on it. */
+export const PlanTask = Type.Object(
+	{
+		key: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+		title: Title,
+		description: Text,
+		done_when: Text,
+		depends_on: Type.Optional(
+			Type.Array(Type.String({ minLength: 1, maxLength: 128 }), { maxItems: 50 })
+		),
+		agent: Type.Optional(Who),
+		plan: Type.Optional(Text)
+	},
+	{ additionalProperties: false }
+);
+export const PlanMilestone = Type.Object(
+	{
+		title: Title,
+		success_condition: Text,
+		tasks: Type.Optional(Type.Array(PlanTask, { maxItems: 100 }))
+	},
+	{ additionalProperties: false }
+);

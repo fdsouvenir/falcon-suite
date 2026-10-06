@@ -303,6 +303,43 @@ export class Reads {
 				]
 			: [];
 		const mine = new Set(this.all('SELECT id FROM task WHERE agent = ?', agent).map((r) => r.id));
+		const ranks = new Map(this.objectives().map((o) => [o.id, o.rank as number]));
+		// Where work lives: active Areas and their open Projects, so plans go into the right place.
+		const structure = this.all(
+			"SELECT id, title FROM area WHERE status = 'active' ORDER BY title LIMIT 20"
+		).map((a) => ({
+			id: a.id,
+			title: a.title,
+			projects: this.all(
+				'SELECT * FROM project WHERE area_id = ? AND abandoned_at IS NULL ORDER BY created_at LIMIT 15',
+				a.id
+			)
+				.filter((p) => this.projectStatus(p) === 'open')
+				.map((p) => {
+					const ms = this.all(
+						'SELECT title, position, status FROM milestone WHERE project_id = ? ORDER BY position',
+						p.id
+					);
+					const current = ms.find((m) => m.status !== 'achieved');
+					return {
+						id: p.id,
+						title: p.title,
+						serves: this.all(
+							"SELECT target_id FROM link WHERE kind = 'serves' AND source_kind = 'project' AND source_id = ?",
+							p.id
+						)
+							.map((l) => ranks.get(l.target_id))
+							.filter((r): r is number => typeof r === 'number'),
+						milestone: current
+							? { position: current.position, of: ms.length, title: current.title }
+							: null,
+						open_tasks: this.one(
+							"SELECT count(*) AS n FROM task WHERE project_id = ? AND status IN ('open','ready','in_progress','waiting')",
+							p.id
+						)!.n as number
+					};
+				})
+		}));
 		return {
 			objectives: this.objectives().map((o) => ({
 				rank: o.rank,
@@ -311,6 +348,7 @@ export class Reads {
 				autonomy: o.autonomy,
 				last_progress: o.last_progress
 			})),
+			structure,
 			in_progress: tasks('in_progress'),
 			waiting: tasks('waiting'),
 			resolved_for_you: resolved,

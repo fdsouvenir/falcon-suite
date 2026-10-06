@@ -74,7 +74,7 @@ function warnDependencies(ctx: Context, t: TaskRow) {
 		ctx.warn('dependency_unfinished', `Depends on "${d.title}", which is not finished`, d.id);
 }
 
-function insertTask(
+export function insertTask(
 	ctx: Context,
 	i: any,
 	where: { area_id: string | null; project_id: string | null; milestone_id: string | null }
@@ -138,7 +138,7 @@ const NewTask = {
 };
 
 /** Would adding task -> on create a cycle? */
-function reaches(ctx: Context, from: string, to: string): boolean {
+export function reaches(ctx: Context, from: string, to: string): boolean {
 	const seen = new Set<string>();
 	const stack = [from];
 	while (stack.length) {

@@ -1,7 +1,20 @@
 import { Type } from 'typebox';
 import { defineCommand, type Context } from '../engine.js';
 import { InputRequired, reject } from '../types.js';
-import { Id, Title, Text, Reason, Session, Sources, Who, obj, opt } from '../schemas.js';
+import {
+	Id,
+	Title,
+	Text,
+	Reason,
+	Session,
+	Sources,
+	Who,
+	obj,
+	opt,
+	PlanMilestone,
+	PlanTask
+} from '../schemas.js';
+import { addPlan } from './plan.js';
 
 const UNFINISHED = "('open','ready','in_progress','waiting')";
 
@@ -99,14 +112,15 @@ export const structureCommands = [
 	defineCommand({
 		name: 'create_project',
 		summary:
-			'Create a Project in an Area, optionally with Milestones and the Objectives it serves.',
+			'Create a Project in an Area, optionally with its whole plan (Milestones with their Tasks and dependencies) and the Objectives it serves.',
 		input: obj({
 			title: Title,
 			outcome: Text,
 			area: Id,
 			serves: opt(Type.Array(Id, { maxItems: 20 })),
 			decision: opt(Id),
-			milestones: opt(Type.Array(obj({ title: Title, success_condition: Text }), { maxItems: 50 })),
+			milestones: opt(Type.Array(PlanMilestone, { maxItems: 50 })),
+			tasks: opt(Type.Array(PlanTask, { maxItems: 100 })),
 			session: opt(Session)
 		}),
 		run(ctx, i) {
@@ -129,19 +143,9 @@ export const structureCommands = [
 				version: 1
 			});
 			for (const o of i.serves ?? []) ctx.link('serves', 'project', id, 'objective', o);
-			(i.milestones ?? []).forEach((m: { title: string; success_condition: string }, n: number) =>
-				ctx.insert('milestone', {
-					id: ctx.newId(),
-					project_id: id,
-					title: m.title,
-					success_condition: m.success_condition,
-					position: n + 1,
-					status: 'open',
-					version: 1
-				})
-			);
 			ctx.event('project', id, 1, i.decision ? { decision: i.decision } : undefined);
-			ctx.done(id, 1);
+			const plan = addPlan(ctx, id, i.milestones, i.tasks);
+			ctx.done(id, 1, plan.tasks.length || plan.milestones.length ? plan : undefined);
 		}
 	}),
 	defineCommand({
@@ -279,6 +283,26 @@ export const structureCommands = [
 			});
 			ctx.event('milestone', id, 1, { project: p!.id, position });
 			ctx.done(id, 1);
+		}
+	}),
+	defineCommand({
+		name: 'plan_project',
+		on: 'project',
+		summary:
+			'Add a plan to a Project in one step: new Milestones with their Tasks, and Tasks for existing Milestones. Tasks name each other by key in depends_on.',
+		input: obj({
+			milestones: opt(Type.Array(PlanMilestone, { maxItems: 50 })),
+			tasks: opt(Type.Array(obj({ ...PlanTask.properties, milestone: opt(Id) }), { maxItems: 100 }))
+		}),
+		run(ctx, i, p) {
+			if (!i.milestones?.length && !i.tasks?.length)
+				reject('empty_plan', 'Give at least one Milestone or Task');
+			const plan = addPlan(ctx, p!.id as string, i.milestones, i.tasks);
+			const v = ctx.update('project', p!.id as string, {});
+			ctx.event('project', p!.id as string, v, {
+				planned: { milestones: plan.milestones.length, tasks: plan.tasks.length }
+			});
+			ctx.done(p!.id as string, v, plan);
 		}
 	}),
 	defineCommand({
