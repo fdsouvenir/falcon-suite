@@ -125,7 +125,12 @@ export class Views {
 		};
 	}
 
-	/** Everything on the Overview tab (spec §12). */
+	/**
+	 * Everything on the Overview tab (spec §12). Needs you holds only what this person can act on,
+	 * one entry per thing: Decisions to decide, Questions to answer, and Tasks waiting on them that
+	 * no Decision or Question of theirs already covers. Happening now is the agents' work; Heads up
+	 * is the remaining Warnings, those not already shown as the age of an item above.
+	 */
 	overview(person: string, now: string) {
 		const decisions = this.all(
 			"SELECT * FROM decision WHERE status IN ('pending','deferred') ORDER BY created_at"
@@ -135,23 +140,61 @@ export class Views {
 		const questions = this.all("SELECT * FROM question WHERE status = 'open' ORDER BY created_at")
 			.map((q) => this.questionCard(q, person))
 			.filter((q) => q.can_answer);
+		// A Task held by one of this person's Decisions or Questions is covered by that item.
+		const coveredBy = new Map<string, 'decision' | 'answer'>();
+		for (const k of [...decisions, ...questions])
+			for (const l of this.all(
+				"SELECT target_id FROM link WHERE kind = 'targets' AND source_id = ? AND target_kind = 'task'",
+				k.id
+			))
+				coveredBy.set(l.target_id, k.kind === 'decision' ? 'decision' : 'answer');
+		const waitingOnYou = this.all(
+			"SELECT * FROM task WHERE status = 'waiting' AND waiting_on_kind = 'person' AND waiting_on_ref = ? ORDER BY follow_up_at IS NULL, follow_up_at, updated_at",
+			person
+		).filter((t) => !coveredBy.has(t.id));
 		const handovers = this.all(
 			"SELECT * FROM ask WHERE addressed_to = ? AND status = 'pending' AND subject_kind = 'task' ORDER BY created_at",
 			person
-		).map((a) => ({
-			kind: 'ask' as const,
-			id: a.id,
-			prompt: a.prompt,
-			task: a.subject_id,
-			created_at: a.created_at,
-			version: a.version
-		}));
-		const tasks = (status: string, order = 'updated_at DESC', limit = 50) =>
-			this.all(`SELECT * FROM task WHERE status = ? ORDER BY ${order} LIMIT ${limit}`, status).map(
-				(t) => this.taskCard(t)
-			);
+		);
+		const todo = [
+			...waitingOnYou.map((t) => ({
+				kind: 'task' as const,
+				id: t.id,
+				title: this.reads.taskTitle(t.id),
+				agent: t.agent,
+				waiting_for: t.waiting_for,
+				resume_when: t.resume_when,
+				follow_up_at: t.follow_up_at,
+				since: t.updated_at
+			})),
+			...handovers.map((a) => ({
+				kind: 'ask' as const,
+				id: a.subject_id,
+				ask: a.id,
+				title: a.prompt,
+				agent: null,
+				waiting_for: null,
+				resume_when: null,
+				follow_up_at: null,
+				since: a.created_at
+			}))
+		];
+		const todoIds = new Set(todo.map((t) => t.id));
+
+		const card = (t: Row) => ({
+			...this.taskCard(t),
+			waiting_on_you: coveredBy.get(t.id) ?? null
+		});
+		const happening = [
+			...this.all("SELECT * FROM task WHERE status = 'in_progress' ORDER BY updated_at DESC"),
+			...this.all(
+				"SELECT * FROM task WHERE status = 'waiting' ORDER BY follow_up_at IS NULL, follow_up_at"
+			).filter((t) => !todoIds.has(t.id)),
+			...this.all("SELECT * FROM task WHERE status = 'ready' ORDER BY updated_at DESC LIMIT 5")
+		].map(card);
+
 		const completed = this.all(
-			"SELECT * FROM task WHERE status = 'completed' ORDER BY updated_at DESC LIMIT 5"
+			"SELECT * FROM task WHERE status = 'completed' ORDER BY updated_at DESC LIMIT 4"
 		).map((t) => {
 			const r = this.one(
 				'SELECT content, sources, at FROM task_result WHERE id = ?',
@@ -162,24 +205,30 @@ export class Views {
 				result: r ? { content: r.content, sources: parse(r.sources), at: r.at } : null
 			};
 		});
-		const untracked = this.all(
-			'SELECT * FROM activity WHERE task_id IS NULL ORDER BY at DESC LIMIT 10'
-		);
-		const warnings = this.reads.warnings(now);
+		const heads_up = this.reads
+			.warnings(now)
+			.filter(
+				(w) =>
+					w.kind !== 'unanswered' &&
+					!(
+						w.kind === 'follow_up_overdue' &&
+						(todoIds.has(w.object.id) || coveredBy.has(w.object.id))
+					)
+			);
+		const count = decisions.length + questions.length + todo.length;
 		return {
-			needs_you: {
-				warnings,
-				decisions,
-				questions,
-				handovers,
-				count: warnings.length + decisions.length + questions.length + handovers.length
+			summary: {
+				decide: decisions.length,
+				answer: questions.length,
+				todo: todo.length,
+				in_progress: happening.filter((t) => t.status === 'in_progress').length
 			},
-			now: tasks('in_progress'),
-			waiting: tasks('waiting', 'follow_up_at IS NULL, follow_up_at'),
+			needs_you: { decisions, questions, todo, count },
+			happening,
+			heads_up,
 			completed,
 			untracked: {
-				count: this.one('SELECT count(*) AS n FROM activity WHERE task_id IS NULL')!.n,
-				items: untracked
+				count: this.one('SELECT count(*) AS n FROM activity WHERE task_id IS NULL')!.n
 			},
 			objectives: this.objectivesTab()
 		};
@@ -489,6 +538,17 @@ export class Views {
 	}
 
 	/** Detail for the side panel: a Task, Question, Decision or Finding. */
+	/** Targets with the titles a person reads. */
+	private titled(targets: { kind: string; id: string }[] = []) {
+		return targets.map((t) => ({
+			...t,
+			title:
+				t.kind === 'task'
+					? this.reads.taskTitle(t.id)
+					: (this.one(`SELECT title FROM ${t.kind} WHERE id = ?`, t.id)?.title ?? t.id)
+		}));
+	}
+
 	panel(id: string, person: string) {
 		const d = this.reads.get(id);
 		if (!d) return null;
@@ -516,12 +576,14 @@ export class Views {
 		if (d.kind === 'decision')
 			return {
 				...d,
-				card: this.decisionCard(this.one('SELECT * FROM decision WHERE id = ?', id)!, person)
+				card: this.decisionCard(this.one('SELECT * FROM decision WHERE id = ?', id)!, person),
+				for: this.titled(d.targets)
 			};
 		if (d.kind === 'question')
 			return {
 				...d,
-				card: this.questionCard(this.one('SELECT * FROM question WHERE id = ?', id)!, person)
+				card: this.questionCard(this.one('SELECT * FROM question WHERE id = ?', id)!, person),
+				for: this.titled(d.targets)
 			};
 		return d;
 	}

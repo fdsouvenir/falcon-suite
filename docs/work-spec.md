@@ -276,18 +276,29 @@ Warnings appear in **Needs you** and feed the agent's daily Objective review.
 
 ## 12. The human's view
 
-The Work tab in the Control UI answers, at a glance:
+The Work tab in the Control UI answers, at a glance. Its **Overview** is calm: one line per item,
+nothing listed twice, and acting happens in the side panel, not on the page.
 
-1. **Objectives** — each active Objective by rank: KPI readings against target, latest review,
-   Work in flight serving it, and when it last made progress (the most recent completed Task
-   serving it).
-2. **Needs you** — Questions, Decisions and Asks addressed to you, and Warnings (§11), oldest
-   first.
-3. **Now** — what each agent has in progress.
-4. **Waiting** — Tasks waiting, on whom, and which follow-ups are due.
-5. **Recently completed** — with Results and their evidence.
-6. **Untracked activity** — things agents did that no Task explains.
+1. **Summary** — one sentence: what is waiting on you, and what the agents are working on.
+2. **Needs you** — only what you can act on, oldest first, grouped by what you do: **Decide**
+   (Decisions you decide, with the agent's recommendation), **Answer** (Questions you can answer,
+   with the agent's hypothesis), **Do** (Tasks waiting on you, and Asks to take over a Task). A
+   Task waiting on you that one of your Decisions or Questions already covers is not listed again.
+   Age replaces the matching Warnings: an old item's age turns to a warning colour, and an overdue
+   follow-up shows as "overdue".
+3. **Happening now** — Tasks in progress, waiting (on whom; "waiting on your decision" when it is
+   covered above) and ready.
+4. **Heads up** — the remaining Warnings (§11), quietly: Objectives without progress, stalled
+   Tasks, untracked activity, Milestones ready to mark achieved.
+5. **Objectives** — each active Objective by rank with its first KPI and last progress (the full
+   view, with reviews and serving Work, is the Objectives tab).
+6. **Recently completed** — the latest finished Tasks; the rest is in Activity.
 7. **Areas and Projects** — the browsable structure, with derived status and Milestone progress.
+
+A Decision opens in the side panel with its options (risks and tradeoffs), the recommendation
+preselected, the agent's reasoning, an optional "Why?", **Decide**, and what happens if nobody
+decides. A Question shows why it matters, the agent's hypothesis with **Use its guess**, or your
+own answer. Both show what they are for.
 
 **Navigation.** Areas are a row of filter chips under the tabs ("All" by default, grouping
 Projects under Area headings), never a second sidebar. Objectives, Projects and Areas open as full

@@ -112,7 +112,7 @@ export function warningRow(c: Ctx, w: any) {
 }
 
 /** Warning details name exact timestamps for agents; people read them as dates. */
-const readableDates = (text: string) =>
+export const readableDates = (text: string) =>
 	(text ?? '').replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z/g, (iso) => day(iso));
 
 const labelFor = (kind: string) =>

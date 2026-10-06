@@ -510,3 +510,176 @@
 .fw-feed .fw-who {
 	min-width: 48px;
 }
+
+/* Overview: one line per item, acting happens in the side panel. */
+.fw-summary {
+	margin: 0 0 var(--space-3);
+	color: var(--muted);
+	font-size: var(--control-ui-text-sm);
+}
+.fw-group-label {
+	padding: var(--space-1) var(--space-3);
+	border-bottom: 1px solid var(--border);
+	background: var(--bg-hover);
+	color: var(--muted);
+	font-size: var(--control-ui-text-xs);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.fw-row.fw-line {
+	min-height: 0;
+	padding: var(--space-2) var(--space-3);
+	font-size: var(--control-ui-text-sm);
+}
+.fw-line-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.fw-line-title {
+	color: var(--text-strong);
+	font-weight: 500;
+}
+.fw-age,
+.fw-line-status {
+	flex: none;
+	font-size: var(--control-ui-text-xs);
+}
+.fw-line-status {
+	font-size: var(--control-ui-text-sm);
+}
+.fw-chevron {
+	flex: none;
+	color: var(--muted);
+}
+.fw-run-text {
+	color: var(--ok);
+}
+.fw-heads-up {
+	display: grid;
+	gap: var(--space-1);
+	margin: 0;
+	padding: 0;
+	color: var(--muted);
+	font-size: var(--control-ui-text-sm);
+	list-style: none;
+}
+.fw-heads-up li {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2);
+}
+.fw-dot-warn {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: var(--radius-full);
+	background: var(--warn);
+	transform: translateY(-1px);
+}
+.fw-objectives-slim {
+	display: grid;
+}
+.fw-objective-slim {
+	display: grid;
+	gap: var(--space-2);
+	padding: var(--space-3) 0;
+	border-bottom: 1px solid var(--border);
+}
+.fw-objective-slim:first-child {
+	padding-top: 0;
+}
+.fw-done-list {
+	display: grid;
+	gap: var(--space-1);
+}
+.fw-done-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	font-size: var(--control-ui-text-sm);
+	cursor: pointer;
+}
+.fw-done-row:hover .fw-done-title {
+	color: var(--text-strong);
+}
+.fw-done-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Side panel: a Decision's options and a Question's answer. */
+.fw-choices {
+	display: grid;
+	gap: var(--space-2);
+}
+.fw-choice {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-3);
+	padding: var(--space-3);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--card);
+	color: var(--text);
+	font: inherit;
+	text-align: left;
+}
+button.fw-choice {
+	cursor: pointer;
+}
+button.fw-choice:hover {
+	border-color: var(--border-strong);
+}
+.fw-choice[aria-pressed='true'],
+.fw-choice[data-chosen] {
+	border-color: var(--accent);
+	background: var(--accent-subtle);
+}
+.fw-radio {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	margin-top: 2px;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-full);
+	background: var(--card);
+}
+.fw-choice[aria-pressed='true'] .fw-radio,
+.fw-choice[data-chosen] .fw-radio {
+	border: 4px solid var(--accent);
+}
+.fw-choice-body {
+	display: grid;
+	gap: var(--space-1);
+}
+.fw-choice-label {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	color: var(--text-strong);
+	font-weight: 500;
+}
+.fw-pill-accent {
+	background: var(--accent-subtle);
+	color: var(--accent);
+}
+.fw-btn-wide {
+	width: 100%;
+	min-height: 36px;
+}
+.fw-center {
+	text-align: center;
+}
+.fw-textarea {
+	min-height: 72px;
+	padding: var(--space-2);
+	resize: vertical;
+}

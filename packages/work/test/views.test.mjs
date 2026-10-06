@@ -90,17 +90,77 @@ test('overview: what needs the person, what is happening, and sessions with fall
 		[q]
 	);
 	assert.equal(v.needs_you.questions[0].hypothesis, 'gpt-5.5');
-	assert.deepEqual(
-		v.now.map((x) => x.id),
-		[t1]
-	);
-	assert.deepEqual(v.now[0].session, { key: 'agent:main:dashboard:proj', from: 'project' });
+	assert.equal(v.happening[0].id, t1);
+	assert.deepEqual(v.happening[0].session, { key: 'agent:main:dashboard:proj', from: 'project' });
+	assert.deepEqual(v.summary, { decide: 1, answer: 1, todo: 0, in_progress: 1 });
 	assert.equal(v.untracked.count, 1);
 	assert.equal(v.objectives[0].serving.projects[0].tasks_total, 2);
 	assert.equal(
 		w.views.overview('person:other', w.now()).needs_you.decisions.length,
 		0,
 		'only deciders see a Decision'
+	);
+});
+
+test('overview: one entry per thing that needs the person; warnings become ages or Heads up', () => {
+	const { w, t1, d } = world();
+	const ok = (env, actor = VERL) => {
+		const r = w.do(env, actor);
+		assert.ok(r.outcome.startsWith('committed'), JSON.stringify(r));
+		return r.id;
+	};
+	const wait = (id) =>
+		ok({
+			command: 'wait',
+			id,
+			input: {
+				waiting_for: 'Fred',
+				waiting_on: { kind: 'person', ref: FRED.id },
+				resume_when: 'done',
+				follow_up_at: '2000-01-01T00:00:00Z'
+			}
+		});
+	// Waiting on Fred with nothing else asking him: a thing to do.
+	wait(t1);
+	let v = w.views.overview(FRED.id, w.now());
+	assert.deepEqual(
+		v.needs_you.todo.map((x) => x.id),
+		[t1]
+	);
+	assert.ok(!v.happening.some((x) => x.id === t1), 'listed once, under Needs you');
+	assert.ok(
+		!v.heads_up.some((x) => x.kind === 'follow_up_overdue'),
+		'the overdue follow-up is the age of the Do item'
+	);
+	assert.ok(!v.heads_up.some((x) => x.kind === 'unanswered'));
+	assert.equal(v.needs_you.count, 3);
+
+	// The same Task held by one of Fred's Decisions: the Decision covers it.
+	ok({ command: 'resume', id: t1 });
+	ok({
+		command: 'raise_decision',
+		input: {
+			prompt: 'Go ahead?',
+			options: [
+				{ id: 'y', label: 'Yes' },
+				{ id: 'n', label: 'No' }
+			],
+			recommendation: { option: 'y', rationale: 'r' },
+			deciders: [FRED.id],
+			consequence_of_no_decision: 'c',
+			targets: [{ kind: 'task', id: t1 }]
+		}
+	});
+	wait(t1);
+	v = w.views.overview(FRED.id, w.now());
+	assert.equal(v.needs_you.todo.length, 0);
+	assert.equal(v.happening.find((x) => x.id === t1).waiting_on_you, 'decision');
+	assert.ok(v.needs_you.decisions.some((x) => x.id === d));
+
+	const panel = w.views.panel(d, FRED.id);
+	assert.deepEqual(
+		panel.for.map((x) => x.title),
+		['First Job']
 	);
 });
 
