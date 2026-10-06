@@ -307,7 +307,17 @@ over the current page, with "Open as page". Session chips open the session; evid
 the commit, PR or file. A Project page shows its header (status, serves, accountable, session with
 live state; Edit, Change session, Abandon), outcome, ordered Milestones with their Tasks and
 achievement basis — **Mark achieved** is disabled with the reason while the closure guard holds —
-the Questions, Decisions and Findings about it, and its history.
+the Questions, Decisions and Findings about it, and its history. An Objective page shows its
+header (rank, owner, session), statement, KPIs, latest review and what serves it: each Project
+with its Tasks under their Milestones, and Tasks serving it directly. Its side column shows its
+Decisions and Questions only when there are any, its Autonomy, and a folded History.
+
+**Saying what things are.** Every page names its kind above its title in small caps (Objective,
+Project, Area), and every Project card and Decision or Question card names its kind too. A rank is
+written "Rank 2", never "#2". Every list says what it holds (Tasks, Other Tasks, Decisions…), and
+rows in mixed lists (Needs you) carry their kind. A Task row shows one status pill — open, ready,
+blocked, waiting or in progress — with why (what it depends on, whom it waits on, the follow-up
+date) as a quiet line under its title.
 
 **Look.** Work is a native Control UI page that looks built in: it uses only the Control UI's
 theme variables, fonts and full-width page layout, with no palette, fonts or page frame of its

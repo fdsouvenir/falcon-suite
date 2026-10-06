@@ -1,5 +1,5 @@
 import type { Ctx } from '../app.js';
-import { h, section, empty, day, since, who, icon, statusIcon } from '../dom.js';
+import { h, section, empty, day, since, who, icon, statusIcon, kicker } from '../dom.js';
 import { objectiveLink, kpiBar, openPanel, readableDates } from '../parts.js';
 
 /** Days since an ISO time, for ages that turn to warnings. */
@@ -33,6 +33,7 @@ export async function overviewView(c: Ctx, setCount: (n: number) => void) {
 								const rec = d.options.find((o: any) => o.id === d.recommendation?.option);
 								return needRow(c, {
 									id: d.id,
+									kind: 'Decision',
 									icon: icon('decision'),
 									text: d.prompt,
 									context: rec ? `${who(d.created_by)} recommends: ${rec.label}` : null,
@@ -45,6 +46,7 @@ export async function overviewView(c: Ctx, setCount: (n: number) => void) {
 							n.questions.map((q: any) =>
 								needRow(c, {
 									id: q.id,
+									kind: 'Question',
 									icon: icon('question'),
 									text: q.prompt,
 									context: q.hypothesis
@@ -59,6 +61,7 @@ export async function overviewView(c: Ctx, setCount: (n: number) => void) {
 							n.todo.map((t: any) =>
 								needRow(c, {
 									id: t.id,
+									kind: 'Task',
 									icon: icon('check'),
 									text: t.title,
 									context: t.agent ? `${who(t.agent)} is waiting on you` : null,
@@ -114,7 +117,7 @@ export async function overviewView(c: Ctx, setCount: (n: number) => void) {
 									'div',
 									{ class: 'fw-card-head' },
 									objectiveLink(c, o),
-									h('span', { class: 'fw-pill' }, o.autonomy)
+									h('span', { class: 'fw-pill' }, `Autonomy: ${o.autonomy}`)
 								),
 								o.kpis[0] ? kpiBar(o.kpis[0]) : null,
 								h(
@@ -128,7 +131,7 @@ export async function overviewView(c: Ctx, setCount: (n: number) => void) {
 				: empty('No Objectives yet. Add the things you want progress toward.')
 		),
 		section(
-			'Recently completed',
+			'Recently completed Tasks',
 			null,
 			v.completed.length
 				? h(
@@ -201,6 +204,7 @@ function needRow(
 	c: Ctx,
 	r: {
 		id: string;
+		kind: string;
 		icon: HTMLElement;
 		text: string;
 		context: string | null;
@@ -220,6 +224,7 @@ function needRow(
 			}
 		},
 		r.icon,
+		kicker(r.kind),
 		h(
 			'span',
 			{ class: 'fw-line-text' },
@@ -243,11 +248,9 @@ function happeningRow(c: Ctx, t: any) {
 							{ class: 'fw-muted' },
 							`waiting on ${who(t.waiting_on?.ref)}${t.follow_up_at ? ` · follow up ${day(t.follow_up_at)}` : ''}`
 						)
-				: h(
-						'span',
-						{ class: 'fw-muted' },
-						`ready${t.blocked_by?.length ? ` · ${t.blocked_by[0]}` : ''}`
-					);
+				: t.blocked_by?.length
+					? h('span', { class: 'fw-warn-text' }, `blocked · ${t.blocked_by[0]}`)
+					: h('span', { class: 'fw-muted' }, 'ready');
 	return h(
 		'div',
 		{

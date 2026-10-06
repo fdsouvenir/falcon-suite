@@ -97,3 +97,10 @@ export const section = (title: string, count: number | null, ...body: Child[]) =
 	);
 
 export const empty = (text: string) => h('p', { class: 'fw-empty' }, text);
+
+/** What kind of thing this is (Objective, Project, Task…), in small caps above or before its name. */
+export const kicker = (kind: string) => h('span', { class: 'fw-kicker' }, kind);
+
+/** An Objective's rank, written out so it does not read like an issue number. */
+export const rank = (n?: number | null) =>
+	n ? h('span', { class: 'fw-rank' }, `Rank ${n}`) : null;

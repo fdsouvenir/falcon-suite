@@ -1,5 +1,5 @@
 import type { Ctx } from './app.js';
-import { h, icon, statusIcon, day, since, who, avatar } from './dom.js';
+import { h, icon, statusIcon, day, since, who, avatar, kicker } from './dom.js';
 
 type SessionRef = { key: string; from: 'own' | 'project' | 'task' } | null;
 
@@ -32,11 +32,42 @@ export const evidence = (sources: { ref: string; label?: string }[] | null | und
 /** Open the side panel for an object, keeping the current page. */
 export const openPanel = (c: Ctx, id: string) => c.go({ ...c.params, panel: id });
 
-export function taskRow(c: Ctx, t: any, opts: { place?: boolean; muted?: boolean } = {}) {
+/**
+ * One status per Task row: a single pill, with why (whom it waits on, what blocks it) as a quiet
+ * second line under the title.
+ */
+export function taskStatus(t: any): { label: string; tone: string; detail: string | null } {
+	const blockers: string[] = (t.blocked_by ?? []).filter((b: string) => !b.startsWith('waiting:'));
+	if (t.status === 'waiting')
+		return {
+			label: 'waiting',
+			tone: 'waiting',
+			detail: [
+				t.waiting_on ? `on ${who(t.waiting_on.ref)}` : null,
+				t.follow_up_at ? `follow up ${day(t.follow_up_at)}` : null
+			]
+				.filter(Boolean)
+				.join(' · ')
+		};
+	if ((t.status === 'open' || t.status === 'ready') && blockers.length)
+		return { label: 'blocked', tone: 'waiting', detail: blockers.join(' · ') };
+	return {
+		label: t.status.replace('_', ' '),
+		tone: t.status,
+		detail: blockers.length ? blockers.join(' · ') : null
+	};
+}
+
+export function taskRow(c: Ctx, t: any, opts: { place?: boolean } = {}) {
+	const done = t.status === 'completed';
+	const s = taskStatus(t);
+	const sub = [opts.place && t.place ? t.place.title : null, done ? null : s.detail]
+		.filter(Boolean)
+		.join(' · ');
 	return h(
 		'div',
 		{
-			class: `fw-row fw-task${t.status === 'completed' ? ' is-done' : ''}`,
+			class: `fw-row fw-task${done ? ' is-done' : ''}`,
 			'data-panel': t.id,
 			role: 'button',
 			tabindex: 0,
@@ -50,29 +81,14 @@ export function taskRow(c: Ctx, t: any, opts: { place?: boolean; muted?: boolean
 			'div',
 			{ class: 'fw-row-main' },
 			h('span', { class: 'fw-row-title' }, t.title),
-			opts.place && t.place ? h('span', { class: 'fw-row-sub' }, t.place.title) : null
+			sub ? h('span', { class: 'fw-row-sub', title: sub }, sub) : null
 		),
 		h(
 			'div',
 			{ class: 'fw-row-meta' },
-			t.status === 'waiting' && t.waiting_on
-				? h(
-						'span',
-						{ class: 'fw-warn-text' },
-						`waiting on ${who(t.waiting_on.ref)}${t.follow_up_at ? ` · follow up ${day(t.follow_up_at)}` : ''}`
-					)
-				: null,
-			t.blocked_by?.length && t.status !== 'waiting'
-				? h('span', { class: 'fw-warn-text', title: t.blocked_by.join('\n') }, t.blocked_by[0])
-				: null,
-			t.status === 'in_progress'
-				? h('span', { class: 'fw-pill fw-pill-run' }, 'in progress')
-				: null,
-			t.status === 'open' || t.status === 'ready'
-				? h('span', { class: 'fw-pill' }, t.status)
-				: null,
-			t.agent && t.status !== 'completed' ? avatar(t.agent) : null,
-			t.session && t.status !== 'completed' ? sessionChip(c, t.session) : null
+			done ? null : h('span', { class: `fw-pill fw-pill-${s.tone}` }, s.label),
+			t.agent && !done ? avatar(t.agent) : null,
+			t.session && !done ? sessionChip(c, t.session) : null
 		)
 	);
 }
@@ -174,6 +190,7 @@ export function decisionCard(c: Ctx, d: any) {
 			'div',
 			{ class: 'fw-card-head' },
 			icon('decision'),
+			kicker('Decision'),
 			h('strong', { class: 'fw-strong' }, d.prompt)
 		),
 		d.recommendation?.rationale ? h('p', { class: 'fw-muted' }, d.recommendation.rationale) : null,
@@ -225,6 +242,7 @@ export function questionCard(c: Ctx, q: any) {
 			'div',
 			{ class: 'fw-card-head' },
 			icon('question'),
+			kicker('Question'),
 			h('strong', { class: 'fw-strong' }, q.prompt),
 			h(
 				'span',
@@ -276,7 +294,7 @@ export function questionCard(c: Ctx, q: any) {
 	);
 }
 
-export function objectiveLink(c: Ctx, o: { id: string; rank?: number | null; title: string }) {
+export function objectiveLink(c: Ctx, o: { id: string; title: string }) {
 	return h(
 		'a',
 		{
@@ -284,7 +302,7 @@ export function objectiveLink(c: Ctx, o: { id: string; rank?: number | null; tit
 			href: c.href({ objective: o.id }),
 			on: { click: (e: Event) => (e.preventDefault(), c.go({ objective: o.id })) }
 		},
-		`${o.rank ? `#${o.rank} ` : ''}${o.title}`
+		o.title
 	);
 }
 

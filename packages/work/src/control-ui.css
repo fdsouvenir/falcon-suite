@@ -441,7 +441,6 @@
 	display: grid;
 	gap: var(--space-2);
 }
-.fw-step,
 .fw-rank {
 	display: inline-grid;
 	place-items: center;
@@ -454,7 +453,36 @@
 	font-size: var(--control-ui-text-xs);
 }
 .fw-indent {
-	margin-left: calc(var(--space-7) + var(--space-2));
+	margin-left: var(--space-6);
+}
+/* What kind of thing this is: OBJECTIVE, PROJECT, AREA, DECISION… */
+.fw-kicker {
+	color: var(--muted);
+	font-size: var(--control-ui-text-xs);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+.fw-row-sub {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.fw-fold > summary {
+	cursor: pointer;
+	list-style: none;
+}
+.fw-fold > summary::-webkit-details-marker {
+	display: none;
+}
+.fw-fold > summary::before {
+	content: '›';
+	display: inline-block;
+	transition: transform 0.15s;
+}
+.fw-fold[open] > summary::before {
+	transform: rotate(90deg);
 }
 .fw-project-title,
 .fw-objective-title {

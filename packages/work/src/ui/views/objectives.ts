@@ -1,6 +1,7 @@
 import type { Ctx } from '../app.js';
-import { h, section, empty, day, who, avatar, icon } from '../dom.js';
+import { h, section, empty, day, who, avatar, icon, kicker, rank } from '../dom.js';
 import { kpiBar, sessionChip, decisionCard, questionCard, taskRow, evidence } from '../parts.js';
+import { projectCard } from './areas.js';
 
 export async function objectivesView(c: Ctx) {
 	const list = await c.read({ view: 'objectives' });
@@ -23,7 +24,7 @@ export async function objectivesView(c: Ctx) {
 							h(
 								'div',
 								{ class: 'fw-card-head' },
-								h('span', { class: 'fw-rank' }, `#${o.rank}`),
+								rank(o.rank),
 								h(
 									'a',
 									{
@@ -34,7 +35,7 @@ export async function objectivesView(c: Ctx) {
 									o.title,
 									' ›'
 								),
-								h('span', { class: 'fw-pill' }, o.autonomy),
+								h('span', { class: 'fw-pill' }, `Autonomy: ${o.autonomy}`),
 								h(
 									'span',
 									{ class: `fw-right ${o.last_progress ? 'fw-muted' : 'fw-warn-text'}` },
@@ -51,9 +52,10 @@ export async function objectivesView(c: Ctx) {
 										h('span', { class: 'fw-muted' }, 'Serving: '),
 										[
 											...o.serving.projects.map(
-												(p: any) => `${p.title} (${p.tasks_done} of ${p.tasks_total} Tasks)`
+												(p: any) =>
+													`Project ${p.title} (${p.tasks_done} of ${p.tasks_total} Tasks done)`
 											),
-											...o.serving.tasks.map((t: any) => t.title)
+											...o.serving.tasks.map((t: any) => `Task ${t.title}`)
 										].join(' · ')
 									)
 								: h('p', { class: 'fw-muted' }, 'Nothing serves this Objective yet.'),
@@ -77,47 +79,20 @@ export async function objectiveView(c: Ctx, id: string) {
 	if (o.error) return empty('This Objective no longer exists.');
 	const review = o.reviews[0];
 	const serving = [
-		...o.serving.projects.map((p: any) => {
-			const tasks = p.milestones.flatMap((m: any) => m.tasks);
-			return h(
-				'div',
-				{ class: 'fw-card' },
-				h(
+		...o.serving.projects.map((p: any) => projectCard(c, p, { area: p.area_title ?? '' })),
+		o.serving.tasks.length
+			? h(
 					'div',
-					{ class: 'fw-card-head' },
+					{ class: 'fw-card' },
+					h('h3', { class: 'fw-card-title' }, 'Tasks'),
 					h(
-						'a',
-						{
-							class: 'fw-strong fw-link',
-							href: c.href({ project: p.id }),
-							on: { click: (e: Event) => (e.preventDefault(), c.go({ project: p.id })) }
-						},
-						p.title,
-						' ›'
-					),
-					h('span', { class: 'fw-pill' }, p.area_title ?? '')
-				),
-				p.milestones.length
-					? h(
-							'p',
-							{ class: 'fw-muted' },
-							'Milestones: ',
-							p.milestones
-								.map((m: any) => `${m.status === 'achieved' ? '✓' : '○'} ${m.title}`)
-								.join('  ')
-						)
-					: null,
-				tasks.length
-					? h(
-							'div',
-							{ class: 'fw-list' },
-							tasks.map((t: any) => taskRow(c, t))
-						)
-					: h('p', { class: 'fw-muted' }, 'No Tasks yet')
-			);
-		}),
-		...o.serving.tasks.map((t: any) => taskRow(c, t, { place: true }))
-	];
+						'div',
+						{ class: 'fw-list' },
+						o.serving.tasks.map((t: any) => taskRow(c, t, { place: true }))
+					)
+				)
+			: null
+	].filter(Boolean);
 	const main = h(
 		'div',
 		{ class: 'fw-col-main' },
@@ -188,15 +163,15 @@ export async function objectiveView(c: Ctx, id: string) {
 	const side = h(
 		'div',
 		{ class: 'fw-col-side' },
-		section(
-			'Needs you',
-			o.needs_you.length,
-			o.needs_you.length
-				? o.needs_you.map((x: any) =>
+		o.needs_you.length
+			? section(
+					'Needs you',
+					o.needs_you.length,
+					o.needs_you.map((x: any) =>
 						x.kind === 'decision' ? decisionCard(c, x) : questionCard(c, x)
 					)
-				: empty('Nothing.')
-		),
+				)
+			: null,
 		section(
 			'Autonomy',
 			null,
@@ -213,9 +188,15 @@ export async function objectiveView(c: Ctx, id: string) {
 				)
 			)
 		),
-		section(
-			'History',
-			null,
+		h(
+			'details',
+			{ class: 'fw-section fw-fold' },
+			h(
+				'summary',
+				{ class: 'fw-section-title' },
+				'History',
+				h('span', { class: 'fw-count' }, String(o.history.length))
+			),
 			h(
 				'ul',
 				{ class: 'fw-history' },
@@ -235,11 +216,10 @@ export async function objectiveView(c: Ctx, id: string) {
 			h(
 				'div',
 				null,
+				kicker('Objective'),
 				h(
 					'h1',
 					{ class: 'fw-page-title' },
-					o.rank ? h('span', { class: 'fw-rank' }, `#${o.rank}`) : null,
-					' ',
 					o.title,
 					' ',
 					h('span', { class: 'fw-pill' }, o.status)
@@ -247,9 +227,10 @@ export async function objectiveView(c: Ctx, id: string) {
 				h(
 					'div',
 					{ class: 'fw-meta' },
-					'Owner: ',
+					rank(o.rank),
+					' Owner: ',
 					avatar(o.owner),
-					` ${who(o.owner)} · Autonomy: ${o.autonomy} `,
+					` ${who(o.owner)} `,
 					sessionChip(c, o.session)
 				)
 			)

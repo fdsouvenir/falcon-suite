@@ -1,5 +1,5 @@
 import type { Ctx } from '../app.js';
-import { h, section, empty, day, who, avatar, icon } from '../dom.js';
+import { h, section, empty, day, who, avatar, icon, kicker } from '../dom.js';
 import {
 	sessionChip,
 	taskRow,
@@ -40,6 +40,7 @@ export async function areasView(c: Ctx) {
 			h(
 				'div',
 				{ class: 'fw-area-line' },
+				kicker('Area'),
 				h('h2', { class: 'fw-area-title' }, g.area.title),
 				h('span', { class: 'fw-muted' }, g.area.description),
 				h(
@@ -102,7 +103,7 @@ function chip(
 	);
 }
 
-function milestoneBlock(c: Ctx, m: any, guard: boolean) {
+export function milestoneBlock(c: Ctx, m: any, guard: boolean) {
 	const achieved = m.status === 'achieved';
 	const open = m.tasks.filter((t: any) => !['completed', 'abandoned'].includes(t.status)).length;
 	return h(
@@ -111,9 +112,8 @@ function milestoneBlock(c: Ctx, m: any, guard: boolean) {
 		h(
 			'div',
 			{ class: 'fw-milestone-head' },
-			h('span', { class: 'fw-step' }, String(m.position)),
 			achieved ? icon('check') : icon('circle'),
-			h('span', { class: 'fw-strong' }, m.title),
+			h('span', { class: 'fw-strong' }, `Milestone ${m.position}: ${m.title}`),
 			h(
 				'span',
 				{ class: 'fw-muted' },
@@ -154,15 +154,7 @@ function milestoneBlock(c: Ctx, m: any, guard: boolean) {
 			? h(
 					'div',
 					{ class: 'fw-list fw-indent' },
-					m.tasks.map((t: any) =>
-						taskRow(c, {
-							...t,
-							blocked_by:
-								t.depends_on?.length && t.status !== 'completed'
-									? [`depends on: ${t.depends_on.map((d: any) => d.title).join(', ')}`]
-									: t.blocked_by
-						})
-					)
+					m.tasks.map((t: any) => taskRow(c, t))
 				)
 			: null
 	);
@@ -197,13 +189,15 @@ function achieveButton(c: Ctx, m: any, open: number) {
 	];
 }
 
-function projectCard(c: Ctx, p: any) {
+/** A Project with its Milestones and their Tasks; on an Objective page it names its Area instead. */
+export function projectCard(c: Ctx, p: any, opts: { area?: string } = {}) {
 	return h(
 		'article',
 		{ class: `fw-card fw-project${p.status === 'abandoned' ? ' is-abandoned' : ''}` },
 		h(
 			'div',
 			{ class: 'fw-card-head' },
+			kicker('Project'),
 			h(
 				'a',
 				{
@@ -215,9 +209,9 @@ function projectCard(c: Ctx, p: any) {
 				' ›'
 			),
 			h('span', { class: 'fw-pill' }, p.status),
-			p.serves.map((o: any) =>
-				h('span', { class: 'fw-pill' }, `serves #${o.rank ?? ''} ${o.title}`)
-			),
+			opts.area !== undefined
+				? h('span', { class: 'fw-pill' }, `Area: ${opts.area}`)
+				: p.serves.map((o: any) => h('span', { class: 'fw-pill' }, `Serves: ${o.title}`)),
 			h('span', { class: 'fw-right' }, sessionChip(c, p.session))
 		),
 		h('p', { class: 'fw-muted' }, p.outcome),
@@ -229,12 +223,16 @@ function projectCard(c: Ctx, p: any) {
 				)
 			: null,
 		p.tasks.length
-			? h(
-					'div',
-					{ class: 'fw-list' },
-					p.tasks.map((t: any) => taskRow(c, t))
-				)
+			? [
+					h('h3', { class: 'fw-card-title' }, p.milestones.length ? 'Other Tasks' : 'Tasks'),
+					h(
+						'div',
+						{ class: 'fw-list' },
+						p.tasks.map((t: any) => taskRow(c, t))
+					)
+				]
 			: null,
+		!p.milestones.length && !p.tasks.length ? empty('No Tasks yet.') : null,
 		p.findings
 			? h(
 					'div',
@@ -279,6 +277,7 @@ export async function projectView(c: Ctx, id: string) {
 			h(
 				'div',
 				null,
+				kicker('Project'),
 				h(
 					'h1',
 					{ class: 'fw-page-title' },
