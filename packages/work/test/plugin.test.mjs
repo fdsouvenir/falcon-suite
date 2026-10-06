@@ -452,3 +452,76 @@ test('Code Mode scripts are not activity however they start', () => {
 		assert.equal(classify('exec', { command }), null, command);
 	assert.equal(classify('exec', { command: 'for f in *.log; do rm "$f"; done' }).kind, 'command');
 });
+
+test('a reply that asks the person for something, with nothing raised in Work, gets one pass', async () => {
+	const { asksThePerson } = await import('../dist/plugin/asks.js');
+	// Real endings from building-902-alpha.
+	assert.ok(
+		asksThePerson(
+			'The milestone remains open.\n\nTo unlock the next useful work, **what city/region/country is the house in, and does “spring 2027” mean listed or closed?** Include any firm move-out deadline.'
+		)
+	);
+	assert.ok(
+		asksThePerson(
+			'Send me:\n1. **A photo of the model/specification label** and approximate age.\n2. **What’s going wrong**.'
+		),
+		'a request without a question mark'
+	);
+	assert.ok(!asksThePerson('Done. The plan is saved in Falcon Work with 8 Milestones.'));
+	assert.ok(!asksThePerson('Run `ls -la?` to check.\n\nAll set.'), 'code does not count');
+	assert.ok(!asksThePerson(undefined));
+
+	const { call, hook } = await started();
+	const reply = 'I need two things. What city is the house in?';
+	const nudge = hook('before_agent_finalize', {
+		runId: 'q1',
+		sessionId: 's',
+		stopHookActive: false,
+		lastAssistantMessage: reply
+	});
+	assert.equal(nudge.action, 'revise');
+	assert.match(nudge.retry.instruction, /falcon_work_ask/);
+	assert.doesNotMatch(nudge.retry.instruction, /no Task in Falcon Work explains/);
+	assert.equal(
+		hook('before_agent_finalize', {
+			runId: 'q1',
+			sessionId: 's',
+			stopHookActive: false,
+			lastAssistantMessage: reply
+		}),
+		undefined,
+		'once per turn'
+	);
+
+	await call('falcon_work_ask', { kind: 'question', prompt: 'What city?', impact: 'Market' });
+	hook('after_tool_call', {
+		toolName: 'falcon_work_ask',
+		params: { kind: 'question' },
+		runId: 'q2'
+	});
+	assert.equal(
+		hook('before_agent_finalize', {
+			runId: 'q2',
+			sessionId: 's',
+			stopHookActive: false,
+			lastAssistantMessage: reply
+		}),
+		undefined,
+		'already asked in Work'
+	);
+	hook('after_tool_call', {
+		toolName: 'exec',
+		params: { code: "text(await falcon_work_ask({kind:'question', prompt:'x', impact:'y'}))" },
+		runId: 'q3'
+	});
+	assert.equal(
+		hook('before_agent_finalize', {
+			runId: 'q3',
+			sessionId: 's',
+			stopHookActive: false,
+			lastAssistantMessage: reply
+		}),
+		undefined,
+		'asked from inside a Code Mode script'
+	);
+});

@@ -8,12 +8,13 @@ import type { Work } from './store/work.js';
 import { currentWork, startWork } from './plugin/runtime.js';
 import type { Actor, Envelope } from './store/types.js';
 import type { Kind } from './store/engine.js';
-import { classify } from './plugin/activity.js';
+import { classify, raisesAsk } from './plugin/activity.js';
+import { asksThePerson } from './plugin/asks.js';
 import { GUIDANCE, renderBrief } from './plugin/brief.js';
 import { currentHuman } from './plugin/identity.js';
 
 /** Per-run bookkeeping for the end-of-turn nudge (spec §10). */
-type RunState = { untracked: number; recorded: boolean; nudged: boolean };
+type RunState = { untracked: number; recorded: boolean; asked: boolean; nudged: boolean };
 
 /** Who is calling: the agent behind a tool call, or the signed-in person behind the Control UI. */
 function actorFor(context: FeatureInvocationContext): Actor {
@@ -109,7 +110,7 @@ const feature = defineFeaturePlugin({
 			if (!id) return null;
 			let state = runs.get(id);
 			if (!state) {
-				state = { untracked: 0, recorded: false, nudged: false };
+				state = { untracked: 0, recorded: false, asked: false, nudged: false };
 				runs.set(id, state);
 				if (runs.size > 500) runs.delete(runs.keys().next().value as string);
 			}
@@ -142,6 +143,8 @@ const feature = defineFeaturePlugin({
 			const work = ctx.agentId ? maybe() : null;
 			if (!work || !ctx.agentId) return;
 			const state = runState(event.runId ?? ctx.runId);
+			if (state && !event.error && raisesAsk(event.toolName, event.params ?? {}))
+				state.asked = true;
 			if (
 				event.toolName.startsWith('falcon_work') &&
 				event.toolName !== 'falcon_work_read' &&
@@ -165,18 +168,35 @@ const feature = defineFeaturePlugin({
 			if (!r.task && state) state.untracked++;
 		});
 
-		// A turn that changed things no Task explains gets one more pass to record them.
+		// One more pass at the end of a turn, at most, for what Work should hold but does not:
+		// changes no Task explains, and things the reply asks of the person that were not raised in
+		// Work (they would live only in this chat).
 		api.on('before_agent_finalize', (event) => {
-			const state = event.runId ? runs.get(event.runId) : undefined;
-			if (!state || event.stopHookActive || state.nudged || state.recorded || state.untracked === 0)
-				return;
+			if (event.stopHookActive) return;
+			const state = runState(event.runId);
+			if (!state || state.nudged) return;
+			const untracked = !state.recorded && state.untracked > 0;
+			const unasked = !state.asked && asksThePerson(event.lastAssistantMessage);
+			if (!untracked && !unasked) return;
 			state.nudged = true;
+			const steps = [
+				untracked
+					? 'You changed things this turn that no Task in Falcon Work explains: put them under the Task they belong to (falcon_work_task: create with start, or start an existing one), or attach the activity to an existing Task (falcon_work attach_activity).'
+					: null,
+				unasked
+					? 'Your reply asks the person for something that is not in Falcon Work, so it lives only in this chat. Record it with falcon_work_ask so it stays under Needs you and the answer returns in your brief: kind question with questions[] (one per thing you need, with your best guess as hypothesis), or kind decision for a choice they must make; about the Task or Project it concerns, and holds the Tasks that wait on it (create the Task first if this request has none). If it was only a passing conversational question, leave it.'
+					: null
+			].filter(Boolean);
 			return {
 				action: 'revise',
-				reason: 'Untracked changes',
+				reason:
+					untracked && unasked
+						? 'Untracked changes and unrecorded asks'
+						: untracked
+							? 'Untracked changes'
+							: 'Unrecorded asks',
 				retry: {
-					instruction:
-						'You changed things this turn that no Task in Falcon Work explains. Before you finish, put them under the Task they belong to (falcon_work_task: create with start, or start an existing one), or attach the activity to an existing Task (falcon_work attach_activity). Then finish your reply.',
+					instruction: `${steps.join(' ')} Then give your reply.`,
 					idempotencyKey: `${PLUGIN_ID}-nudge:${event.runId}`,
 					maxAttempts: 1
 				}

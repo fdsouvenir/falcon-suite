@@ -144,3 +144,12 @@ export function classify(
 		summary: clip(`${toolName}${params.action ? ' ' + str(params.action) : ''}`)
 	};
 }
+
+/** Did this call raise a Question or Decision (directly, or from inside a Code Mode script)? */
+export function raisesAsk(toolName: string, params: Record<string, unknown>): boolean {
+	if (toolName === 'falcon_work_ask') return true;
+	if (toolName === 'falcon_work')
+		return ['raise_question', 'raise_decision', 'add_hypothesis'].includes(str(params.command));
+	const script = str(params.code) || str(params.script) || str(params.command);
+	return /falcon_work_ask\s*\(|['"](raise_question|raise_decision)['"]/.test(script);
+}
