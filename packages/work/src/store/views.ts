@@ -7,6 +7,22 @@ import type { Reads } from './reads.js';
 type Row = Record<string, any>;
 const parse = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v);
 
+// OpenClaw refuses a reply over 4096 values or 256 KB; the feed keeps well under both.
+const FEED_BUDGET = { values: 3500, bytes: 200_000 };
+const CLIP = 1000;
+const clip = (v: unknown): unknown =>
+	typeof v === 'string'
+		? v.length > CLIP
+			? `${v.slice(0, CLIP)}…`
+			: v
+		: v && typeof v === 'object'
+			? Array.isArray(v)
+				? v.map(clip)
+				: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clip(x)]))
+			: v;
+const values = (v: unknown): number =>
+	v && typeof v === 'object' ? Object.values(v).reduce((n: number, x) => n + values(x), 1) : 1;
+
 export type SessionRef = { key: string; from: 'own' | 'project' | 'task' } | null;
 
 export class Views {
@@ -533,9 +549,25 @@ export class Views {
 						? { kind: 'task', id: a.task_id, title: this.reads.taskTitle(a.task_id) }
 						: null
 				});
+		// Long text is clipped (the full record stays on the object); the newest entries that fit are kept.
+		const kept: unknown[] = [];
+		let used = { values: 4, bytes: 64 };
+		for (const item of items
+			.sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0))
+			.slice(0, limit)) {
+			const c = clip(item);
+			const next = {
+				values: used.values + values(c),
+				bytes: used.bytes + Buffer.byteLength(JSON.stringify(c)) + 1
+			};
+			if (next.values > FEED_BUDGET.values || next.bytes > FEED_BUDGET.bytes) break;
+			kept.push(c);
+			used = next;
+		}
 		return {
 			untracked_count: this.one('SELECT count(*) AS n FROM activity WHERE task_id IS NULL')!.n,
-			items: items.sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0)).slice(0, limit)
+			items: kept,
+			truncated: kept.length < Math.min(items.length, limit)
 		};
 	}
 

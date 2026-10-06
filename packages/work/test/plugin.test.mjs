@@ -138,7 +138,7 @@ test('untracked changes get exactly one nudge; recorded work gets none', async (
 	assert.match(hook('before_prompt_build', {}).prependContext, /In progress: Fix plunge/);
 });
 
-test('the objectives and Project pages load through the UI read', async () => {
+test('the objectives, Project and Activity pages load through the UI read', async () => {
 	const { reg } = await started();
 	const act = (payload) =>
 		reg.actions.do.handler({ payload, client: { connId: 'c', scopes: ['operator.write'] } });
@@ -167,6 +167,18 @@ test('the objectives and Project pages load through the UI read', async () => {
 	const page = await unwrap(read({ view: 'project', id: p }));
 	assert.equal(page.error, undefined, page.error);
 	assert.equal(page.history[0].title, 'P');
+	// Long edits must not push the Activity page past what OpenClaw will carry.
+	for (let n = 0; n < 30; n++)
+		await unwrap(
+			act({
+				command: 'edit_project',
+				id: p,
+				input: { outcome: `${n}`.padEnd(12000, 'x'), reason: `round ${n}` }
+			})
+		);
+	const feed = await unwrap(read({ view: 'feed', filters: { feed: 'changes' } }));
+	assert.equal(feed.error, undefined, feed.error);
+	assert.equal(feed.items[0].detail.reason, 'round 29');
 });
 
 test('a retried tool call with the same id does not apply twice', async () => {
