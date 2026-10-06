@@ -269,11 +269,7 @@ function happeningRow(c: Ctx, t: any) {
 function headsUpItem(c: Ctx, w: any) {
 	const o = w.object;
 	const text =
-		w.kind === 'objective_without_progress'
-			? `No progress on ${w.title} · ${readableDates(w.detail)}`
-			: w.kind === 'untracked_activity'
-				? w.detail
-				: `${w.title} · ${readableDates(w.detail)}`;
+		w.kind === 'untracked_activity' ? w.detail : `${w.title}: ${readableDates(w.detail)}`;
 	const go =
 		w.kind === 'untracked_activity'
 			? () => c.go({ tab: 'activity', feed: 'untracked' })

@@ -15,9 +15,9 @@
     "onStartup": true
   },
   "controlUi": {
-    "entry": "dist/control-ui/b87a0764ccec7191382aad22ed3196373535af9a5d8a0b7f847818fb228cb38e/index.js",
+    "entry": "dist/control-ui/57dde64bf49db19712758815a45b6ccfc4e58e25dc23f90f1c55f67b637c7f54/index.js",
     "styles": [
-      "dist/control-ui/b87a0764ccec7191382aad22ed3196373535af9a5d8a0b7f847818fb228cb38e/index.css"
+      "dist/control-ui/57dde64bf49db19712758815a45b6ccfc4e58e25dc23f90f1c55f67b637c7f54/index.css"
     ]
   },
   "icon": "https://raw.githubusercontent.com/fdsouvenir/falcon-suite/main/assets/falcon-work-icon.png",
