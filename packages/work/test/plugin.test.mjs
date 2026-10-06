@@ -138,7 +138,7 @@ test('untracked changes get exactly one nudge; recorded work gets none', async (
 	assert.match(hook('before_prompt_build', {}).prependContext, /In progress: Fix plunge/);
 });
 
-test('the objectives read carries Task counts for what serves each Objective', async () => {
+test('the objectives and Project pages load through the UI read', async () => {
 	const { reg } = await started();
 	const act = (payload) =>
 		reg.actions.do.handler({ payload, client: { connId: 'c', scopes: ['operator.write'] } });
@@ -154,14 +154,19 @@ test('the objectives read carries Task counts for what serves each Objective', a
 	const area = (
 		await unwrap(act({ command: 'create_area', input: { title: 'Home', description: 'd' } }))
 	).id;
-	await unwrap(
-		act({ command: 'create_project', input: { title: 'P', outcome: 'o', area, serves: [o] } })
-	);
+	const p = (
+		await unwrap(
+			act({ command: 'create_project', input: { title: 'P', outcome: 'o', area, serves: [o] } })
+		)
+	).id;
 	const list = await unwrap(read({ view: 'objectives' }));
 	assert.deepEqual(
 		list.map((x) => [x.serving.projects[0].tasks_done, x.serving.projects[0].tasks_total]),
 		[[0, 0]]
 	);
+	const page = await unwrap(read({ view: 'project', id: p }));
+	assert.equal(page.error, undefined, page.error);
+	assert.equal(page.history[0].title, 'P');
 });
 
 test('a retried tool call with the same id does not apply twice', async () => {

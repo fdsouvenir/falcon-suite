@@ -42,6 +42,27 @@ export class Views {
 		return { kind: 'area', id: t.area_id, title: a?.title ?? '' };
 	}
 
+	/** What to call any recorded object in a list. */
+	private title(kind: string, id: string): string {
+		if (kind === 'task') return this.reads.taskTitle(id);
+		const table = [
+			'objective',
+			'area',
+			'project',
+			'milestone',
+			'question',
+			'decision',
+			'finding',
+			'ask',
+			'kpi'
+		].includes(kind)
+			? kind
+			: null;
+		if (!table) return '';
+		const r = this.one(`SELECT * FROM ${table} WHERE id = ?`, id);
+		return (r?.title ?? r?.prompt ?? r?.conclusion ?? r?.name ?? '') as string;
+	}
+
 	taskCard(t: Row) {
 		return {
 			id: t.id,
@@ -406,7 +427,7 @@ export class Views {
 				...milestoneIds
 			).map((e) => ({
 				...e,
-				title: e.object_kind === 'task' ? this.reads.taskTitle(e.object_id) : undefined
+				title: this.title(e.object_kind, e.object_id)
 			}))
 		};
 	}
@@ -479,25 +500,6 @@ export class Views {
 	}) {
 		const limit = Math.min(f.limit ?? 100, 300);
 		const filter = f.filter ?? 'all';
-		const title = (kind: string, id: string): string => {
-			if (kind === 'task') return this.reads.taskTitle(id);
-			const table = [
-				'objective',
-				'area',
-				'project',
-				'milestone',
-				'question',
-				'decision',
-				'finding',
-				'ask',
-				'kpi'
-			].includes(kind)
-				? kind
-				: null;
-			if (!table) return '';
-			const r = this.one(`SELECT * FROM ${table} WHERE id = ?`, id);
-			return (r?.title ?? r?.prompt ?? r?.conclusion ?? r?.name ?? '') as string;
-		};
 		const items: Row[] = [];
 		if (filter === 'all' || filter === 'changes')
 			for (const e of this.all('SELECT * FROM event ORDER BY seq DESC LIMIT ?', limit))
@@ -509,7 +511,7 @@ export class Views {
 					object: {
 						kind: e.object_kind,
 						id: e.object_id,
-						title: title(e.object_kind, e.object_id)
+						title: this.title(e.object_kind, e.object_id)
 					},
 					detail: parse(e.detail)
 				});
