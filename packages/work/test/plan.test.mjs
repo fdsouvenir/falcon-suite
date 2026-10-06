@@ -124,7 +124,7 @@ test('a plan is all or nothing: duplicate keys and cycles are refused', () => {
 	assert.equal(w.reads.get(p).tasks.length, 0, 'nothing from a refused plan remains');
 });
 
-test('the brief shows Areas and their open Projects; the guidance says plans live in Work', () => {
+test('the brief shows Areas and their open Projects; the guidance stays short', () => {
 	const { w, area } = setup();
 	w.do(
 		{
@@ -141,6 +141,6 @@ test('the brief shows Areas and their open Projects; the guidance says plans liv
 	const brief = renderBrief(w.reads, VERL.id, null, w.now());
 	assert.match(brief, /Marketing/);
 	assert.match(brief, /Home AI Solutions: first paid pilot .*Milestone 1\/1 "Thesis written"/);
-	assert.match(GUIDANCE, /plan, a breakdown, a roadmap or a project, build it in Work/);
-	assert.match(GUIDANCE, /never the plan itself/);
+	assert.match(GUIDANCE, /Objectives .*Areas .*Projects .*Tasks/s);
+	assert.ok(GUIDANCE.length < 700, 'the guidance explains Work; the tools explain themselves');
 });

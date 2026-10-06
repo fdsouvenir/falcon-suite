@@ -15,16 +15,20 @@
     "onStartup": true
   },
   "controlUi": {
-    "entry": "dist/control-ui/ad481c8816eb3ed8a98971d8684e6a253e4eb1a0bc029aa57dd2252c0efc3daf/index.js",
+    "entry": "dist/control-ui/c5c3094bfe51a9fdc40ec42d08f458cc8709bf6d5f6d4152aa1c19693ce92afd/index.js",
     "styles": [
-      "dist/control-ui/ad481c8816eb3ed8a98971d8684e6a253e4eb1a0bc029aa57dd2252c0efc3daf/index.css"
+      "dist/control-ui/c5c3094bfe51a9fdc40ec42d08f458cc8709bf6d5f6d4152aa1c19693ce92afd/index.css"
     ]
   },
   "icon": "https://raw.githubusercontent.com/fdsouvenir/falcon-suite/main/assets/falcon-work-icon.png",
   "contracts": {
     "tools": [
+      "falcon_work_ask",
       "falcon_work",
-      "falcon_work_read"
+      "falcon_work_finding",
+      "falcon_work_plan",
+      "falcon_work_read",
+      "falcon_work_task"
     ]
   }
 }

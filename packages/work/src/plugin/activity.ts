@@ -26,11 +26,20 @@ const READ_ONLY_TOOLS = new Set([
 	'presence',
 	'get_goal',
 	'pdf',
-	'falcon_work_read'
+	'falcon_work_read',
+	// Session presentation, not work.
+	'progress_card',
+	'sessions_yield'
 ]);
 const READ_ONLY_SUFFIX =
 	/(^|_)(read|get|list|search|fetch|status|history|view|inspect|find|stats|runs|brief|describe|events)$/;
-const RECORDING_TOOLS = new Set(['falcon_work']);
+const RECORDING_TOOLS = new Set([
+	'falcon_work',
+	'falcon_work_plan',
+	'falcon_work_task',
+	'falcon_work_ask',
+	'falcon_work_finding'
+]);
 
 const READ_ONLY_COMMAND =
 	/^\s*(ls|cat|head|tail|less|grep|rg|ugrep|find|fd|wc|stat|file|du|df|pwd|echo|printf|which|type|env|date|whoami|id|uname|ps|top|free|uptime|tree|jq|sort|uniq|cut|diff|cmp|sha256sum|md5sum|curl\s+-s?I|git\s+(status|log|diff|show|branch|remote|rev-parse|ls-files|grep|blame|describe|fetch)|gh\s+\S+\s+(view|list|status|diff|checks|watch)|gh\s+api\s+(?!.*-X\s*(POST|PATCH|PUT|DELETE))|npm\s+(ls|view|outdated|audit)|systemctl\s+(status|is-active|list-units|show)|journalctl|docker\s+(ps|logs|inspect|images)|kubectl\s+(get|describe|logs)|sqlite3\s+\S+\s+["']?select|openclaw\s+(status|--version|plugins\s+(list|inspect|validate))|clawhub\s+(whoami|inspect|search|explore))\b/i;
@@ -51,9 +60,11 @@ export function classify(
 	if (error) return null; // a failed call is taken to have changed nothing
 	// A code-mode script is a wrapper: the tools it calls report their own after_tool_call events.
 	// Hosts that do not label it (2026.9.6) still pass a `script` rather than a shell `command`.
+	// Hosts pass the script as `code` (2026.9.6 Code Mode) or `script`, never as a shell `command`.
 	if (
 		toolKind === 'code_mode_exec' ||
-		(typeof params.script === 'string' && params.command === undefined)
+		((typeof params.script === 'string' || typeof params.code === 'string') &&
+			params.command === undefined)
 	)
 		return null;
 	if (toolName === 'exec' && CODE_MODE_SCRIPT.test(str(params.command))) return null;

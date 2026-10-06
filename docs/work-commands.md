@@ -4,21 +4,32 @@ Status: **draft for Fred's review**, 2026-10-03. Companion to [work-spec.md](wor
 vocabulary only. Every button in the Stitch screens (`.stitch/screens/`) maps to a command below
 (§8).
 
-## 1. Two tools
+## 1. Tools
 
-Agents use two tools:
+Agents see Work as tools named for what they want to do. Each tool's description and fields say
+what it does, so the agent learns Work from its tools rather than from rules in the prompt:
 
-- **`falcon_work_read`** — compact projections (§3). Never changes anything; needs only read access.
-- **`falcon_work`** — exactly one command (§4–§6), validated, committed atomically, logged as an event.
+- **`falcon_work_read`** — compact projections (§3). Never changes anything.
+- **`falcon_work_plan`** — plan a Project: a new one with its Milestones and Tasks, or more
+  Milestones and Tasks for an existing one (`create_project` / `plan_project`).
+- **`falcon_work_task`** — track a Task: `create` (optionally `start` it at once), `start`, `wait`,
+  `resume`, `complete` (result and evidence), `abandon`.
+- **`falcon_work_ask`** — ask the person: a Question (with the agent's best guess) or a Decision
+  (options, recommendation, what happens if nobody decides). Addressed to the Gateway owner unless
+  `to` says otherwise; `about` takes ids of the things it concerns.
+- **`falcon_work_finding`** — record a Finding with evidence.
+- **`falcon_work`** — any other command (§4–§6): Objectives, KPIs, Areas, edits, moves, answering
+  and deciding. One command per call.
 
-They are the plugin's two feature operations (`read`, `do`), so the Control UI calls the same
-operations through the same validation. There is no second path. (The draft had one tool with two
-verbs; OpenClaw's feature contracts give each operation its own tool and access level.)
+Every tool runs the same store commands: validated, committed atomically, logged as an event, with
+the tool call's id as its idempotency key. They are the plugin's feature operations, so the Control
+UI uses the same operations through the same validation. There is no second path.
 
 **Keeping the agent's context small.** 4.x put every command's full schema in the system prompt on
-every turn. Work 5 does not. The tool description lists command names with one line each; the full
-input shape of any command is available on demand (`falcon_work_read` with `view: help`). What the agent sees every
-turn is the short brief from the `before_prompt_build` hook (spec §10), not a schema.
+every turn. Work 5 exposes the common intents as typed tools and keeps the rest behind
+`falcon_work`, whose description lists command names; the full input of any command is available on
+demand (`falcon_work_read` with `view: help`). The standing guidance only says what Work is; each
+turn adds the short brief from the `before_prompt_build` hook (spec §10).
 
 ## 2. Every command
 

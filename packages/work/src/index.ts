@@ -36,6 +36,57 @@ function actorFor(context: FeatureInvocationContext): Actor {
 	throw new Error('Falcon Work needs a signed-in person');
 }
 
+/** A retried tool call carries the same id, so its key makes the retry a no-op. */
+function envelopeFor(
+	e: {
+		command: string;
+		id?: string;
+		expected_version?: number;
+		idempotency_key?: string;
+		input?: Record<string, unknown>;
+	},
+	context: FeatureInvocationContext,
+	suffix = ''
+): Envelope {
+	return {
+		...e,
+		idempotency_key:
+			e.idempotency_key ??
+			(context.source === 'tool' ? `tool:${context.toolCallId}${suffix}` : undefined)
+	};
+}
+
+const invalid = (reason: string) => ({
+	outcome: 'rejected' as const,
+	code: 'invalid_input',
+	reason
+});
+
+/** `person:x`, `agent:x`, a Task id, or anything else (external). */
+function waitingOn(w: Work, ref: unknown) {
+	const r = typeof ref === 'string' ? ref : '';
+	if (r.startsWith('person:')) return { kind: 'person', ref: r };
+	if (r.startsWith('agent:')) return { kind: 'agent', ref: r };
+	if (r && (w.reads.get(r) as { kind?: string } | null)?.kind === 'task')
+		return { kind: 'work', ref: r };
+	return { kind: 'external', ref: r || 'unspecified' };
+}
+
+/** Ids of the things a Question, Decision or Finding is about, with their kinds. */
+function targetsFor(
+	w: Work,
+	ids: unknown
+): { list: { kind: string; id: string }[] } | { error: string } {
+	const list: { kind: string; id: string }[] = [];
+	for (const id of (ids as string[] | undefined) ?? []) {
+		const kind = (w.reads.get(id) as { kind?: string } | null)?.kind;
+		if (!kind || !['objective', 'project', 'milestone', 'task'].includes(kind))
+			return { error: `about: ${id} is not a Task, Project, Milestone or Objective` };
+		list.push({ kind, id });
+	}
+	return { list };
+}
+
 const feature = defineFeaturePlugin({
 	contract,
 	name: 'Falcon Work',
@@ -91,7 +142,11 @@ const feature = defineFeaturePlugin({
 			const work = ctx.agentId ? maybe() : null;
 			if (!work || !ctx.agentId) return;
 			const state = runState(event.runId ?? ctx.runId);
-			if (event.toolName === 'falcon_work' && !event.error) {
+			if (
+				event.toolName.startsWith('falcon_work') &&
+				event.toolName !== 'falcon_work_read' &&
+				!event.error
+			) {
 				if (state) state.recorded = true;
 				return;
 			}
@@ -121,12 +176,24 @@ const feature = defineFeaturePlugin({
 				reason: 'Untracked changes',
 				retry: {
 					instruction:
-						'You changed things this turn that no Task explains. Record them in Falcon Work now: start or create the Task they belong to (falcon_work), or attach the untracked activity to an existing Task. Then finish your reply.',
+						'You changed things this turn that no Task in Falcon Work explains. Before you finish, put them under the Task they belong to (falcon_work_task: create with start, or start an existing one), or attach the activity to an existing Task (falcon_work attach_activity). Then finish your reply.',
 					idempotencyKey: `${PLUGIN_ID}-nudge:${event.runId}`,
 					maxAttempts: 1
 				}
 			};
 		});
+
+		/** Run one command; tell open pages a change happened (best effort: it is already committed). */
+		const commit = (w: Work, envelope: Envelope, actor: Actor) => {
+			const outcome = w.do(envelope, actor);
+			if (outcome.outcome !== 'rejected' && outcome.outcome !== 'noop')
+				try {
+					events.emit('changed', { at: w.now() });
+				} catch (error) {
+					api.logger?.warn?.(`Falcon Work change notice failed: ${(error as Error).message}`);
+				}
+			return outcome;
+		};
 
 		return {
 			read(input, context) {
@@ -188,21 +255,143 @@ const feature = defineFeaturePlugin({
 			},
 			do(input, context) {
 				const w = ready();
-				const envelope: Envelope = {
-					...input,
-					idempotency_key:
-						input.idempotency_key ??
-						(context.source === 'tool' ? `tool:${context.toolCallId}` : undefined)
-				};
-				const outcome = w.do(envelope, actorFor(context));
-				if (outcome.outcome !== 'rejected' && outcome.outcome !== 'noop')
-					// Best effort: the change is already committed; a failed notice must not make it look failed.
-					try {
-						events.emit('changed', { at: w.now() });
-					} catch (error) {
-						api.logger?.warn?.(`Falcon Work change notice failed: ${(error as Error).message}`);
+				return commit(w, envelopeFor(input, context), actorFor(context));
+			},
+			plan(input, context) {
+				const w = ready();
+				const i = input as any;
+				if (!!i.project === !!i.new_project)
+					return invalid('Give project (an existing Project id) or new_project, not both');
+				const plan = { milestones: i.milestones, tasks: i.tasks };
+				return commit(
+					w,
+					envelopeFor(
+						i.project
+							? { command: 'plan_project', id: i.project, input: plan }
+							: { command: 'create_project', input: { ...i.new_project, ...plan } },
+						context
+					),
+					actorFor(context)
+				);
+			},
+			task(input, context) {
+				const w = ready();
+				const actor = actorFor(context);
+				const i = input as any;
+				const on = (command: string, body: Record<string, unknown>) =>
+					commit(w, envelopeFor({ command, id: i.id, input: body }, context), actor);
+				switch (i.action) {
+					case 'create': {
+						const fields: Record<string, unknown> = {};
+						for (const k of [
+							'title',
+							'description',
+							'done_when',
+							'area',
+							'project',
+							'milestone',
+							'serves',
+							'decision',
+							'depends_on',
+							'plan'
+						])
+							if (i[k] !== undefined) fields[k] = i[k];
+						const created = commit(
+							w,
+							envelopeFor({ command: 'create_task', input: fields }, context),
+							actor
+						);
+						if (!i.start || !('id' in created) || !created.id) return created;
+						const started = commit(
+							w,
+							envelopeFor(
+								{ command: 'start', id: created.id, input: { claim: true } },
+								context,
+								':start'
+							),
+							actor
+						);
+						return { ...created, started: started.outcome };
 					}
-				return outcome;
+					case 'start':
+						return on('start', { claim: true });
+					case 'wait':
+						return on('wait', {
+							waiting_for: i.waiting_for,
+							waiting_on: waitingOn(w, i.waiting_on),
+							resume_when: i.resume_when,
+							...(i.follow_up_at ? { follow_up_at: i.follow_up_at } : {})
+						});
+					case 'resume':
+						return on('resume', {});
+					case 'complete':
+						return on('complete', {
+							content: i.result,
+							...(i.evidence?.length ? { sources: i.evidence } : {})
+						});
+					case 'abandon':
+						return on('abandon', { reason: i.reason ?? 'No longer needed' });
+				}
+				return invalid('Unknown action');
+			},
+			ask(input, context) {
+				const w = ready();
+				const i = input as any;
+				const targets = targetsFor(w, i.about);
+				if ('error' in targets) return invalid(targets.error);
+				const to = i.to?.length ? i.to : [w.owner];
+				const about = targets.list.length ? { targets: targets.list } : {};
+				return commit(
+					w,
+					envelopeFor(
+						i.kind === 'question'
+							? {
+									command: 'raise_question',
+									input: {
+										prompt: i.prompt,
+										impact: i.impact,
+										answerable_by: to,
+										...(i.hypothesis ? { hypothesis: i.hypothesis } : {}),
+										...about
+									}
+								}
+							: {
+									command: 'raise_decision',
+									input: {
+										prompt: i.prompt,
+										options: i.options,
+										recommendation: i.recommendation,
+										deciders: to,
+										consequence_of_no_decision: i.consequence_of_no_decision,
+										...about
+									}
+								},
+						context
+					),
+					actorFor(context)
+				);
+			},
+			finding(input, context) {
+				const w = ready();
+				const i = input as any;
+				const targets = targetsFor(w, i.about);
+				if ('error' in targets) return invalid(targets.error);
+				return commit(
+					w,
+					envelopeFor(
+						{
+							command: 'record_finding',
+							input: {
+								conclusion: i.conclusion,
+								confidence: i.confidence,
+								sources: i.evidence,
+								...(targets.list.length ? { targets: targets.list } : {})
+							}
+						},
+						context
+					),
+					actorFor(context)
+				);
 			}
 		};
 	}

@@ -48,6 +48,44 @@ export const KINDS = [
 
 const Lit = (values: readonly string[]) => Type.Union(values.map((v) => Type.Literal(v)));
 const Id = Type.String({ maxLength: 128 });
+const d = (description: string) => ({ description });
+const Str = (max: number, description: string) =>
+	Type.String({ minLength: 1, maxLength: max, description });
+const Ids = (description: string) => Type.Array(Id, { maxItems: 50, description });
+const Sources = Type.Array(
+	Type.Object(
+		{
+			ref: Type.String({ minLength: 1, maxLength: 4096, ...d('commit, PR, URL, file path, …') }),
+			label: Type.Optional(Type.String({ maxLength: 1000 }))
+		},
+		{ additionalProperties: false }
+	),
+	{ maxItems: 50, ...d('Evidence') }
+);
+const PlanTask = {
+	key: Type.Optional(Str(64, 'A short name other Tasks in this plan use in depends_on')),
+	title: Str(240, 'What the Task achieves'),
+	description: Str(12000, 'What it involves'),
+	done_when: Str(12000, 'How anyone can tell it is done'),
+	depends_on: Type.Optional(
+		Type.Array(Type.String({ maxLength: 128 }), {
+			maxItems: 50,
+			...d('Keys of Tasks in this plan, or ids of existing Tasks')
+		})
+	),
+	agent: Type.Optional(Type.String({ maxLength: 160, ...d('agent:<id> accountable for it') })),
+	plan: Type.Optional(Str(12000, 'How it will be done, if known'))
+};
+const PlanMilestone = Type.Object(
+	{
+		title: Str(240, 'The checkpoint'),
+		success_condition: Str(12000, 'What must be true to call it achieved'),
+		tasks: Type.Optional(
+			Type.Array(Type.Object(PlanTask, { additionalProperties: false }), { maxItems: 100 })
+		)
+	},
+	{ additionalProperties: false }
+);
 
 export const contract = defineFeatureContract({
 	pluginId: PLUGIN_ID,
@@ -89,7 +127,7 @@ export const contract = defineFeatureContract({
 		},
 		do: {
 			kind: 'action',
-			description: `Change Falcon Work: exactly one command per call, as {command, id?, expected_version?, input}. Get any command's input with falcon_work_read view=help. Commands: ${COMMAND_NAMES.join(', ')}.`,
+			description: `Any other change to Falcon Work (Objectives, KPIs, Areas, editing or moving things, answering and deciding): one command per call, as {command, id?, expected_version?, input}. falcon_work_read view=help command=<name> gives a command's input. Commands: ${COMMAND_NAMES.join(', ')}.`,
 			input: Type.Object(
 				{
 					command: Lit(COMMAND_NAMES),
@@ -102,6 +140,166 @@ export const contract = defineFeatureContract({
 			),
 			output: Type.Unknown(),
 			tool: { name: 'falcon_work', label: 'Change Falcon Work' }
+		},
+		plan: {
+			kind: 'action',
+			description:
+				'Plan a Project in Falcon Work: a Project is an outcome with ordered Milestones, each reached through Tasks. Give project (an existing Project id) to add Milestones and Tasks to it, or new_project to create one with its plan. Tasks can depend on each other by key. All or nothing.',
+			input: Type.Object(
+				{
+					project: Type.Optional(
+						Type.String({ maxLength: 128, ...d('Existing Project to add to') })
+					),
+					new_project: Type.Optional(
+						Type.Object(
+							{
+								title: Str(240, 'The Project'),
+								outcome: Str(12000, 'What will be true when it is done'),
+								area: Type.String({ maxLength: 128, ...d('Area it belongs to') }),
+								serves: Type.Optional(Ids('Objectives it moves forward')),
+								decision: Type.Optional(
+									Type.String({
+										maxLength: 128,
+										...d(
+											'A decided Decision approving it, when it serves an Objective set to propose'
+										)
+									})
+								)
+							},
+							{ additionalProperties: false }
+						)
+					),
+					milestones: Type.Optional(
+						Type.Array(PlanMilestone, {
+							maxItems: 50,
+							...d('New Milestones, in order, with their Tasks')
+						})
+					),
+					tasks: Type.Optional(
+						Type.Array(
+							Type.Object(
+								{
+									...PlanTask,
+									milestone: Type.Optional(
+										Type.String({ maxLength: 128, ...d('An existing Milestone of this Project') })
+									)
+								},
+								{ additionalProperties: false }
+							),
+							{ maxItems: 100, ...d('Tasks outside the new Milestones') }
+						)
+					)
+				},
+				{ additionalProperties: false }
+			),
+			output: Type.Unknown(),
+			tool: { name: 'falcon_work_plan', label: 'Plan a Project' }
+		},
+		task: {
+			kind: 'action',
+			description:
+				'Track a Task in Falcon Work: a unit of work with a definition of done, placed in an Area or a Project (Milestone). action create (title, description, done_when, area or project, milestone?, depends_on?, start?) · start · wait (waiting_for, waiting_on, resume_when, follow_up_at?) · resume · complete (result, evidence: at least one source) · abandon (reason?).',
+			input: Type.Object(
+				{
+					action: Lit(['create', 'start', 'wait', 'resume', 'complete', 'abandon']),
+					id: Type.Optional(Type.String({ maxLength: 128, ...d('The Task, except for create') })),
+					title: Type.Optional(Str(240, 'create: what the Task achieves')),
+					description: Type.Optional(Str(12000, 'create: what it involves')),
+					done_when: Type.Optional(Str(12000, 'create: how anyone can tell it is done')),
+					area: Type.Optional(Type.String({ maxLength: 128, ...d('create: its Area…') })),
+					project: Type.Optional(Type.String({ maxLength: 128, ...d('create: …or its Project') })),
+					milestone: Type.Optional(
+						Type.String({ maxLength: 128, ...d('create: Milestone in that Project') })
+					),
+					serves: Type.Optional(Ids('create: Objectives it moves forward')),
+					decision: Type.Optional(
+						Type.String({
+							maxLength: 128,
+							...d('create: approving Decision, for propose Objectives')
+						})
+					),
+					depends_on: Type.Optional(Ids('create: Tasks it needs first')),
+					plan: Type.Optional(Str(12000, 'create: how it will be done')),
+					start: Type.Optional(Type.Boolean({ ...d('create: start it now, as yours') })),
+					waiting_for: Type.Optional(Str(12000, 'wait: what it is waiting for')),
+					waiting_on: Type.Optional(
+						Type.String({
+							maxLength: 1000,
+							...d('wait: person:<id>, agent:<id>, a Task id, or something external')
+						})
+					),
+					resume_when: Type.Optional(Str(12000, 'wait: what lets it continue')),
+					follow_up_at: Type.Optional(
+						Type.String({ maxLength: 64, ...d('wait: ISO time to check back') })
+					),
+					result: Type.Optional(Str(12000, 'complete: what it produced')),
+					evidence: Type.Optional(Sources),
+					reason: Type.Optional(Str(1000, 'abandon: why'))
+				},
+				{ additionalProperties: false }
+			),
+			output: Type.Unknown(),
+			tool: { name: 'falcon_work_task', label: 'Track a Task' }
+		},
+		ask: {
+			kind: 'action',
+			description:
+				'Ask the person in Falcon Work; it appears under Needs you. kind question: something you need to know (prompt, impact, hypothesis? = your best guess). kind decision: a choice for them to make (prompt, options, recommendation, consequence_of_no_decision). about: ids of the Tasks, Projects or Objectives it concerns.',
+			input: Type.Object(
+				{
+					kind: Lit(['question', 'decision']),
+					prompt: Str(2000, 'The question, or the choice to make'),
+					impact: Type.Optional(Str(2000, 'question: why the answer matters')),
+					hypothesis: Type.Optional(Str(12000, 'question: your best guess, which they can accept')),
+					options: Type.Optional(
+						Type.Array(
+							Type.Object(
+								{
+									id: Str(64, 'Short option id'),
+									label: Str(240, 'The option'),
+									summary: Type.Optional(Str(2000, 'What it means')),
+									risks: Type.Optional(Str(2000, 'Risks')),
+									tradeoffs: Type.Optional(Str(2000, 'Tradeoffs'))
+								},
+								{ additionalProperties: false }
+							),
+							{ minItems: 2, maxItems: 20, ...d('decision: the options') }
+						)
+					),
+					recommendation: Type.Optional(
+						Type.Object(
+							{ option: Str(64, 'Option id you recommend'), rationale: Str(2000, 'Why') },
+							{ additionalProperties: false }
+						)
+					),
+					consequence_of_no_decision: Type.Optional(
+						Str(2000, 'decision: what happens if nobody decides')
+					),
+					to: Type.Optional(
+						Ids('Who answers or decides (person:<id>); the Gateway owner by default')
+					),
+					about: Type.Optional(Ids('Tasks, Projects, Milestones or Objectives it concerns'))
+				},
+				{ additionalProperties: false }
+			),
+			output: Type.Unknown(),
+			tool: { name: 'falcon_work_ask', label: 'Ask the person' }
+		},
+		finding: {
+			kind: 'action',
+			description:
+				'Record a Finding in Falcon Work: something learned that others should rely on, with evidence.',
+			input: Type.Object(
+				{
+					conclusion: Str(12000, 'What was learned'),
+					confidence: Lit(['tentative', 'supported', 'confirmed']),
+					evidence: Sources,
+					about: Type.Optional(Ids('Tasks, Projects, Milestones or Objectives it concerns'))
+				},
+				{ additionalProperties: false }
+			),
+			output: Type.Unknown(),
+			tool: { name: 'falcon_work_finding', label: 'Record a Finding' }
 		}
 	},
 	events: {

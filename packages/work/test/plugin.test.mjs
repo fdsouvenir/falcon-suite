@@ -80,10 +80,24 @@ test('read-only tool calls are not work; changes are', () => {
 	);
 });
 
-test('registers both tools, the UI operations and the three hooks', async () => {
+test('registers the tools, the UI operations and the three hooks', async () => {
 	const { reg } = await started();
-	assert.deepEqual(Object.keys(reg.tools).sort(), ['falcon_work', 'falcon_work_read']);
-	assert.deepEqual(Object.keys(reg.actions).sort(), ['do', 'read']);
+	assert.deepEqual(Object.keys(reg.tools).sort(), [
+		'falcon_work',
+		'falcon_work_ask',
+		'falcon_work_finding',
+		'falcon_work_plan',
+		'falcon_work_read',
+		'falcon_work_task'
+	]);
+	assert.deepEqual(Object.keys(reg.actions).sort(), [
+		'ask',
+		'do',
+		'finding',
+		'plan',
+		'read',
+		'task'
+	]);
 	for (const h of ['before_prompt_build', 'after_tool_call', 'before_agent_finalize'])
 		assert.ok(reg.hooks[h], h);
 });
@@ -272,4 +286,111 @@ test('a Control UI call with operator scopes is the Gateway owner even without a
 		}),
 		/signed-in person/
 	);
+});
+
+test('the intent tools: plan a Project, track a Task, ask the person, record a Finding', async () => {
+	const { call } = await started();
+	const area = (
+		await call('falcon_work', {
+			command: 'create_area',
+			input: { title: 'Home', description: 'd' }
+		})
+	).id;
+	const t = (key, title, depends_on) => ({
+		key,
+		title,
+		description: 'd',
+		done_when: 'x',
+		...(depends_on ? { depends_on } : {})
+	});
+	const plan = await call('falcon_work_plan', {
+		new_project: { title: 'Plunge', outcome: 'o', area },
+		milestones: [
+			{
+				title: 'M1',
+				success_condition: 's',
+				tasks: [t('a', 'Sensor'), t('b', 'Controller', ['a'])]
+			}
+		]
+	});
+	assert.equal(plan.outcome, 'committed', JSON.stringify(plan));
+	const both = await call('falcon_work_plan', {
+		project: plan.id,
+		new_project: { title: 'x', outcome: 'o', area }
+	});
+	assert.equal(both.code, 'invalid_input');
+
+	const task = await call('falcon_work_task', {
+		action: 'create',
+		title: 'Calibrate',
+		description: 'd',
+		done_when: 'x',
+		project: plan.id,
+		start: true
+	});
+	assert.equal(task.started, 'committed', JSON.stringify(task));
+	const waited = await call('falcon_work_task', {
+		action: 'wait',
+		id: task.id,
+		waiting_for: 'Fred to read the tub',
+		waiting_on: 'person:gateway-owner',
+		resume_when: 'He has'
+	});
+	assert.ok(waited.outcome.startsWith('committed'), JSON.stringify(waited));
+	await call('falcon_work_task', { action: 'resume', id: task.id });
+	const done = await call('falcon_work_task', {
+		action: 'complete',
+		id: task.id,
+		result: 'Calibrated',
+		evidence: [{ ref: 'commit:abc' }]
+	});
+	assert.ok(done.outcome.startsWith('committed'), JSON.stringify(done));
+
+	const q = await call('falcon_work_ask', {
+		kind: 'question',
+		prompt: 'How cold?',
+		impact: 'Sets the floor',
+		hypothesis: '36',
+		about: [plan.id]
+	});
+	assert.equal(q.outcome, 'committed', JSON.stringify(q));
+	const dec = await call('falcon_work_ask', {
+		kind: 'decision',
+		prompt: 'Which sensor?',
+		options: [
+			{ id: 'a', label: 'A' },
+			{ id: 'b', label: 'B' }
+		],
+		recommendation: { option: 'a', rationale: 'r' },
+		consequence_of_no_decision: 'c',
+		about: [task.id]
+	});
+	assert.equal(dec.outcome, 'committed', JSON.stringify(dec));
+	const asked = await call('falcon_work_read', { view: 'get', id: q.id });
+	assert.deepEqual(
+		asked.answerable_by,
+		['person:gateway-owner'],
+		'asks the Gateway owner by default'
+	);
+
+	const f = await call('falcon_work_finding', {
+		conclusion: 'Stop Core first',
+		confidence: 'confirmed',
+		evidence: [{ ref: 'notes:2026-09-18' }],
+		about: [plan.id]
+	});
+	assert.equal(f.outcome, 'committed', JSON.stringify(f));
+	const bad = await call('falcon_work_finding', {
+		conclusion: 'x',
+		confidence: 'tentative',
+		evidence: [{ ref: 'r' }],
+		about: ['nope']
+	});
+	assert.equal(bad.code, 'invalid_input');
+});
+
+test('Code Mode scripts passed as code, and progress cards, are not activity', () => {
+	assert.equal(classify('exec', { code: 'const p = await falcon_work_read({view:"get"})' }), null);
+	assert.equal(classify('progress_card', { markdown: 'x' }), null);
+	assert.equal(classify('falcon_work_task', { action: 'start' }), null);
 });

@@ -1,14 +1,8 @@
 import type { Reads } from '../store/reads.js';
 
 /** Static guidance, cacheable in the system prompt. Kept short on purpose (spec §10). */
-export const GUIDANCE = `Falcon Work holds the plan and the record of everything you do for the people you work for: Objectives, Areas, Projects, Milestones, Tasks, and the Questions, Decisions and Findings around them. The person reads it as their view of your work.
-- When someone asks for a plan, a breakdown, a roadmap or a project, build it in Work: a Project with Milestones and Tasks (one call: falcon_work create_project with milestones[].tasks, or plan_project to add to an existing Project). Put it where it belongs: your brief lists the Areas and open Projects, so extend an existing Project rather than starting a parallel one. Reply with a short summary of what you put in Work. A document is only supporting material, never the plan itself.
-- Before changing anything for a request, have a Task in progress (create_task, then start). Small read-only turns need nothing.
-- Say why: definition of done when you create a Task; a Result with evidence when you complete it.
-- Unknowns go in a Question, choices someone must approve in a Decision, things learned in a Finding.
-- What you actually do is captured automatically; you never need to restate it.
-- Read with falcon_work_read (brief, needs_you, objectives, get, list, activity, warnings, help). Change with falcon_work.
-- Recording never blocks the person's request: if Falcon Work errors or is unavailable, do what was asked anyway and record it once Work is back.`;
+export const GUIDANCE = `Falcon Work is the person's view of your work: their Objectives (what they want progress toward), Areas (standing responsibilities), Projects (outcomes, reached through ordered Milestones), Tasks (units of work with a definition of done), and the Questions, Decisions and Findings around them. Your brief each turn shows what is there. The falcon_work_* tools describe what each one does.
+If Falcon Work errors or is unavailable, do what was asked anyway.`;
 
 /** The per-turn brief for one agent, as compact text. Empty sections are omitted. */
 export function renderBrief(
