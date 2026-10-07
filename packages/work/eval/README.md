@@ -11,6 +11,7 @@ hand-labelled agent turns, by the Work action each gate would take.
 - `build.mjs` — builds the evaluation set (turns, segments, gold labels).
 - `gate_run.py` — runs a gate over the set with Laya (`model:max_len:head_max_len` per run).
 - `gate_jev.mjs` — runs a gate over the set with hosted Jev (`JEV_KEY_ENTRY` names the vault entry).
+- `gate2_jev.mjs`, `gate2_score.mjs` — gate `answers_open_item` (does the person's message answer an open Question or Decision?) on Jev, and its scorer.
 - `gate_score.mjs` — scores runs by outcome: precision/recall of "something lands under Needs
   you", and how often the right action is chosen.
 - `segment.mjs`, `laya_run.py`, `score.mjs` — the first, sentence-level experiment (kept for

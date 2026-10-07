@@ -86,5 +86,49 @@
 				"nothing": "nothing; work reported, question answered, or small talk"
 			}
 		}
+	},
+	"answers_open_item": {
+		"when": "When the person sends a message, if anything is open for them in Work.",
+		"state": "{ previous_reply: the agent's last reply to the person, message: the person's message, open_items: { <id>: { n, prompt } or a Decision { n, prompt, options, recommendation } } }",
+		"question_template": {
+			"type": "noul",
+			"instructions": {
+				"question": "Does message answer open_items.{id}?",
+				"focus": "Read message as the person's reply to previous_reply. A message can answer several items at once, in any order or by their number n."
+			},
+			"criteria": {
+				"true": {
+					"includes": [
+						"gives the information open_items.{id} asks for, even briefly",
+						"a short reply such as yes, fine, ok, go, done or correct, right after previous_reply asked open_items.{id}",
+						"an answer given by the number n of open_items.{id}",
+						"rejects, defers or redirects what open_items.{id} proposes"
+					]
+				},
+				"false": {
+					"includes": [
+						"is about something else",
+						"asks a question back or asks for clarification instead",
+						"only acknowledges without answering",
+						"answers a different open item"
+					]
+				}
+			}
+		},
+		"decision_template": {
+			"type": "choice",
+			"instructions": {
+				"question": "Which option of open_items.{id} does message choose?",
+				"focus": "Only open_items.{id}. \"Your recommendation\", \"what you suggested\" or \"go\" choose open_items.{id}.recommendation only when message is about open_items.{id}; if message names a different item, open_items.{id} is not decided."
+			},
+			"criteria_extra": {
+				"not_decided": "message does not choose an option of open_items.{id}"
+			}
+		},
+		"actions": {
+			"question true": "record message as the answer to the Question",
+			"decision option": "decide with that option and message as the rationale",
+			"otherwise": "nothing"
+		}
 	}
 }
