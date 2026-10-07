@@ -22,7 +22,11 @@
 						"a request to send, paste or share something",
 						"a list of items the person is asked to provide"
 					],
-					"excludes": ["a choice between options or a go-ahead", "an optional offer of more help"]
+					"excludes": [
+						"a choice between options or a go-ahead",
+						"an optional offer of more help",
+						"a follow-up question the work does not depend on"
+					]
 				},
 				"needs_decision": {
 					"description": "reply needs the person to choose, approve or reject before the writer continues",
@@ -48,6 +52,7 @@
 					"includes": [
 						"\"If you want, I can also…\"",
 						"\"Want me to also…?\" about extra work",
+						"a next step the writer will take unless the person says otherwise",
 						"\"Let me know if you have questions\""
 					]
 				},
@@ -56,7 +61,8 @@
 					"includes": [
 						"a report of finished work",
 						"an answer to the person's question",
-						"small talk or a conversational question that needs no answer",
+						"small talk, or a follow-up question about the person's reasons or curiosity that the work does not depend on",
+						"a recommendation with nothing asked",
 						"everything needed was already raised in Work"
 					]
 				}
