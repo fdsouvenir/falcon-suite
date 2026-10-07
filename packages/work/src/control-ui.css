@@ -543,12 +543,13 @@
 	display: grid;
 	align-content: start;
 	gap: var(--space-3);
-	max-height: calc(100vh - var(--space-8) * 2);
+	max-height: var(--fw-panel-max, calc(100vh - var(--space-8) * 2));
 	padding: var(--space-4);
 	border-left: 1px solid var(--border);
 	background: var(--card);
 	box-shadow: var(--shadow-md);
 	overflow: auto;
+	overscroll-behavior: contain;
 }
 .fw-panel-title {
 	margin: 0;

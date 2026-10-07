@@ -174,6 +174,38 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 	let stale = false; // data changed since the shown page and panel were read
 	root.append(h('div', { class: 'fw-body' }, main, drawer));
 
+	// The panel ends at the bottom of what is visible, wherever it starts, so its own scroll
+	// reaches its last line without the page having to move. The host scrolls an inner element,
+	// not the window, and the panel starts below the header until it sticks.
+	const scroller = (() => {
+		for (let el = container.parentElement; el; el = el.parentElement)
+			if (/auto|scroll/.test(getComputedStyle(el).overflowY)) return el;
+		return null;
+	})();
+	let fitQueued = false;
+	const fitPanel = () => {
+		if (fitQueued) return;
+		fitQueued = true;
+		requestAnimationFrame(() => {
+			fitQueued = false;
+			const panel = drawer.querySelector<HTMLElement>('.fw-panel');
+			if (!panel) return;
+			const gap = parseFloat(getComputedStyle(panel).top) || 0;
+			const bottom = Math.min(
+				window.innerHeight,
+				scroller?.getBoundingClientRect().bottom ?? window.innerHeight
+			);
+			const max = bottom - panel.getBoundingClientRect().top - gap;
+			drawer.style.setProperty('--fw-panel-max', `${Math.max(max, 160)}px`);
+		});
+	};
+	const fitTarget = scroller ?? window;
+	fitTarget.addEventListener('scroll', fitPanel, { passive: true });
+	window.addEventListener('resize', fitPanel);
+	const resized = new ResizeObserver(fitPanel);
+	if (scroller) resized.observe(scroller);
+	resized.observe(root);
+
 	const pageKey = (p: Params) =>
 		JSON.stringify(
 			Object.entries(p)
@@ -213,6 +245,7 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 		drawer.classList.remove('is-loading');
 		drawer.classList.toggle('is-open', panelId !== null);
 		shownPanel = panelId;
+		fitPanel();
 		for (const row of main.querySelectorAll<HTMLElement>('[data-panel]'))
 			row.classList.toggle('is-selected', row.dataset.panel === panelId);
 	}
@@ -233,6 +266,9 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 		dispose() {
 			off();
 			document.removeEventListener('keydown', onKey);
+			fitTarget.removeEventListener('scroll', fitPanel);
+			window.removeEventListener('resize', fitPanel);
+			resized.disconnect();
 			sessions.dispose();
 			root.remove();
 		}
