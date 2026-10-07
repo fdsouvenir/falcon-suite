@@ -92,6 +92,7 @@ export function formDialog(
 				}
 			}
 		},
+		h('h2', { class: 'fw-dialog-title' }, opts.title),
 		opts.description ? h('p', { class: 'fw-muted' }, opts.description) : null,
 		...inputs,
 		error,

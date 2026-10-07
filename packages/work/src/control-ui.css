@@ -742,7 +742,19 @@ button.fw-choice:hover {
 .fw-dialog-form {
 	display: grid;
 	gap: var(--space-3);
-	min-width: min(420px, 80vw);
+	width: min(480px, 90vw);
+	padding: var(--space-5);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--card);
+	box-shadow: var(--shadow-md);
+	color: var(--text);
+}
+.fw-dialog-title {
+	margin: 0;
+	color: var(--text-strong);
+	font-size: var(--control-ui-text-lg);
+	font-weight: 600;
 }
 .fw-dialog-actions {
 	display: flex;
