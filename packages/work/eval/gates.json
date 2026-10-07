@@ -1,0 +1,91 @@
+{
+	"left_waiting": {
+		"when": "End of every agent turn (before_agent_finalize / agent_end).",
+		"state": "{ request: the person's message, reply: the agent's final reply, raised_in_work: Questions/Decisions the agent already recorded this turn, task_in_progress: title or null }",
+		"question": {
+			"type": "choice",
+			"instructions": {
+				"question": "After this turn, is the writer of reply left waiting on the person who sent request? Judge what reply asks of that person, in the context of request.",
+				"focus": "Only what the person must supply for the work to continue. Anything already listed in raised_in_work is not waiting.",
+				"ignore": [
+					"steps of a plan, checklist or procedure that describe work, even when written as imperatives",
+					"questions quoted from someone else",
+					"rhetorical questions the reply answers itself",
+					"questions inside code"
+				]
+			},
+			"criteria": {
+				"needs_answer": {
+					"description": "reply needs information only the person has",
+					"includes": [
+						"a question to the person about facts, preferences or context",
+						"a request to send, paste or share something",
+						"a list of items the person is asked to provide"
+					],
+					"excludes": [
+						"a choice between options or a go-ahead",
+						"an optional offer of more help"
+					]
+				},
+				"needs_decision": {
+					"description": "reply needs the person to choose, approve or reject before the writer continues",
+					"includes": [
+						"options to choose between",
+						"asking for approval or a go-ahead",
+						"asking whether a proposal is acceptable",
+						"\"your call\""
+					],
+					"excludes": [
+						"an optional offer of extra work the person did not ask for"
+					]
+				},
+				"needs_action": {
+					"description": "reply needs the person to do something themselves",
+					"includes": [
+						"run a command",
+						"sign in, reconnect or approve something in another system",
+						"open, reload or test something and report back"
+					],
+					"excludes": [
+						"advice about something the person may do for their own reasons"
+					]
+				},
+				"offer_only": {
+					"description": "reply only offers optional further help; nothing is blocked if the person ignores it",
+					"includes": [
+						"\"If you want, I can also…\"",
+						"\"Want me to also…?\" about extra work",
+						"\"Let me know if you have questions\""
+					]
+				},
+				"nothing": {
+					"description": "nothing is waiting on the person",
+					"includes": [
+						"a report of finished work",
+						"an answer to the person's question",
+						"small talk or a conversational question that needs no answer",
+						"everything needed was already raised in Work"
+					]
+				}
+			}
+		},
+		"actions": {
+			"needs_answer": "raise Question(s) to the person, about the in-progress Task if any",
+			"needs_decision": "raise a Decision for the person",
+			"needs_action": "set the in-progress Task waiting on the person (Do)",
+			"offer_only": "nothing",
+			"nothing": "nothing"
+		},
+		"compact": {
+			"type": "choice",
+			"instructions": "After this turn, what is the writer of reply waiting on from the person who sent request? Plan steps, quoted or rhetorical questions, and anything in raised_in_work are not waiting.",
+			"criteria": {
+				"needs_answer": "information or a file only the person can give",
+				"needs_decision": "the person must choose, approve or say go",
+				"needs_action": "the person must do something themselves",
+				"offer_only": "only an optional offer of more help",
+				"nothing": "nothing; work reported, question answered, or small talk"
+			}
+		}
+	}
+}
