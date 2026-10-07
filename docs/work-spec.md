@@ -215,6 +215,13 @@ object. There can be many; nobody sets them by hand, and they are never edited.
 
 **Where it is discussed** — one optional session per **Objective, Project, Task and Ask**.
 
+> **Deferred (Fred, 2026-10-07; §15.8).** Discussion sessions, Add to Work, live session state and
+> the Session mismatch Warning are not part of 5.0. Sessions drift between subjects and one
+> subject has several sessions, so a fixed link adds little: the agent records and updates Work
+> as the conversation goes, the `task_fit` gate (§10) places each turn's work, and the automatic
+> history above answers "where was this done?". The store's existing `session` fields stay;
+> nothing new is built on them. The rest of this section describes the deferred design.
+
 - The agent may set it when it creates the object. The human can set, change or remove it from the
   Work tab. The human's choice always wins, and every change records who made it.
 - What it means: an Objective's daily review is posted there; a Project or Task is worked and
@@ -274,15 +281,15 @@ report anything, which is the point: they catch what the record should say but d
 names the object, what is wrong and since when, and clears itself when the condition no longer
 holds.
 
-| Warning                    | Condition (thresholds configurable)                                                            |
-| -------------------------- | ---------------------------------------------------------------------------------------------- |
-| Stalled Task               | In progress with no recorded activity for 48 hours.                                            |
-| Session mismatch           | In progress, but its discussion session has been idle for 48 hours, has failed, or is missing. |
-| Follow-up overdue          | Waiting past its `follow_up_at`.                                                               |
-| Unanswered                 | A Question or Decision open for more than 7 days.                                              |
-| Objective without progress | An active Objective with no completed serving Task for 7 days.                                 |
-| Untracked activity         | Activity no Task explains, in the last 24 hours.                                               |
-| Milestone ready            | Every associated Task is finished but the Milestone is not achieved.                           |
+| Warning                           | Condition (thresholds configurable)                                                            |
+| --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Stalled Task                      | In progress with no recorded activity for 48 hours.                                            |
+| Session mismatch _(deferred, §9)_ | In progress, but its discussion session has been idle for 48 hours, has failed, or is missing. |
+| Follow-up overdue                 | Waiting past its `follow_up_at`.                                                               |
+| Unanswered                        | A Question or Decision open for more than 7 days.                                              |
+| Objective without progress        | An active Objective with no completed serving Task for 7 days.                                 |
+| Untracked activity                | Activity no Task explains, in the last 24 hours.                                               |
+| Milestone ready                   | Every associated Task is finished but the Milestone is not achieved.                           |
 
 Warnings appear in **Needs you** and feed the agent's daily Objective review.
 
@@ -373,3 +380,6 @@ transcripts (OpenClaw owns sessions; Work links to them) · runtime permission e
 7. Answering a Question submits immediately (with Undo); "Use <agent>'s hypothesis" accepts the
    hypothesis as the human's answer. Choosing a Decision option only selects it; Decide commits,
    with an optional reason when a human decides.
+8. _(2026-10-07)_ Discussion sessions are deferred (§9): no Add to Work, live session state or
+   Session mismatch Warning in 5.0; this supersedes the session parts of items 2 and 5. "Where the
+   work happened" history stays and should cover Tasks, Questions, Decisions and Findings.
