@@ -14,14 +14,18 @@ const REQUEST =
 const regexSegment = (s) => /[?？]\s*$/.test(s.text) || REQUEST.test(s.text);
 
 function prf(pairs) {
-	let tp = 0, fp = 0, fn = 0, tn = 0;
+	let tp = 0,
+		fp = 0,
+		fn = 0,
+		tn = 0;
 	for (const [gold, pred] of pairs) {
 		if (gold && pred) tp++;
 		else if (!gold && pred) fp++;
 		else if (gold && !pred) fn++;
 		else tn++;
 	}
-	const p = tp / (tp + fp || 1), r = tp / (tp + fn || 1);
+	const p = tp / (tp + fp || 1),
+		r = tp / (tp + fn || 1);
 	return { p, r, f1: (2 * p * r) / (p + r || 1), tp, fp, fn, tn };
 }
 const fmt = (m) =>
@@ -44,7 +48,10 @@ const extra = process.argv[4] ? JSON.parse(readFileSync(process.argv[4], 'utf8')
 for (const [model, run] of Object.entries(extra)) {
 	const P = (it) => run.items[it.id];
 	for (const t of [0.5, 0.7, 0.8, 0.9]) {
-		segment(`laya ${model} request-vs-statement ≥${t}`, (it, _s, n) => P(it).segments[n].request >= t);
+		segment(
+			`laya ${model} request-vs-statement ≥${t}`,
+			(it, _s, n) => P(it).segments[n].request >= t
+		);
 		reply(`laya ${model} any request-vs-statement ≥${t}`, (it) =>
 			Object.values(P(it).segments).some((x) => x.request >= t)
 		);
@@ -54,7 +61,8 @@ for (const [model, run] of Object.entries(extra)) {
 
 for (const [model, run] of Object.entries(preds)) {
 	const P = (it) => run.items[it.id];
-	for (const t of [0.3, 0.5, 0.7]) reply(`laya ${model} reply question ≥${t}`, (it) => P(it).reply >= t);
+	for (const t of [0.3, 0.5, 0.7])
+		reply(`laya ${model} reply question ≥${t}`, (it) => P(it).reply >= t);
 	for (const q of ['ask_a', 'ask_b'])
 		for (const t of [0.3, 0.5, 0.7]) {
 			segment(`laya ${model} ${q} ≥${t}`, (it, _s, n) => P(it).segments[n][q] >= t);

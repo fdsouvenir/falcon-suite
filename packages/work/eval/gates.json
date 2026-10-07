@@ -22,10 +22,7 @@
 						"a request to send, paste or share something",
 						"a list of items the person is asked to provide"
 					],
-					"excludes": [
-						"a choice between options or a go-ahead",
-						"an optional offer of more help"
-					]
+					"excludes": ["a choice between options or a go-ahead", "an optional offer of more help"]
 				},
 				"needs_decision": {
 					"description": "reply needs the person to choose, approve or reject before the writer continues",
@@ -35,9 +32,7 @@
 						"asking whether a proposal is acceptable",
 						"\"your call\""
 					],
-					"excludes": [
-						"an optional offer of extra work the person did not ask for"
-					]
+					"excludes": ["an optional offer of extra work the person did not ask for"]
 				},
 				"needs_action": {
 					"description": "reply needs the person to do something themselves",
@@ -46,9 +41,7 @@
 						"sign in, reconnect or approve something in another system",
 						"open, reload or test something and report back"
 					],
-					"excludes": [
-						"advice about something the person may do for their own reasons"
-					]
+					"excludes": ["advice about something the person may do for their own reasons"]
 				},
 				"offer_only": {
 					"description": "reply only offers optional further help; nothing is blocked if the person ignores it",

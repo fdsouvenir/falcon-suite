@@ -32,5 +32,7 @@ writeFileSync(out, JSON.stringify(items, null, 1));
 const segs = items.flatMap((i) => i.segments);
 console.log(
 	`${items.length} replies (${items.filter((i) => i.gold).length} ask the person), ${segs.length} segments: ` +
-		['need', 'offer', 'chat', 'none'].map((c) => `${c} ${segs.filter((s) => s.gold === c).length}`).join(', ')
+		['need', 'offer', 'chat', 'none']
+			.map((c) => `${c} ${segs.filter((s) => s.gold === c).length}`)
+			.join(', ')
 );
