@@ -153,6 +153,7 @@ const feature = defineFeaturePlugin({
 		const decisions = () =>
 			(api as unknown as { runtime?: { decisions?: Parameters<typeof decide>[0] } }).runtime
 				?.decisions;
+		const log = (line: string) => api.logger?.info?.(`Falcon Work ${line}`);
 		const changed = (w: Work) => {
 			try {
 				events.emit('changed', { at: w.now() });
@@ -171,6 +172,10 @@ const feature = defineFeaturePlugin({
 			const message =
 				(event as { currentUserMessage?: string }).currentUserMessage ?? event.prompt ?? '';
 			const person = fromPerson(ctx as never, message);
+			if (!person)
+				log(
+					`gates skipped: not a person turn (trigger ${ctx.trigger ?? '-'}, provenance ${(ctx as { inputProvenance?: { kind?: string } }).inputProvenance?.kind ?? '-'})`
+				);
 			const state = runState(ctx.runId);
 			if (state && person) state.request = message;
 			if (person) void matchAnswers(work, key, message, ctx.runId ?? now);
@@ -232,7 +237,9 @@ const feature = defineFeaturePlugin({
 					},
 					questions
 				},
-				'answers_open_item'
+				'answers_open_item',
+				undefined,
+				log
 			);
 			if (!answers) return;
 			const human = { kind: 'human' as const, id: w.owner };
@@ -303,7 +310,8 @@ const feature = defineFeaturePlugin({
 					questions: { gate: LEFT_WAITING }
 				},
 				'left_waiting',
-				agentId
+				agentId,
+				log
 			);
 			if (!answers) {
 				// No decision model: the plain text check, as a reminder only.
@@ -316,6 +324,7 @@ const feature = defineFeaturePlugin({
 			}
 			const a = answers.gate;
 			const outcome = a?.type === 'choice' ? a.choice : 'nothing';
+			log(`gate left_waiting: ${outcome} ${(a?.probabilities?.[outcome] ?? 0).toFixed(2)}`);
 			if (
 				!String(outcome).startsWith('needs_') ||
 				(a.probabilities?.[outcome] ?? 0) < LEFT_WAITING_THRESHOLD

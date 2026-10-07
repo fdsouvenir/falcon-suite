@@ -145,9 +145,13 @@ export async function decide(
 	decisions: Decisions | undefined,
 	batch: { state: unknown; questions: Record<string, unknown> },
 	purpose: string,
-	agentId?: string
+	agentId?: string,
+	log?: (line: string) => void
 ): Promise<Record<string, any> | null> {
-	if (!decisions?.evaluate) return null;
+	if (!decisions?.evaluate) {
+		log?.(`gate ${purpose}: no decision runtime`);
+		return null;
+	}
 	try {
 		const out = await decisions.evaluate(batch as never, {
 			...(agentId ? { agentId } : {}),
@@ -156,8 +160,11 @@ export async function decide(
 			timeoutMs: 20000,
 			signal: AbortSignal.timeout(25000)
 		});
+		if (out.status !== 'ok')
+			log?.(`gate ${purpose}: decision model unavailable (${String(out.reason)})`);
 		return out.status === 'ok' ? out.result.answers : null;
-	} catch {
+	} catch (error) {
+		log?.(`gate ${purpose}: ${(error as Error).message}`);
 		return null;
 	}
 }
