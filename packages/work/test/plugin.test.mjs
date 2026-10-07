@@ -589,6 +589,22 @@ test('the captured Question text is the asking sentences, even mid-paragraph', a
 	);
 });
 
+test('the end-of-turn battery asks whether an ask is already open, in shadow', async () => {
+	const { turnBattery } = await import('../dist/plugin/gates.js');
+	const none = turnBattery({ request: 'r', reply: 'Which city?', task: null, tasks: [] });
+	assert.equal(none.batch.questions.already_open, undefined, 'only asked when something is open');
+	const b = turnBattery({
+		request: 'r',
+		reply: 'Which city is the house in?',
+		task: null,
+		tasks: [],
+		open: [{ id: 'q-123', prompt: 'What city is the house in?' }]
+	});
+	assert.deepEqual(Object.keys(b.batch.questions.already_open.criteria), ['o1', 'none']);
+	assert.equal(b.batch.state.open_questions.o1, 'What city is the house in?');
+	assert.deepEqual(b.openIds, [['o1', 'q-123']]);
+});
+
 test('gate left_waiting below its threshold, or nothing waiting, records nothing', async () => {
 	const runtime = model(() => ({
 		left_waiting: {

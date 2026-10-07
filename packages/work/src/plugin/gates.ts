@@ -265,6 +265,8 @@ export function turnBattery(input: {
 	reply: string;
 	task: { title: string; done_when: string } | null;
 	tasks: { id: string; title: string }[];
+	/** Questions already open for the person, to tell a repeated ask from a new one. */
+	open?: { id: string; prompt: string }[];
 }) {
 	const pieces = segments(input.reply).slice(-60);
 	const pieceIds = pieces.map((_, n) => `p${n + 1}`);
@@ -285,9 +287,24 @@ export function turnBattery(input: {
 				none: 'none of these tasks'
 			}
 		};
+	const open = (input.open ?? []).slice(0, 20);
+	if (open.length)
+		questions.already_open = {
+			type: 'choice',
+			instructions: {
+				question: 'Is what reply asks the person already one of open_questions?',
+				focus:
+					'The same thing asked again, in any wording, counts. A related but different question does not.'
+			},
+			criteria: {
+				...Object.fromEntries(open.map((q, n) => [`o${n + 1}`, q.prompt.slice(0, 300)])),
+				none: 'reply asks nothing, or asks something not in open_questions'
+			}
+		};
 	return {
 		pieces,
 		pieceIds,
+		openIds: open.map((q, n) => [`o${n + 1}`, q.id] as const),
 		batch: {
 			state: {
 				request: input.request.slice(0, 2000),
@@ -295,6 +312,9 @@ export function turnBattery(input: {
 				pieces: Object.fromEntries(pieceIds.map((id, n) => [id, pieces[n].text])),
 				task_in_progress: input.task,
 				tasks: Object.fromEntries(input.tasks.slice(0, 15).map((t, n) => [`t${n + 1}`, t.title])),
+				open_questions: Object.fromEntries(
+					open.map((q, n) => [`o${n + 1}`, q.prompt.slice(0, 600)])
+				),
 				raised_in_work: []
 			},
 			questions

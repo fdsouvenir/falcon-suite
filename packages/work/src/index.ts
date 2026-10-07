@@ -342,11 +342,15 @@ const feature = defineFeaturePlugin({
 				? ((w.reads.get(task.id) as { definition?: { done_when?: string } } | null)?.definition
 						?.done_when ?? '')
 				: '';
-			const { pieces, pieceIds, batch } = turnBattery({
+			const openQuestions = w.views
+				.overview(w.owner, w.now())
+				.needs_you.questions.map((q) => ({ id: q.id, prompt: q.prompt }));
+			const { pieces, pieceIds, openIds, batch } = turnBattery({
 				request,
 				reply,
 				task: task ? { title: task.title, done_when: doneWhen } : null,
-				tasks: inProgress.map((t) => ({ id: t.id, title: t.title }))
+				tasks: inProgress.map((t) => ({ id: t.id, title: t.title })),
+				open: openQuestions
 			});
 			const answers = await decide(decisions(), batch, 'turn', agentId, log);
 			if (!answers) {
@@ -429,6 +433,10 @@ const feature = defineFeaturePlugin({
 				reply_end: reply.slice(-1000),
 				asked_in_work: askedInWork,
 				answers: summarise(answers, pieceIds),
+				already_open_id:
+					answers.already_open?.choice && answers.already_open.choice !== 'none'
+						? (openIds.find(([k]) => k === answers.already_open.choice)?.[1] ?? null)
+						: null,
 				pieces_picked: pieceIds.filter(
 					(id) => (answers[id]?.probabilityTrue ?? 0) >= ASKED_FOR_THRESHOLD
 				),

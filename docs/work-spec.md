@@ -265,7 +265,7 @@ Work asks the Office's decision model (OpenClaw's `decisionModel` role, e.g. Typ
 | **asked_for**         | Right after left_waiting finds something                       | per sentence or list item of the reply: part of the ask? The picked pieces become the captured Question's text; the sentence-based text extractor is the fallback. Threshold 0.8. | 58 asking turns, 1,069 pieces: F1 0.84, precision 0.88 (text extractor 0.73)      |
 | **answers_open_item** | When the person sends a message and something is open for them | per open Question: answered → record the message as the answer; per open Decision: an option → decide. Threshold 0.7.                                                             | 42 real replies + 8 Decision cases: precision 1.00, recall 0.82, no decoy matched |
 
-In shadow (logged, not acted on): end of turn — `work_request` (track / one-off / chat), `plan_in_chat`, `promise` (the agent committed to later work), `task_done` (the in-progress Task's done-when is met), `task_fit` (which in-progress Task the work belongs to); person's message — `message_kind` (answers / new request / correction / chat).
+In shadow (logged, not acted on): end of turn — `work_request` (track / one-off / chat), `plan_in_chat`, `promise` (the agent committed to later work), `task_done` (the in-progress Task's done-when is met), `task_fit` (which in-progress Task the work belongs to), `already_open` (the ask repeats a Question already open for the person — the log names it, so duplicates can be measured before Work links instead of re-asking); person's message — `message_kind` (answers / new request / correction / chat).
 
 ## 11. Warnings
 
