@@ -10,27 +10,8 @@ export const normalize = (s) =>
 		.trim()
 		.toLowerCase();
 
-export function segments(reply) {
-	const text = reply.replace(/```[\s\S]*?```/g, '\n').replace(/`([^`]*)`/g, '$1');
-	const out = [];
-	let previous = '';
-	for (const raw of text.split(/\n+/)) {
-		const line = raw
-			.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '')
-			.replace(/[*_]+/g, '')
-			.replace(/^#+\s*/, '')
-			.replace(/^>\s*/, '')
-			.trim();
-		if (!line) continue;
-		for (const s of line.split(/(?<=[.!?。？])\s+(?=[^\s])/)) {
-			const t = s.trim();
-			if (t.split(/\s+/).length < 2 && !/[?？]$/.test(t)) continue;
-			out.push({ text: t, context: previous });
-			previous = t;
-		}
-	}
-	return out;
-}
+// The plugin's own splitter, so the evaluation judges exactly the pieces Work would use.
+export { segments } from '../dist/plugin/gates.js';
 
 /** Which gold class a segment carries: need, offer, chat or none. */
 export function goldFor(segment, labels) {

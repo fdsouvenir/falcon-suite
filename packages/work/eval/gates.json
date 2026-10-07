@@ -130,5 +130,35 @@
 			"decision option": "decide with that option and message as the rationale",
 			"otherwise": "nothing"
 		}
+	},
+	"asked_for": {
+		"when": "After left_waiting found something waiting on the person: which pieces of the reply are it.",
+		"state": "{ request: the person's message, reply: the agent's reply, pieces: { <id>: one sentence or list item of reply } }",
+		"piece_template": {
+			"type": "noul",
+			"instructions": {
+				"question": "Is pieces.{id} part of what reply asks the person who sent request to give, decide or do?",
+				"focus": "Read pieces.{id} within reply. A list item counts when the line introducing the list asks for it."
+			},
+			"criteria": {
+				"true": {
+					"includes": [
+						"a question to the person",
+						"a request to send, share, confirm, approve or choose something",
+						"an item of a list the person is asked to provide",
+						"an instruction for the person to do something themselves"
+					]
+				},
+				"false": {
+					"includes": [
+						"a step of a plan or procedure describing work",
+						"a report, explanation or recommendation",
+						"a question quoted from someone else or answered by reply itself",
+						"an optional offer of more help",
+						"small talk or a follow-up question the work does not depend on"
+					]
+				}
+			}
+		}
 	}
 }

@@ -34,6 +34,9 @@ test('the gates the plugin runs are the gates the evaluation measured', async ()
 	const t = measured.answers_open_item.question_template;
 	assert.deepEqual(q.instructions, t.instructions);
 	assert.deepEqual(q.criteria, t.criteria);
+	const asked = g.askedFor('{id}');
+	assert.deepEqual(asked.instructions, measured.asked_for.piece_template.instructions);
+	assert.deepEqual(asked.criteria, measured.asked_for.piece_template.criteria);
 	assert.deepEqual(
 		g.answersDecision('{id}', {}).instructions,
 		measured.answers_open_item.decision_template.instructions

@@ -16,7 +16,10 @@ import {
 	LEFT_WAITING_THRESHOLD,
 	answersDecision,
 	answersQuestion,
+	askedFor,
+	ASKED_FOR_THRESHOLD,
 	askingPart,
+	segments,
 	decide,
 	fromPerson
 } from './plugin/gates.js';
@@ -287,6 +290,37 @@ const feature = defineFeaturePlugin({
 			if (recorded) changed(w);
 		}
 
+		/** Gate asked_for: the pieces of the reply that are the ask; the text extractor as fallback. */
+		async function askedPart(request: string, reply: string, agentId: string) {
+			const pieces = segments(reply).slice(-60);
+			const ids = pieces.map((_, n) => `p${n + 1}`);
+			const answers = pieces.length
+				? await decide(
+						decisions(),
+						{
+							state: {
+								request: request.slice(0, 2000),
+								reply: reply.slice(-6000),
+								pieces: Object.fromEntries(ids.map((id, n) => [id, pieces[n].text]))
+							},
+							questions: Object.fromEntries(ids.map((id) => [id, askedFor(id)]))
+						},
+						'asked_for',
+						agentId,
+						log
+					)
+				: null;
+			const picked = answers
+				? pieces.filter((_, n) => {
+						const a = answers[ids[n]];
+						return a?.type === 'boolean' && a.probabilityTrue >= ASKED_FOR_THRESHOLD;
+					})
+				: [];
+			if (!picked.length) return askingPart(reply);
+			const body = picked.map((p) => p.text).join('\n');
+			return body.length > 1900 ? body.slice(0, 1899) + '…' : body;
+		}
+
 		/** Gate left_waiting: capture what the agent's reply leaves waiting on the person. */
 		async function captureAsks(
 			w: Work,
@@ -336,7 +370,7 @@ const feature = defineFeaturePlugin({
 					: outcome === 'needs_action'
 						? 'an action'
 						: 'an answer';
-			const prompt = askingPart(reply);
+			const prompt = await askedPart(request, reply, agentId);
 			const r = w.do(
 				{
 					command: 'raise_question',

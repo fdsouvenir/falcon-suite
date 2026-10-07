@@ -124,6 +124,36 @@ export const answersDecision = (id: string, options: Record<string, string>) => 
 /** Recording a wrong answer is worse than missing one (measured: eval/gate2_score.mjs). */
 export const ANSWERS_THRESHOLD = 0.7;
 
+/** Gate asked_for: is this piece of the reply part of what it asks the person for? */
+export const askedFor = (id: string) => ({
+	type: 'boolean' as const,
+	instructions: {
+		question: `Is pieces.${id} part of what reply asks the person who sent request to give, decide or do?`,
+		focus: `Read pieces.${id} within reply. A list item counts when the line introducing the list asks for it.`
+	},
+	criteria: {
+		true: {
+			includes: [
+				'a question to the person',
+				'a request to send, share, confirm, approve or choose something',
+				'an item of a list the person is asked to provide',
+				'an instruction for the person to do something themselves'
+			]
+		},
+		false: {
+			includes: [
+				'a step of a plan or procedure describing work',
+				'a report, explanation or recommendation',
+				'a question quoted from someone else or answered by reply itself',
+				'an optional offer of more help',
+				'small talk or a follow-up question the work does not depend on'
+			]
+		}
+	}
+});
+/** Measured: eval/extract_score.mjs (F1 0.80 against 0.73 for the text extractor). */
+export const ASKED_FOR_THRESHOLD = 0.8;
+
 type Decisions = {
 	evaluate(
 		batch: { state: unknown; questions: Record<string, unknown> },
@@ -185,25 +215,48 @@ export function fromPerson(
 const ASKING =
 	/[?？]\s*$|\b(send me|tell me|let me know|reply with|could you|can you|would you|please (share|confirm|send|provide|choose|pick|tell)|i need (you|from you)|your call|say (go|the word)|approve)\b/i;
 
+/**
+ * Split a reply into the pieces a person answers one by one: sentences and list items, with code
+ * removed and markdown emphasis stripped. Each piece keeps the piece before it as context, so
+ * "the policy number" under "I need:" can be judged. The evaluation uses the same splitter.
+ */
+export function segments(reply: string): { text: string; context: string; item: boolean }[] {
+	const text = reply.replace(/```[\s\S]*?```/g, '\n').replace(/`([^`]*)`/g, '$1');
+	const out: { text: string; context: string; item: boolean }[] = [];
+	let previous = '';
+	for (const raw of text.split(/\n+/)) {
+		const item = /^\s*(?:[-*•]|\d+[.)])\s+/.test(raw);
+		const line = raw
+			.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '')
+			.replace(/[*_]+/g, '')
+			.replace(/^#+\s*/, '')
+			.replace(/^>\s*/, '')
+			.trim();
+		if (!line) continue;
+		for (const piece of line.split(/(?<=[.!?。？])\s+(?=[^\s])/)) {
+			const t = piece.trim();
+			if (t.split(/\s+/).length < 2 && !/[?？]$/.test(t)) continue;
+			out.push({ text: t, context: previous, item });
+			previous = t;
+		}
+	}
+	return out;
+}
+
 /** The part of a reply that asks the person for something, as one Question prompt. */
 export function askingPart(reply: string): string {
-	const text = reply.replace(/```[\s\S]*?```/g, '\n').replace(/[*_`]+/g, '');
-	const ITEM = /^\s*(?:[-•*]|\d+[.)])\s+/;
-	const raw = text.split(/\n+/).filter((l) => l.trim());
 	const picked: string[] = [];
-	// A line that asks and ends with ":" introduces a list; every item of that list is part of it.
+	// A sentence that asks and ends with ":" introduces a list; every item of that list is part of it.
 	let inAskList = false;
-	for (const l of raw) {
-		const item = ITEM.test(l);
-		const line = l.replace(ITEM, '').trim();
-		if (item && inAskList) {
-			picked.push(line);
+	for (const seg of segments(reply)) {
+		if (seg.item && inAskList) {
+			picked.push(seg.text);
 			continue;
 		}
-		inAskList = ASKING.test(line) && /:\s*$/.test(line);
-		if (ASKING.test(line)) picked.push(line);
+		inAskList = ASKING.test(seg.text) && /:\s*$/.test(seg.text);
+		if (ASKING.test(seg.text)) picked.push(seg.text);
 	}
-	const lines = raw.map((l) => l.replace(ITEM, '').trim());
-	const body = (picked.length ? picked : lines.slice(-2)).join('\n');
+	const all = segments(reply).map((x) => x.text);
+	const body = (picked.length ? picked : all.slice(-2)).join('\n');
 	return body.length > 1900 ? body.slice(0, 1899) + '…' : body;
 }

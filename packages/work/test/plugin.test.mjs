@@ -516,7 +516,12 @@ test('gate left_waiting: what a reply needs from the person becomes a Question; 
 	const q = await call('falcon_work_read', { view: 'get', id: qs[0].id });
 	assert.match(q.prompt, /Send me:\nA photo of the model label\nWhat is going wrong/);
 	assert.match(q.impact, /Asked in chat/);
-	assert.equal(runtime.decisions.calls[0].options.purpose, 'falcon-work.left_waiting');
+	assert.deepEqual(
+		runtime.decisions.calls
+			.map((c) => c.options.purpose)
+			.filter((p) => p !== 'falcon-work.answers_open_item'),
+		['falcon-work.left_waiting', 'falcon-work.asked_for']
+	);
 	assert.equal(
 		runtime.decisions.calls[0].batch.state.request,
 		'our chiller is old, repair or replace?'
@@ -537,6 +542,22 @@ test('gate left_waiting: what a reply needs from the person becomes a Question; 
 	});
 	qs = (await call('falcon_work_read', { view: 'list', kind: 'question' })).items;
 	assert.equal(qs.length, 1);
+});
+
+test('the captured Question text is the asking sentences, even mid-paragraph', async () => {
+	const { askingPart } = await import('../dist/plugin/gates.js');
+	assert.equal(
+		askingPart(
+			"For 120 gallons at 38°F, don't upsize just because it slowed down.\n\n**One important question: is it indoors, in a garage, or outdoors?** The current standard 1 HP is not outdoor-rated."
+		),
+		'One important question: is it indoors, in a garage, or outdoors?'
+	);
+	assert.equal(
+		askingPart(
+			'Diagnose first.\n\nSend me:\n- A photo of the label\n- What is going wrong\n\nThen I can compare.'
+		),
+		'Send me:\nA photo of the label\nWhat is going wrong'
+	);
 });
 
 test('gate left_waiting below its threshold, or nothing waiting, records nothing', async () => {
