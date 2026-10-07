@@ -1,4 +1,5 @@
 import type { Ctx } from '../app.js';
+import { formDialog, messageDialog } from '../dialog.js';
 import { h, empty, time, who, avatar } from '../dom.js';
 import { openPanel } from '../parts.js';
 
@@ -108,27 +109,37 @@ function feedRow(c: Ctx, i: any) {
 
 async function createFromActivity(c: Ctx, i: any) {
 	const areas = (await c.read({ view: 'areas' })).areas as any[];
-	if (!areas.length) return alert('Create an Area first: every Task lives in an Area or Project.');
-	const title = prompt('Task title', i.summary);
-	if (!title) return;
-	const area =
-		areas.length === 1
-			? areas[0]
-			: areas.find(
-					(a) =>
-						a.title.toLowerCase() ===
-						(prompt(`Which Area? (${areas.map((a) => a.title).join(', ')})`) ?? '').toLowerCase()
-				);
-	if (!area) return alert('No such Area.');
-	await c
-		.act('create_task_from_activity', undefined, {
-			title,
-			description: `Explains: ${i.summary}`,
-			done_when: 'Recorded what this activity was for.',
-			area: area.id,
-			activity: [i.id]
-		})
-		.catch((e) => alert((e as Error).message));
+	if (!areas.length)
+		return messageDialog(
+			c,
+			'Create an Area first',
+			'Every Task lives in an Area or a Project. Add an Area on the Areas & Projects tab, then come back.'
+		);
+	formDialog(c, {
+		title: 'Create a Task from this activity',
+		description: `Explains: ${i.summary}`,
+		fields: [
+			{ id: 'title', label: 'Task title', value: i.summary.slice(0, 200) },
+			{
+				id: 'area',
+				label: 'Area',
+				kind: 'select',
+				options: areas.map((a) => ({ value: a.id, label: a.title }))
+			}
+		],
+		submitLabel: 'Create Task',
+		submit: async (v) => {
+			if (!v.title.trim()) return 'Give the Task a title.';
+			const r = await c.act('create_task_from_activity', undefined, {
+				title: v.title.trim(),
+				description: `Explains: ${i.summary}`,
+				done_when: 'Recorded what this activity was for.',
+				area: v.area,
+				activity: [i.id]
+			});
+			return r?.outcome === 'rejected' ? r.reason : undefined;
+		}
+	});
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

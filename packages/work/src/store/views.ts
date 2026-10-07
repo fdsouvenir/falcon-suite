@@ -376,7 +376,7 @@ export class Views {
 					a.id
 				).map((p) => this.projectCard(p, person)),
 				tasks: this.all(
-					"SELECT * FROM task WHERE area_id = ? ORDER BY status = 'completed', updated_at DESC",
+					"SELECT * FROM task WHERE area_id = ? AND status <> 'abandoned' ORDER BY status = 'completed', updated_at DESC",
 					a.id
 				).map((t) => this.taskCard(t))
 			}))

@@ -737,3 +737,15 @@ button.fw-choice:hover {
 	padding: var(--space-2);
 	resize: vertical;
 }
+
+/* Forms inside the host's dialog. */
+.fw-dialog-form {
+	display: grid;
+	gap: var(--space-3);
+	min-width: min(420px, 80vw);
+}
+.fw-dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-2);
+}

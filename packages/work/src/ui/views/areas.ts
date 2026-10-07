@@ -1,4 +1,5 @@
 import type { Ctx } from '../app.js';
+import { formDialog } from '../dialog.js';
 import { h, section, empty, day, who, avatar, icon, kicker } from '../dom.js';
 import {
 	sessionChip,
@@ -172,15 +173,26 @@ function achieveButton(c: Ctx, m: any, open: number) {
 		},
 		'Mark achieved'
 	);
-	b.addEventListener('click', async () => {
-		const basis = prompt(`Why is "${m.title}" achieved?`);
-		if (!basis) return;
-		const ref = prompt('Evidence (a link, commit, or reference)');
-		if (!ref) return;
-		await c
-			.act('achieve_milestone', m.id, { basis, sources: [{ ref }] })
-			.catch((e) => alert((e as Error).message));
-	});
+	b.addEventListener('click', () =>
+		formDialog(c, {
+			title: `Mark "${m.title}" achieved`,
+			description: m.success_condition ? `Success condition: ${m.success_condition}` : undefined,
+			fields: [
+				{ id: 'basis', label: 'Why it is achieved', kind: 'textarea' },
+				{ id: 'ref', label: 'Evidence', placeholder: 'A link, commit, or reference' }
+			],
+			submitLabel: 'Mark achieved',
+			submit: async (v) => {
+				if (!v.basis.trim() || !v.ref.trim())
+					return 'Give the reason and at least one piece of evidence.';
+				const r = await c.act('achieve_milestone', m.id, {
+					basis: v.basis.trim(),
+					sources: [{ ref: v.ref.trim() }]
+				});
+				return r?.outcome === 'rejected' ? r.reason : undefined;
+			}
+		})
+	);
 	return [
 		open > 0
 			? h('span', { class: 'fw-muted fw-right' }, `${open} Task${open > 1 ? 's' : ''} still open`)
@@ -252,17 +264,32 @@ export async function projectView(c: Ctx, id: string) {
 		{ class: 'fw-link', type: 'button' },
 		p.status === 'abandoned' ? 'Resume' : 'Abandon'
 	);
-	abandon.addEventListener('click', async () => {
-		const reason = prompt(
-			p.status === 'abandoned' ? 'Why resume it?' : 'Why abandon this Project?'
-		);
-		if (!reason) return;
-		const r = await c
-			.act(p.status === 'abandoned' ? 'resume_project' : 'abandon_project', p.id, { reason })
-			.catch((e) => alert((e as Error).message));
-		if (r?.outcome === 'input_required')
-			alert('Each unfinished Task needs a decision first; they are in Needs you.');
-	});
+	abandon.addEventListener('click', () =>
+		formDialog(c, {
+			title: p.status === 'abandoned' ? `Resume "${p.title}"` : `Abandon "${p.title}"`,
+			fields: [
+				{
+					id: 'reason',
+					label: p.status === 'abandoned' ? 'Why resume it?' : 'Why abandon it?',
+					kind: 'textarea'
+				}
+			],
+			submitLabel: p.status === 'abandoned' ? 'Resume' : 'Abandon',
+			submit: async (v) => {
+				if (!v.reason.trim()) return 'Give a reason.';
+				const r = await c.act(
+					p.status === 'abandoned' ? 'resume_project' : 'abandon_project',
+					p.id,
+					{
+						reason: v.reason.trim()
+					}
+				);
+				if (r?.outcome === 'input_required')
+					return 'Each unfinished Task needs a decision first: they are now under Needs you. Decide them, then abandon again.';
+				return r?.outcome === 'rejected' ? r.reason : undefined;
+			}
+		})
+	);
 	const about = p.about as any[];
 	return h(
 		'div',

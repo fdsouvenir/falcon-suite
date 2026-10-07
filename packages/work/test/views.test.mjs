@@ -194,3 +194,19 @@ test('feed merges changes and captured activity; panel shows a Task in full', ()
 	);
 	assert.equal(panel.milestone.position, 1);
 });
+
+test('Areas & Projects leaves out abandoned Tasks', () => {
+	const w = new Work(':memory:', FRED.id);
+	const area = w.do(
+		{ command: 'create_area', input: { title: 'Home', description: 'd' } },
+		VERL
+	).id;
+	const mk = (title) =>
+		w.do({ command: 'create_task', input: { title, description: 'd', done_when: 'x', area } }, VERL)
+			.id;
+	mk('Keep me');
+	const gone = mk('Mistaken test');
+	w.do({ command: 'abandon', id: gone, input: { reason: 'test' } }, VERL);
+	const shown = w.views.areas(FRED.id).groups[0].tasks.map((t) => t.title);
+	assert.deepEqual(shown, ['Keep me']);
+});

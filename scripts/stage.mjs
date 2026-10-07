@@ -86,6 +86,7 @@ if (existsSync(readmePath))
 			.replaceAll(IDENTITIES[pkgName].production.npm + '\n', identity.npm + '\n')
 			.replace(/^# .*$/m, `# ${identity.name}`)
 			.replaceAll('`falcon-work/work.db`', `\`${identity.id}/work.db\``)
+			.replaceAll('`falcon-work/`', `\`${identity.id}/\``)
 			.replaceAll('plugins.entries.falcon-work.', `plugins.entries.${identity.id}.`) +
 			(channel === 'preview'
 				? `\n> This is the **preview** channel: early builds for testing. Production is \`${IDENTITIES[pkgName].production.npm}\`.\n`

@@ -39,8 +39,23 @@ Then allow two settings:
 - **The Work page** is native Control UI: turn on **Settings → Labs → Custom plugin UI**
   (`gateway.controlUi.experimental.customPlugins: true`).
 
-Requires OpenClaw 2026.9.6 or later. Data is kept in a private SQLite database in the Gateway's
-state directory (`falcon-work/work.db`).
+Optional, recommended: **a decision model** (OpenClaw's `decisionModel` role, for example TypeSafe
+Jev). With one, Work notices when a reply leaves the agent waiting on you and puts it under Needs
+you, and records answers you give in chat against the open Question. Without one, the agent gets a
+reminder in its next brief instead.
+
+Requires OpenClaw 2026.9.6 or later.
+
+## What Work keeps on your Gateway
+
+Everything stays in the Gateway's state directory, in `falcon-work/`, readable only by the Gateway:
+
+- `work.db` — your Objectives, Areas, Projects, Tasks, Questions, Decisions, Findings and their
+  history, in a private SQLite database.
+- `decisions.jsonl` — when a decision model is configured, each judgment Work asked it for, with
+  a short excerpt of the turn it judged (up to 300 characters of your message and the last 1,000 of
+  the agent's reply) and what Work did. It is there so the judgments can be reviewed. It rotates at
+  5 MB and keeps one older file, so it never holds more than about 10 MB.
 
 ## Source
 
