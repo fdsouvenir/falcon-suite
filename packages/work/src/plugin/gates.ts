@@ -137,7 +137,7 @@ export const askedFor = (id: string) => ({
 				'a question to the person',
 				'a request to send, share, confirm, approve or choose something',
 				'an item of a list the person is asked to provide',
-				'an instruction for the person to do something themselves'
+				'an instruction for the person to do something and report back, which the writer needs before continuing'
 			]
 		},
 		false: {
@@ -146,12 +146,13 @@ export const askedFor = (id: string) => ({
 				'a report, explanation or recommendation',
 				'a question quoted from someone else or answered by reply itself',
 				'an optional offer of more help',
-				'small talk or a follow-up question the work does not depend on'
+				'small talk or a follow-up question the work does not depend on',
+				'advice or steps the person may follow on their own'
 			]
 		}
 	}
 });
-/** Measured: eval/extract_score.mjs (F1 0.80 against 0.73 for the text extractor). */
+/** Measured: eval/extract_score.mjs (F1 0.84 against 0.73 for the text extractor). */
 export const ASKED_FOR_THRESHOLD = 0.8;
 
 type Decisions = {
