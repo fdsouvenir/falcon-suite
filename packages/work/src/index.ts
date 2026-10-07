@@ -5,7 +5,9 @@ import {
 import { contract, KINDS } from './contract.js';
 import { PLUGIN_ID } from './identity.js';
 import type { Work } from './store/work.js';
-import { currentWork, startWork } from './plugin/runtime.js';
+import { currentWork, dataDir, startWork } from './plugin/runtime.js';
+import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs';
+import path from 'node:path';
 import type { Actor, Envelope } from './store/types.js';
 import type { Kind } from './store/engine.js';
 import { classify, raisesAsk } from './plugin/activity.js';
@@ -16,10 +18,12 @@ import {
 	LEFT_WAITING_THRESHOLD,
 	answersDecision,
 	answersQuestion,
-	askedFor,
 	ASKED_FOR_THRESHOLD,
 	askingPart,
-	segments,
+	MESSAGE_SHADOW,
+	RUBRIC_VERSION,
+	summarise,
+	turnBattery,
 	decide,
 	fromPerson
 } from './plugin/gates.js';
@@ -193,6 +197,25 @@ const feature = defineFeaturePlugin({
 		});
 
 		/** Gate answers_open_item: record the person's chat reply against what is open for them. */
+		/**
+		 * Every decision-model answer is logged with what it acted on, so shadow questions can be
+		 * reviewed and labelled before they are allowed to act. One JSON line per event, in Work's
+		 * own data folder; rotated at 5 MB.
+		 */
+		function logDecisions(entry: Record<string, unknown>) {
+			try {
+				const dir = dataDir();
+				mkdirSync(dir, { recursive: true, mode: 0o700 });
+				const file = path.join(dir, 'decisions.jsonl');
+				if (existsSync(file) && statSync(file).size > 5_000_000)
+					renameSync(file, path.join(dir, 'decisions.1.jsonl'));
+				appendFileSync(file, JSON.stringify(entry) + '\n', { mode: 0o600 });
+			} catch (error) {
+				log(`decision log failed: ${(error as Error).message}`);
+			}
+		}
+
+		/** The person's message: answers to what is open for them, and (shadow) what kind it is. */
 		async function matchAnswers(w: Work, session: string, message: string, runId: string) {
 			const open = w.views.overview(w.owner, w.now()).needs_you;
 			const items = [
@@ -213,9 +236,8 @@ const feature = defineFeaturePlugin({
 					recommendation: (d.recommendation as { option?: string } | null)?.option ?? null
 				}))
 			].slice(0, 20);
-			if (!items.length) return;
 			const open_items: Record<string, unknown> = {};
-			const questions: Record<string, unknown> = {};
+			const questions: Record<string, unknown> = { ...MESSAGE_SHADOW };
 			items.forEach((it, n) => {
 				if (it.kind === 'question') {
 					open_items[it.id] = { n: n + 1, prompt: it.prompt };
@@ -240,13 +262,13 @@ const feature = defineFeaturePlugin({
 					},
 					questions
 				},
-				'answers_open_item',
+				'message',
 				undefined,
 				log
 			);
 			if (!answers) return;
 			const human = { kind: 'human' as const, id: w.owner };
-			let recorded = false;
+			const acted: string[] = [];
 			for (const it of items) {
 				const a = answers[it.id];
 				if (
@@ -267,7 +289,7 @@ const feature = defineFeaturePlugin({
 						},
 						human
 					);
-					recorded ||= r.outcome !== 'rejected';
+					if (r.outcome !== 'rejected') acted.push(`answered ${it.id}`);
 				}
 				if (
 					it.kind === 'decision' &&
@@ -284,126 +306,135 @@ const feature = defineFeaturePlugin({
 						},
 						human
 					);
-					recorded ||= r.outcome !== 'rejected';
+					if (r.outcome !== 'rejected') acted.push(`decided ${it.id} ${a.choice}`);
 				}
 			}
-			if (recorded) changed(w);
+			logDecisions({
+				at: w.now(),
+				event: 'message',
+				rubric: RUBRIC_VERSION,
+				session,
+				run: runId,
+				message: message.slice(0, 600),
+				answers: summarise(answers, []),
+				acted
+			});
+			if (acted.length) changed(w);
 		}
 
-		/** Gate asked_for: the pieces of the reply that are the ask; the text extractor as fallback. */
-		async function askedPart(request: string, reply: string, agentId: string) {
-			const pieces = segments(reply).slice(-60);
-			const ids = pieces.map((_, n) => `p${n + 1}`);
-			const answers = pieces.length
-				? await decide(
-						decisions(),
-						{
-							state: {
-								request: request.slice(0, 2000),
-								reply: reply.slice(-6000),
-								pieces: Object.fromEntries(ids.map((id, n) => [id, pieces[n].text]))
-							},
-							questions: Object.fromEntries(ids.map((id) => [id, askedFor(id)]))
-						},
-						'asked_for',
-						agentId,
-						log
-					)
-				: null;
-			const picked = answers
-				? pieces.filter((_, n) => {
-						const a = answers[ids[n]];
-						return a?.type === 'boolean' && a.probabilityTrue >= ASKED_FOR_THRESHOLD;
-					})
-				: [];
-			if (!picked.length) return askingPart(reply);
-			const body = picked.map((p) => p.text).join('\n');
-			return body.length > 1900 ? body.slice(0, 1899) + '…' : body;
-		}
-
-		/** Gate left_waiting: capture what the agent's reply leaves waiting on the person. */
-		async function captureAsks(
+		/**
+		 * The end of a turn the person started: one batch for everything Work wants to know about it.
+		 * Measured questions act (left_waiting, and the pieces that are the ask); shadow ones are logged.
+		 */
+		async function captureTurn(
 			w: Work,
 			agentId: string,
 			session: string,
 			request: string,
 			reply: string,
-			runId: string
+			runId: string,
+			askedInWork: boolean
 		) {
 			const agent = `agent:${agentId}`;
-			const task = w.reads.brief(agent, null, w.now()).in_progress[0] ?? null;
-			const answers = await decide(
-				decisions(),
-				{
-					state: {
-						request: request.slice(0, 2000),
-						raised_in_work: [],
-						task_in_progress: task?.title ?? null,
-						reply: reply.slice(-6000)
-					},
-					questions: { gate: LEFT_WAITING }
-				},
-				'left_waiting',
-				agentId,
-				log
-			);
+			const inProgress = w.reads.brief(agent, null, w.now()).in_progress;
+			const task = inProgress[0] ?? null;
+			const doneWhen = task
+				? ((w.reads.get(task.id) as { definition?: { done_when?: string } } | null)?.definition
+						?.done_when ?? '')
+				: '';
+			const { pieces, pieceIds, batch } = turnBattery({
+				request,
+				reply,
+				task: task ? { title: task.title, done_when: doneWhen } : null,
+				tasks: inProgress.map((t) => ({ id: t.id, title: t.title }))
+			});
+			const answers = await decide(decisions(), batch, 'turn', agentId, log);
 			if (!answers) {
 				// No decision model: the plain text check, as a reminder only.
-				if (asksThePerson(reply))
+				if (!askedInWork && asksThePerson(reply))
 					note(
 						session,
 						'Your last reply asked the person for something that is not in Falcon Work. If the work depends on it, record it with falcon_work_ask so it stays under Needs you.'
 					);
 				return;
 			}
-			const a = answers.gate;
-			const outcome = a?.type === 'choice' ? a.choice : 'nothing';
-			log(`gate left_waiting: ${outcome} ${(a?.probabilities?.[outcome] ?? 0).toFixed(2)}`);
-			if (
-				!String(outcome).startsWith('needs_') ||
-				(a.probabilities?.[outcome] ?? 0) < LEFT_WAITING_THRESHOLD
-			)
-				return;
-			const kind =
-				outcome === 'needs_decision'
-					? 'a decision'
-					: outcome === 'needs_action'
-						? 'an action'
-						: 'an answer';
-			const prompt = await askedPart(request, reply, agentId);
-			const r = w.do(
-				{
-					command: 'raise_question',
-					idempotency_key: `gate-capture:${runId}`,
-					input: {
-						prompt,
-						impact: `Asked in chat; captured by Falcon Work because the reply needs ${kind} from you.`,
-						answerable_by: [w.owner],
-						...(task ? { targets: [{ kind: 'task', id: task.id }] } : {})
-					}
-				},
-				{ kind: 'agent', id: agent }
-			);
-			if (r.outcome === 'rejected') return;
-			if (outcome === 'needs_action' && task)
-				w.do(
+			const acted: string[] = [];
+			const a = answers.left_waiting;
+			const outcome = a?.type === 'choice' ? String(a.choice) : 'nothing';
+			const waiting =
+				!askedInWork &&
+				outcome.startsWith('needs_') &&
+				(a.probabilities?.[outcome] ?? 0) >= LEFT_WAITING_THRESHOLD;
+			let prompt = '';
+			if (waiting) {
+				const picked = pieces.filter((_, n) => {
+					const p = answers[pieceIds[n]];
+					return p?.type === 'boolean' && p.probabilityTrue >= ASKED_FOR_THRESHOLD;
+				});
+				prompt = picked.length ? picked.map((p) => p.text).join('\n') : askingPart(reply);
+				if (prompt.length > 1900) prompt = prompt.slice(0, 1899) + '…';
+				const kind =
+					outcome === 'needs_decision'
+						? 'a decision'
+						: outcome === 'needs_action'
+							? 'an action'
+							: 'an answer';
+				const r = w.do(
 					{
-						command: 'wait',
-						id: task.id,
-						idempotency_key: `gate-wait:${runId}`,
+						command: 'raise_question',
+						idempotency_key: `gate-capture:${runId}`,
 						input: {
-							waiting_for: prompt.slice(0, 2000),
-							waiting_on: { kind: 'person', ref: w.owner },
-							resume_when: 'The person has done it and said so'
+							prompt,
+							impact: `Asked in chat; captured by Falcon Work because the reply needs ${kind} from you.`,
+							answerable_by: [w.owner],
+							...(task ? { targets: [{ kind: 'task', id: task.id }] } : {})
 						}
 					},
 					{ kind: 'agent', id: agent }
 				);
-			note(
-				session,
-				`Falcon Work captured what your last reply asked of the person as a Question (${(r as { id?: string }).id}). Refine it, split it into separate Questions with falcon_work_ask, or withdraw it if the work does not depend on it.`
+				if (r.outcome !== 'rejected') {
+					acted.push(`captured ${(r as { id?: string }).id}`);
+					if (outcome === 'needs_action' && task) {
+						w.do(
+							{
+								command: 'wait',
+								id: task.id,
+								idempotency_key: `gate-wait:${runId}`,
+								input: {
+									waiting_for: prompt.slice(0, 2000),
+									waiting_on: { kind: 'person', ref: w.owner },
+									resume_when: 'The person has done it and said so'
+								}
+							},
+							{ kind: 'agent', id: agent }
+						);
+						acted.push(`waiting ${task.id}`);
+					}
+					note(
+						session,
+						`Falcon Work captured what your last reply asked of the person as a Question (${(r as { id?: string }).id}). Refine it, split it into separate Questions with falcon_work_ask, or withdraw it if the work does not depend on it.`
+					);
+				}
+			}
+			log(
+				`decisions at end of turn: left_waiting ${outcome} ${(a?.probabilities?.[outcome] ?? 0).toFixed(2)}${acted.length ? ` → ${acted.join(', ')}` : ''}`
 			);
-			changed(w);
+			logDecisions({
+				at: w.now(),
+				event: 'turn',
+				rubric: RUBRIC_VERSION,
+				session,
+				run: runId,
+				request: request.slice(0, 300),
+				reply_end: reply.slice(-1000),
+				asked_in_work: askedInWork,
+				answers: summarise(answers, pieceIds),
+				pieces_picked: pieceIds.filter(
+					(id) => (answers[id]?.probabilityTrue ?? 0) >= ASKED_FOR_THRESHOLD
+				),
+				acted
+			});
+			if (acted.length) changed(w);
 		}
 
 		// What the agent actually did: attached to its in-progress Task, or kept as untracked.
@@ -445,14 +476,15 @@ const feature = defineFeaturePlugin({
 			const reply = event.lastAssistantMessage ?? '';
 			const session = ctx?.sessionKey ?? event.sessionKey ?? '';
 			const work = ctx?.agentId ? maybe() : null;
-			if (work && ctx?.agentId && state?.request && !state.asked && reply && !state.nudged)
-				void captureAsks(
+			if (work && ctx?.agentId && state?.request && reply && !state.nudged)
+				void captureTurn(
 					work,
 					ctx.agentId,
 					session,
 					state.request,
 					reply,
-					event.runId ?? work.now()
+					event.runId ?? work.now(),
+					state.asked
 				);
 			if (session && reply) lastReply.set(session, reply);
 			// Changes no Task explains get one more pass, where the runtime allows it (OpenClaw does

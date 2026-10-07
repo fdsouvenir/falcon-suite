@@ -34,6 +34,14 @@ export function currentWork(): Work {
 	);
 }
 
+/** Work's own data folder on this Gateway (the store and the decision log live here). */
+export function dataDir(): string {
+	return path.join(
+		shared[KEY] ?? process.env.OPENCLAW_STATE_DIR ?? path.join(os.homedir(), '.openclaw'),
+		PLUGIN_ID
+	);
+}
+
 /** For tests: forget the store and its location. */
 export function resetWork(): void {
 	work?.close();

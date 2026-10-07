@@ -1,13 +1,16 @@
 /**
- * Decision gates (spec §10): small typed judgments Work asks the Office's decision model for, each
- * tied to one Work action. Rubrics follow the typesafe-evaluate conventions and are measured in
- * eval/ against labelled turns; change them there first.
+ * Decision gates (spec §10): typed judgments Work asks the Office's decision model for. Each event
+ * sends one batch — a battery of independent questions over the same state, including speculative
+ * ones — and Work's routing picks what applies (TypeSafe's "speculative fan-out"). Questions that
+ * have been measured against labelled turns drive actions; the rest run in shadow, their answers
+ * only logged until they are measured. Rubrics follow the typesafe-evaluate conventions and are
+ * measured in eval/; change them there first.
  *
  * Gates only run on turns that came from the person, never on heartbeats, scheduled jobs or
  * messages from other sessions. Without a decision model they report "unavailable" and Work falls
  * back to a reminder in the agent's next brief.
  */
-export const RUBRIC_VERSION = 'falcon-work-gates-2026-10-07';
+export const RUBRIC_VERSION = 'falcon-work-gates-2026-10-07b';
 
 /** Gate left_waiting: after this turn, is the agent waiting on the person? */
 export const LEFT_WAITING = {
@@ -154,6 +157,165 @@ export const askedFor = (id: string) => ({
 });
 /** Measured: eval/extract_score.mjs (F1 0.84 against 0.73 for the text extractor). */
 export const ASKED_FOR_THRESHOLD = 0.8;
+
+/** Shadow questions at the end of a turn: answers are logged, not acted on, until measured. */
+export const TURN_SHADOW = {
+	work_request: {
+		type: 'choice' as const,
+		instructions: {
+			question: 'What kind of request is request?',
+			focus: 'Judge request as the person wrote it, using reply only to understand it.'
+		},
+		criteria: {
+			track: {
+				description: 'asks the agent to do work worth tracking',
+				includes: [
+					'work that takes steps, changes something, or continues beyond this reply',
+					'a plan, build, fix, setup or investigation'
+				]
+			},
+			one_off: {
+				description: 'a single question or quick lookup answered in reply',
+				includes: ['an explanation', 'a fact or status check']
+			},
+			chat: {
+				description: 'nothing to do',
+				includes: ['small talk, thanks or acknowledgement', 'feedback with no request']
+			}
+		}
+	},
+	plan_in_chat: {
+		type: 'boolean' as const,
+		instructions:
+			'Does reply lay out a plan, breakdown, roadmap or project in steps, rather than only answering or reporting?',
+		criteria: {
+			true: {
+				includes: [
+					'phases, milestones or numbered steps of work to come',
+					'a breakdown of a project into tasks'
+				]
+			},
+			false: {
+				includes: [
+					'a short list of options',
+					'a status report of work done',
+					'a single next step',
+					'an explanation'
+				]
+			}
+		}
+	},
+	promise: {
+		type: 'boolean' as const,
+		instructions: 'Does reply commit the writer to do something later, after this reply?',
+		criteria: {
+			true: {
+				includes: [
+					'"I\'ll check back…"',
+					'"I\'ll follow up on Friday"',
+					'continuing the work in a later turn or at a set time'
+				]
+			},
+			false: {
+				includes: [
+					'work done within this reply',
+					"an offer that waits for the person's yes",
+					'something the person is asked to do'
+				]
+			}
+		}
+	},
+	task_done: {
+		type: 'boolean' as const,
+		instructions: 'Does reply say the work of task_in_progress is finished, meeting its done_when?',
+		criteria: {
+			true: {
+				includes: [
+					'reports the outcome done_when describes',
+					'says the task is complete with evidence'
+				]
+			},
+			false: {
+				includes: ['progress or a partial result', 'no task in progress', 'work on something else']
+			}
+		}
+	}
+} as const;
+
+/** Shadow question when the person sends a message. */
+export const MESSAGE_SHADOW = {
+	message_kind: {
+		type: 'choice' as const,
+		instructions: {
+			question: "What is message, as the person's reply to previous_reply?",
+			focus: 'Pick the main purpose of message.'
+		},
+		criteria: {
+			answers_open: 'answers, decides or approves something previous_reply or open_items asked',
+			new_request: 'asks for new work or asks a new question',
+			correction: 'corrects, redirects or rejects the current work',
+			chat: 'acknowledgement, thanks or small talk with nothing to do'
+		}
+	}
+} as const;
+
+/** One end-of-turn batch: the measured questions, a piece question per sentence, and the shadow ones. */
+export function turnBattery(input: {
+	request: string;
+	reply: string;
+	task: { title: string; done_when: string } | null;
+	tasks: { id: string; title: string }[];
+}) {
+	const pieces = segments(input.reply).slice(-60);
+	const pieceIds = pieces.map((_, n) => `p${n + 1}`);
+	const questions: Record<string, unknown> = {
+		left_waiting: LEFT_WAITING,
+		...Object.fromEntries(pieceIds.map((id) => [id, askedFor(id)])),
+		work_request: TURN_SHADOW.work_request,
+		plan_in_chat: TURN_SHADOW.plan_in_chat,
+		promise: TURN_SHADOW.promise
+	};
+	if (input.task) questions.task_done = TURN_SHADOW.task_done;
+	if (input.tasks.length > 1)
+		questions.task_fit = {
+			type: 'choice',
+			instructions: 'Which task in tasks does the work done or described in reply belong to?',
+			criteria: {
+				...Object.fromEntries(input.tasks.slice(0, 15).map((t, n) => [`t${n + 1}`, t.title])),
+				none: 'none of these tasks'
+			}
+		};
+	return {
+		pieces,
+		pieceIds,
+		batch: {
+			state: {
+				request: input.request.slice(0, 2000),
+				reply: input.reply.slice(-6000),
+				pieces: Object.fromEntries(pieceIds.map((id, n) => [id, pieces[n].text])),
+				task_in_progress: input.task,
+				tasks: Object.fromEntries(input.tasks.slice(0, 15).map((t, n) => [`t${n + 1}`, t.title])),
+				raised_in_work: []
+			},
+			questions
+		}
+	};
+}
+
+/** Answers worth logging: everything except the per-piece booleans, which are summarised. */
+export function summarise(answers: Record<string, any>, pieceIds: string[]) {
+	const out: Record<string, unknown> = {};
+	for (const [k, a] of Object.entries(answers)) {
+		if (pieceIds.includes(k)) continue;
+		out[k] =
+			a?.type === 'boolean'
+				? Number(a.probabilityTrue.toFixed(3))
+				: a?.type === 'choice'
+					? { choice: a.choice, p: Number((a.probabilities?.[a.choice] ?? 0).toFixed(3)) }
+					: a;
+	}
+	return out;
+}
 
 type Decisions = {
 	evaluate(

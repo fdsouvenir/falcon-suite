@@ -13,6 +13,7 @@ hand-labelled agent turns, by the Work action each gate would take.
 - `gate_jev.mjs` — runs a gate over the set with hosted Jev (`JEV_KEY_ENTRY` names the vault entry).
 - `gate2_jev.mjs`, `gate2_score.mjs` — gate `answers_open_item` (does the person's message answer an open Question or Decision?) on Jev, and its scorer.
 - `extract_jev.mjs`, `extract_score.mjs` — gate `asked_for` (which pieces of a reply are the ask?) on Jev, scored against the sentence labels and the text extractor.
+- `battery_jev.mjs` — the plugin's own end-of-turn battery on Jev, scored with the same scorers as the separate gates.
 - `gate_score.mjs` — scores runs by outcome: precision/recall of "something lands under Needs
   you", and how often the right action is chosen.
 - `segment.mjs`, `laya_run.py`, `score.mjs` — the first, sentence-level experiment (kept for

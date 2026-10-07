@@ -13,13 +13,15 @@ import { resetWork } from '../dist/plugin/runtime.js';
 import { humanFromClient } from '../dist/plugin/identity.js';
 
 function load(runtime) {
-	const reg = { services: [], hooks: {}, tools: {}, actions: {} };
+	const reg = { services: [], hooks: {}, tools: {}, actions: {}, logs: [] };
 	const api = new Proxy(
 		{},
 		{
 			get(_, key) {
 				if (key === 'pluginConfig') return {};
 				if (key === 'runtime') return runtime;
+				if (key === 'logger')
+					return { info: (m) => reg.logs.push(m), warn: (m) => reg.logs.push(m) };
 				if (key === 'id') return 'falcon-work';
 				if (key === 'registerService') return (s) => reg.services.push(s);
 				if (key === 'on') return (name, fn) => (reg.hooks[name] = fn);
@@ -476,7 +478,7 @@ const model = (answer) => ({
 		}
 	}
 });
-const settle = () => new Promise((r) => setTimeout(r, 30));
+const settle = () => new Promise((r) => setTimeout(r, 150));
 const turn = async (hook, runId, message, reply, ctx = {}) => {
 	hook(
 		'before_prompt_build',
@@ -494,17 +496,29 @@ const turn = async (hook, runId, message, reply, ctx = {}) => {
 
 test('gate left_waiting: what a reply needs from the person becomes a Question; other turns do not', async () => {
 	const runtime = model((batch) =>
-		batch.questions.gate
+		batch.questions.left_waiting
 			? {
-					gate: {
+					left_waiting: {
 						type: 'choice',
 						choice: 'needs_answer',
 						probabilities: { needs_answer: 0.9, nothing: 0.1 }
-					}
+					},
+					work_request: { type: 'choice', choice: 'track', probabilities: { track: 0.8 } },
+					plan_in_chat: { type: 'boolean', probabilityTrue: 0.1 },
+					promise: { type: 'boolean', probabilityTrue: 0.05 },
+					...Object.fromEntries(
+						Object.entries(batch.state.pieces).map(([id, text]) => [
+							id,
+							{
+								type: 'boolean',
+								probabilityTrue: /Send me|label|going wrong/.test(text) ? 0.95 : 0.05
+							}
+						])
+					)
 				}
-			: {}
+			: { message_kind: { type: 'choice', choice: 'chat', probabilities: { chat: 0.9 } } }
 	);
-	const { call, hook } = await started(runtime);
+	const { call, hook, reg } = await started(runtime);
 	await turn(
 		hook,
 		'g1',
@@ -512,20 +526,35 @@ test('gate left_waiting: what a reply needs from the person becomes a Question; 
 		'Diagnose first.\n\nSend me:\n- A photo of the model label\n- What is going wrong'
 	);
 	let qs = (await call('falcon_work_read', { view: 'list', kind: 'question' })).items;
-	assert.equal(qs.length, 1, JSON.stringify(qs));
+	assert.equal(qs.length, 1, JSON.stringify(reg.logs));
 	const q = await call('falcon_work_read', { view: 'get', id: qs[0].id });
 	assert.match(q.prompt, /Send me:\nA photo of the model label\nWhat is going wrong/);
 	assert.match(q.impact, /Asked in chat/);
+	// One batch per event: the person's message, then the end of the turn.
 	assert.deepEqual(
-		runtime.decisions.calls
-			.map((c) => c.options.purpose)
-			.filter((p) => p !== 'falcon-work.answers_open_item'),
-		['falcon-work.left_waiting', 'falcon-work.asked_for']
+		runtime.decisions.calls.map((c) => c.options.purpose),
+		['falcon-work.message', 'falcon-work.turn']
+	);
+	const turnBatch = runtime.decisions.calls[1].batch;
+	assert.ok(
+		turnBatch.questions.left_waiting && turnBatch.questions.promise && turnBatch.questions.p1
 	);
 	assert.equal(
-		runtime.decisions.calls[0].batch.state.request,
+		runtime.decisions.calls[1].batch.state.request,
 		'our chiller is old, repair or replace?'
 	);
+	// Every answer is logged, with what it acted on.
+	const { readFileSync } = await import('node:fs');
+	const dir = (await import('../dist/plugin/runtime.js')).dataDir();
+	const lines = readFileSync(join(dir, 'decisions.jsonl'), 'utf8')
+		.trim()
+		.split('\n')
+		.map((l) => JSON.parse(l));
+	const turnLog = lines.find((l) => l.event === 'turn');
+	assert.equal(turnLog.answers.work_request.choice, 'track');
+	assert.equal(turnLog.answers.promise, 0.05);
+	assert.ok(turnLog.acted[0].startsWith('captured '));
+	assert.ok(lines.some((l) => l.event === 'message' && l.answers.message_kind.choice === 'chat'));
 
 	// The next brief tells the agent what was captured.
 	const brief = hook(
@@ -562,7 +591,7 @@ test('the captured Question text is the asking sentences, even mid-paragraph', a
 
 test('gate left_waiting below its threshold, or nothing waiting, records nothing', async () => {
 	const runtime = model(() => ({
-		gate: {
+		left_waiting: {
 			type: 'choice',
 			choice: 'needs_answer',
 			probabilities: { needs_answer: 0.4, nothing: 0.35 }
@@ -645,5 +674,5 @@ test('gate answers_open_item: a chat reply answers the open Question and decides
 	const dec = await call('falcon_work_read', { view: 'get', id: d.id });
 	assert.equal(dec.status, 'decided');
 	assert.equal(dec.chosen_option, 'apply');
-	assert.equal(runtime.decisions.calls[0].options.purpose, 'falcon-work.answers_open_item');
+	assert.equal(runtime.decisions.calls[0].options.purpose, 'falcon-work.message');
 });
