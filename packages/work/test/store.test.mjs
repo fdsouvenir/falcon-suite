@@ -251,36 +251,48 @@ test('Abandoning a Project never silently changes its unfinished Tasks', () => {
 		command: 'create_task',
 		input: { title: 'b', description: 'd', done_when: 'x', project: p }
 	}).id;
+	const byAgent = w.do(
+		{
+			command: 'abandon_project',
+			id: p,
+			input: { reason: 'pivot', dispositions: { [a]: 'abandon', [b]: 'detach' } }
+		},
+		VERL
+	);
+	assert.equal(byAgent.code, 'human_only', 'agents do not abandon Projects');
 	const r = w.do(
 		{
 			command: 'abandon_project',
 			id: p,
 			input: { reason: 'pivot', dispositions: { [a]: 'abandon' } }
 		},
-		VERL
+		FRED
 	);
-	assert.equal(r.outcome, 'input_required');
-	assert.equal(r.needed.length, 1);
+	assert.equal(r.code, 'dispositions_required');
+	assert.equal(r.next.length, 1);
 	assert.equal(w.reads.get(a).status, 'open', 'nothing applied');
 	assert.equal(w.reads.get(p).status, 'open');
-	assert.equal(w.reads.needsYou(FRED.id, w.now()).asks.length, 1);
-	ok({
-		command: 'abandon_project',
-		id: p,
-		input: { reason: 'pivot', dispositions: { [a]: 'abandon', [b]: 'detach' } }
-	});
+	assert.equal(w.reads.needsYou(FRED.id, w.now()).asks.length, 0, 'no Asks filed');
+	ok(
+		{
+			command: 'abandon_project',
+			id: p,
+			input: { reason: 'pivot', dispositions: { [a]: 'abandon', [b]: 'detach' } }
+		},
+		FRED
+	);
 	assert.equal(w.reads.get(a).status, 'abandoned');
 	assert.equal(w.reads.get(b).area_id, area);
 	assert.equal(w.reads.get(p).status, 'abandoned');
 });
 
-test('Taking a Task from another agent asks that agent first', () => {
+test('Only a person takes a Task from another agent', () => {
 	const { w, ok, task } = setup();
 	const t = task({ agent: OTTO.id });
 	const r = w.do({ command: 'assign', id: t, input: { agent: VERL.id } }, VERL);
-	assert.equal(r.outcome, 'input_required');
+	assert.equal(r.code, 'not_yours', JSON.stringify(r));
 	assert.equal(w.reads.get(t).agent, OTTO.id);
-	assert.equal(w.reads.brief(OTTO.id, null, w.now()).asks_for_you.length, 1);
+	assert.equal(w.reads.brief(OTTO.id, null, w.now()).asks_for_you.length, 0);
 	ok({ command: 'assign', id: t, input: { agent: VERL.id } }, FRED);
 });
 

@@ -1,6 +1,6 @@
 import { Type } from 'typebox';
 import { defineCommand, type Context } from '../engine.js';
-import { InputRequired, reject } from '../types.js';
+import { reject } from '../types.js';
 import {
 	Id,
 	Title,
@@ -272,33 +272,15 @@ export const taskCommands = [
 		name: 'assign',
 		on: 'task',
 		summary:
-			'Make an agent accountable for a Task. Taking it from another agent asks that agent first.',
+			'Make an agent accountable for a Task. Only a person can take a Task from another agent.',
 		input: obj({ agent: Who }),
 		run(ctx, i, row) {
 			const t = row as unknown as TaskRow;
 			if (!i.agent.startsWith('agent:')) reject('not_an_agent', 'Tasks are assigned to agents');
 			if (t.agent === i.agent) return ctx.nothing(t.id, t.version);
-			// An agent taking a Task from another agent needs that agent's agreement; a person may reassign.
-			if (t.agent && ctx.actor.kind === 'agent' && t.agent !== ctx.actor.id) {
-				const pending = ctx.one(
-					"SELECT 1 FROM ask WHERE subject_id = ? AND addressed_to = ? AND status = 'pending'",
-					t.id,
-					t.agent
-				);
-				const ask = pending
-					? null
-					: ctx.ask(
-							'task',
-							t.id,
-							t.agent,
-							`${ctx.actor.id} asks to take over this Task`,
-							t.session_key
-						);
-				throw new InputRequired(
-					[{ from: t.agent, what: 'Agree to hand over this Task', ...(ask ? { ask } : {}) }],
-					t.id
-				);
-			}
+			// One agent per Office is assumed: an agent never takes another agent's Task; a person may reassign.
+			if (t.agent && ctx.actor.kind === 'agent' && t.agent !== ctx.actor.id)
+				reject('not_yours', `This Task belongs to ${t.agent}; only a person can reassign it`);
 			const v = ctx.update('task', t.id, { agent: i.agent, updated_at: ctx.now });
 			ctx.event('task', t.id, v, { agent: i.agent, previous: t.agent });
 			ctx.done(t.id, v);

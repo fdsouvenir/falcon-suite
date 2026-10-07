@@ -264,32 +264,48 @@ export async function projectView(c: Ctx, id: string) {
 		{ class: 'fw-link', type: 'button' },
 		p.status === 'abandoned' ? 'Resume' : 'Abandon'
 	);
-	abandon.addEventListener('click', () =>
+	// Abandoning asks, for each unfinished Task, whether it goes too or moves to the Area (spec §5).
+	const unfinished = [...p.milestones.flatMap((m: any) => m.tasks), ...p.tasks].filter(
+		(t: any) => !['completed', 'abandoned'].includes(t.status)
+	);
+	abandon.addEventListener('click', () => {
+		const resuming = p.status === 'abandoned';
 		formDialog(c, {
-			title: p.status === 'abandoned' ? `Resume "${p.title}"` : `Abandon "${p.title}"`,
+			title: resuming ? `Resume "${p.title}"` : `Abandon "${p.title}"`,
+			description:
+				!resuming && unfinished.length
+					? `${unfinished.length} unfinished Task${unfinished.length > 1 ? 's' : ''}: abandon each one too, or move it to the Area to keep it.`
+					: undefined,
 			fields: [
-				{
-					id: 'reason',
-					label: p.status === 'abandoned' ? 'Why resume it?' : 'Why abandon it?',
-					kind: 'textarea'
-				}
+				{ id: 'reason', label: resuming ? 'Why resume it?' : 'Why abandon it?', kind: 'textarea' },
+				...(resuming
+					? []
+					: unfinished.map((t: any) => ({
+							id: `task:${t.id}`,
+							label: t.title,
+							kind: 'select' as const,
+							value: 'detach',
+							options: [
+								{ value: 'detach', label: 'Move to Area' },
+								{ value: 'abandon', label: 'Abandon too' }
+							]
+						})))
 			],
-			submitLabel: p.status === 'abandoned' ? 'Resume' : 'Abandon',
+			submitLabel: resuming ? 'Resume' : 'Abandon',
 			submit: async (v) => {
 				if (!v.reason.trim()) return 'Give a reason.';
-				const r = await c.act(
-					p.status === 'abandoned' ? 'resume_project' : 'abandon_project',
-					p.id,
-					{
-						reason: v.reason.trim()
-					}
+				const dispositions = Object.fromEntries(
+					unfinished.map((t: any) => [t.id, v[`task:${t.id}`]])
 				);
-				if (r?.outcome === 'input_required')
-					return 'Each unfinished Task needs a decision first: they are now under Needs you. Decide them, then abandon again.';
+				const r = await c.act(
+					resuming ? 'resume_project' : 'abandon_project',
+					p.id,
+					resuming ? { reason: v.reason.trim() } : { reason: v.reason.trim(), dispositions }
+				);
 				return r?.outcome === 'rejected' ? r.reason : undefined;
 			}
-		})
-	);
+		});
+	});
 	const about = p.about as any[];
 	return h(
 		'div',

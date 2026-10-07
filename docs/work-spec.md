@@ -93,7 +93,9 @@ A Project is a bounded outcome placed in one Area, optionally serving Objectives
 - `title`, `outcome` (what exists when it is done), `area`, `accountable_human`, `serves[]`.
 - Status is **derived**, never set: `open`, `completed` (all Milestones achieved), `abandoned`.
 - Abandoning is reversible (resume) and never silently changes unfinished Work: each unfinished
-  item must be explicitly abandoned too or detached into the Area as standalone Work.
+  item must be explicitly abandoned too or detached into the Area as standalone Work. Only a person
+  abandons a Project, choosing for each unfinished Task in the same step; an agent that thinks a
+  Project should go raises a Decision.
 
 A Milestone belongs to one Project, in order.
 
@@ -120,8 +122,9 @@ reason; the Task points at the current one. Revising a finished Task requires re
 `open` → `ready` → `in_progress` → `completed`, plus `waiting` and `abandoned`.
 
 - `open`/`ready` is routine grooming and needs no reason.
-- **Starting requires an accountable agent.** At most one agent is accountable per Task. Taking a
-  Task assigned to another agent goes through an Ask to that agent.
+- **Starting requires an accountable agent.** At most one agent is accountable per Task. Work assumes one
+  agent per Office: an agent cannot take a Task assigned to another agent; a person can reassign
+  it. Handover between agents waits for real multi-agent use (§15.9).
 - **Waiting** requires `waiting_for` (a sentence) and `waiting_on` (typed: an agent, a person, a
   Work object, or something external), plus `resume_when` and optional `follow_up_at`. Resuming
   restores the prior state.
@@ -197,8 +200,7 @@ or Project.
 An Ask is the delivery mechanism, not a kind of Work. It records that one specific person or agent
 has been asked for input about one subject.
 
-- Created for: a Question or Decision addressed to a human; a Task handover to another agent;
-  each unfinished item during Project abandonment.
+- Created for a Question or Decision addressed to a human.
 - **Always shown in the Work tab** under "Needs you". If it has a session (§9), it is also posted
   there and discussed there.
 - It can be answered from the Work tab or in its session; either way the answer is recorded once.
@@ -383,3 +385,6 @@ transcripts (OpenClaw owns sessions; Work links to them) · runtime permission e
 8. _(2026-10-07)_ Discussion sessions are deferred (§9): no Add to Work, live session state or
    Session mismatch Warning in 5.0; this supersedes the session parts of items 2 and 5. "Where the
    work happened" history stays and should cover Tasks, Questions, Decisions and Findings.
+9. _(2026-10-07)_ One agent per Office is assumed. Agents do not abandon Projects or take other
+   agents' Tasks; a person does both. Multi-agent handover is revisited once there are real
+   multi-agent scenarios.

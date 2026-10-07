@@ -189,10 +189,6 @@ export class Views {
 			"SELECT * FROM task WHERE status = 'waiting' AND waiting_on_kind = 'person' AND waiting_on_ref = ? ORDER BY follow_up_at IS NULL, follow_up_at, updated_at",
 			person
 		).filter((t) => !coveredBy.has(t.id));
-		const handovers = this.all(
-			"SELECT * FROM ask WHERE addressed_to = ? AND status = 'pending' AND subject_kind = 'task' ORDER BY created_at",
-			person
-		);
 		const todo = [
 			...waitingOnYou.map((t) => ({
 				kind: 'task' as const,
@@ -203,17 +199,6 @@ export class Views {
 				resume_when: t.resume_when,
 				follow_up_at: t.follow_up_at,
 				since: t.updated_at
-			})),
-			...handovers.map((a) => ({
-				kind: 'ask' as const,
-				id: a.subject_id,
-				ask: a.id,
-				title: a.prompt,
-				agent: null,
-				waiting_for: null,
-				resume_when: null,
-				follow_up_at: null,
-				since: a.created_at
 			}))
 		];
 		const todoIds = new Set(todo.map((t) => t.id));

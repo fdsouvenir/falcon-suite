@@ -1,6 +1,6 @@
 import { Type } from 'typebox';
 import { defineCommand, type Context } from '../engine.js';
-import { InputRequired, reject } from '../types.js';
+import { reject } from '../types.js';
 import {
 	Id,
 	Title,
@@ -179,8 +179,9 @@ export const structureCommands = [
 	defineCommand({
 		name: 'abandon_project',
 		on: 'project',
+		humanOnly: true,
 		summary:
-			'Abandon a Project, deciding for each unfinished Task whether to abandon it or detach it into the Area.',
+			'Abandon a Project (people only), deciding for each unfinished Task whether to abandon it or detach it into the Area.',
 		input: obj({
 			reason: Reason,
 			dispositions: opt(
@@ -197,24 +198,12 @@ export const structureCommands = [
 			);
 			const disp: Record<string, string> = i.dispositions ?? {};
 			const missing = open.filter((t) => !disp[t.id]);
-			if (missing.length) {
-				// Nothing is applied: each undecided Task gets an Ask to whoever is accountable.
-				const to = p!.accountable_human as string;
-				throw new InputRequired(
-					missing.map((t) => ({
-						from: to,
-						what: `Abandon or detach "${t.title}" (${t.id})`,
-						ask: ctx.ask(
-							'task',
-							t.id,
-							to,
-							`Project is being abandoned: abandon "${t.title}" too, or detach it into the Area?`,
-							(p!.session_key as string) ?? null
-						)
-					})),
-					id
+			if (missing.length)
+				reject(
+					'dispositions_required',
+					'Choose abandon or detach for every unfinished Task; nothing was changed',
+					missing.map((t) => `${t.id}: ${t.title}`)
 				);
-			}
 			for (const t of open) {
 				if (disp[t.id] === 'abandon') {
 					const v = ctx.update('task', t.id, {
