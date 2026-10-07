@@ -12,13 +12,14 @@ import { classify } from '../dist/plugin/activity.js';
 import { resetWork } from '../dist/plugin/runtime.js';
 import { humanFromClient } from '../dist/plugin/identity.js';
 
-function load() {
+function load(runtime) {
 	const reg = { services: [], hooks: {}, tools: {}, actions: {} };
 	const api = new Proxy(
 		{},
 		{
 			get(_, key) {
 				if (key === 'pluginConfig') return {};
+				if (key === 'runtime') return runtime;
 				if (key === 'id') return 'falcon-work';
 				if (key === 'registerService') return (s) => reg.services.push(s);
 				if (key === 'on') return (name, fn) => (reg.hooks[name] = fn);
@@ -32,9 +33,9 @@ function load() {
 	return reg;
 }
 
-async function started() {
+async function started(runtime) {
 	resetWork();
-	const reg = load();
+	const reg = load(runtime);
 	const stateDir = mkdtempSync(join(tmpdir(), 'falcon-work-plugin-'));
 	for (const s of reg.services) await s.start?.({ stateDir, gatewayEvents: { emit() {} } });
 	const call = async (name, params, agentId = 'verl') => {
@@ -453,75 +454,175 @@ test('Code Mode scripts are not activity however they start', () => {
 	assert.equal(classify('exec', { command: 'for f in *.log; do rm "$f"; done' }).kind, 'command');
 });
 
-test('a reply that asks the person for something, with nothing raised in Work, gets one pass', async () => {
+test('the text check behind the fallback reminder recognises asks, including requests without a question mark', async () => {
 	const { asksThePerson } = await import('../dist/plugin/asks.js');
-	// Real endings from building-902-alpha.
 	assert.ok(
 		asksThePerson(
-			'The milestone remains open.\n\nTo unlock the next useful work, **what city/region/country is the house in, and does “spring 2027” mean listed or closed?** Include any firm move-out deadline.'
+			'To unlock the next useful work, **what city is the house in?** Include any deadline.'
 		)
 	);
-	assert.ok(
-		asksThePerson(
-			'Send me:\n1. **A photo of the model/specification label** and approximate age.\n2. **What’s going wrong**.'
-		),
-		'a request without a question mark'
-	);
+	assert.ok(asksThePerson('Send me:\n1. **A photo of the label**\n2. **What is going wrong**.'));
 	assert.ok(!asksThePerson('Done. The plan is saved in Falcon Work with 8 Milestones.'));
-	assert.ok(!asksThePerson('Run `ls -la?` to check.\n\nAll set.'), 'code does not count');
-	assert.ok(!asksThePerson(undefined));
+	assert.ok(!asksThePerson('Run `ls -la?` to check.\n\nAll set.'));
+});
 
-	const { call, hook } = await started();
-	const reply = 'I need two things. What city is the house in?';
-	const nudge = hook('before_agent_finalize', {
-		runId: 'q1',
-		sessionId: 's',
-		stopHookActive: false,
-		lastAssistantMessage: reply
-	});
-	assert.equal(nudge.action, 'revise');
-	assert.match(nudge.retry.instruction, /falcon_work_ask/);
-	assert.doesNotMatch(nudge.retry.instruction, /no Task in Falcon Work explains/);
+/** A stand-in decision model: answers come from a function of the request. */
+const model = (answer) => ({
+	decisions: {
+		calls: [],
+		async evaluate(batch, options) {
+			this.calls.push({ batch, options });
+			return { status: 'ok', result: { model: 'fake', answers: answer(batch, options) } };
+		}
+	}
+});
+const settle = () => new Promise((r) => setTimeout(r, 30));
+const turn = async (hook, runId, message, reply, ctx = {}) => {
+	hook(
+		'before_prompt_build',
+		{ prompt: message, currentUserMessage: message, messages: [] },
+		{ runId, trigger: 'user', ...ctx }
+	);
+	await settle();
+	hook(
+		'before_agent_finalize',
+		{ runId, sessionId: 's', stopHookActive: false, lastAssistantMessage: reply },
+		{ runId, ...ctx }
+	);
+	await settle();
+};
+
+test('gate left_waiting: what a reply needs from the person becomes a Question; other turns do not', async () => {
+	const runtime = model((batch) =>
+		batch.questions.gate
+			? {
+					gate: {
+						type: 'choice',
+						choice: 'needs_answer',
+						probabilities: { needs_answer: 0.9, nothing: 0.1 }
+					}
+				}
+			: {}
+	);
+	const { call, hook } = await started(runtime);
+	await turn(
+		hook,
+		'g1',
+		'our chiller is old, repair or replace?',
+		'Diagnose first.\n\nSend me:\n- A photo of the model label\n- What is going wrong'
+	);
+	let qs = (await call('falcon_work_read', { view: 'list', kind: 'question' })).items;
+	assert.equal(qs.length, 1, JSON.stringify(qs));
+	const q = await call('falcon_work_read', { view: 'get', id: qs[0].id });
+	assert.match(q.prompt, /Send me:\nA photo of the model label\nWhat is going wrong/);
+	assert.match(q.impact, /Asked in chat/);
+	assert.equal(runtime.decisions.calls[0].options.purpose, 'falcon-work.left_waiting');
 	assert.equal(
-		hook('before_agent_finalize', {
-			runId: 'q1',
-			sessionId: 's',
-			stopHookActive: false,
-			lastAssistantMessage: reply
-		}),
-		undefined,
-		'once per turn'
+		runtime.decisions.calls[0].batch.state.request,
+		'our chiller is old, repair or replace?'
 	);
 
-	await call('falcon_work_ask', { kind: 'question', prompt: 'What city?', impact: 'Market' });
-	hook('after_tool_call', {
-		toolName: 'falcon_work_ask',
-		params: { kind: 'question' },
-		runId: 'q2'
-	});
-	assert.equal(
-		hook('before_agent_finalize', {
-			runId: 'q2',
-			sessionId: 's',
-			stopHookActive: false,
-			lastAssistantMessage: reply
-		}),
-		undefined,
-		'already asked in Work'
+	// The next brief tells the agent what was captured.
+	const brief = hook(
+		'before_prompt_build',
+		{ prompt: 'thanks', messages: [] },
+		{ runId: 'g1b', trigger: 'heartbeat' }
 	);
-	hook('after_tool_call', {
-		toolName: 'exec',
-		params: { code: "text(await falcon_work_ask({kind:'question', prompt:'x', impact:'y'}))" },
-		runId: 'q3'
+	assert.match(brief.prependContext, /captured what your last reply asked/);
+
+	// Not from the person: heartbeats and messages from other sessions are never captured.
+	await turn(hook, 'g2', '[OpenClaw heartbeat poll]', 'Send me the logs?');
+	await turn(hook, 'g3', 'status?', 'Send me the logs?', {
+		inputProvenance: { kind: 'inter_session' }
 	});
+	qs = (await call('falcon_work_read', { view: 'list', kind: 'question' })).items;
+	assert.equal(qs.length, 1);
+});
+
+test('gate left_waiting below its threshold, or nothing waiting, records nothing', async () => {
+	const runtime = model(() => ({
+		gate: {
+			type: 'choice',
+			choice: 'needs_answer',
+			probabilities: { needs_answer: 0.4, nothing: 0.35 }
+		}
+	}));
+	const { call, hook } = await started(runtime);
+	await turn(hook, 'g4', 'hi', 'Hello! How did the plunge feel?');
 	assert.equal(
-		hook('before_agent_finalize', {
-			runId: 'q3',
-			sessionId: 's',
-			stopHookActive: false,
-			lastAssistantMessage: reply
-		}),
-		undefined,
-		'asked from inside a Code Mode script'
+		(await call('falcon_work_read', { view: 'list', kind: 'question' })).items.length,
+		0
 	);
+});
+
+test('without a decision model, an ask becomes a reminder in the next brief, not a Question', async () => {
+	const { call, hook } = await started(undefined);
+	await turn(hook, 'g5', 'chiller?', 'Send me a photo of the label?');
+	assert.equal(
+		(await call('falcon_work_read', { view: 'list', kind: 'question' })).items.length,
+		0
+	);
+	const brief = hook(
+		'before_prompt_build',
+		{ prompt: 'next', currentUserMessage: 'next', messages: [] },
+		{ runId: 'g5b', trigger: 'user' }
+	);
+	assert.match(brief.prependContext, /asked the person for something that is not in Falcon Work/);
+});
+
+test('gate answers_open_item: a chat reply answers the open Question and decides the open Decision', async () => {
+	const runtime = model((batch) => {
+		const out = {};
+		for (const [id, q] of Object.entries(batch.questions))
+			out[id] =
+				q.type === 'boolean'
+					? {
+							type: 'boolean',
+							probabilityTrue: batch.state.open_items[id].prompt.includes('city') ? 0.95 : 0.1
+						}
+					: {
+							type: 'choice',
+							choice: 'apply',
+							probabilities: { apply: 0.9, wait: 0.05, not_decided: 0.05 }
+						};
+		return out;
+	});
+	const { call, hook } = await started(runtime);
+	const q = await call('falcon_work_ask', {
+		kind: 'question',
+		questions: [
+			{ prompt: 'What city is the house in?', impact: 'Market' },
+			{ prompt: 'What budget?', impact: 'Scope' }
+		]
+	});
+	const d = await call('falcon_work_ask', {
+		kind: 'decision',
+		prompt: 'Apply --clear-tools?',
+		options: [
+			{ id: 'apply', label: 'Apply' },
+			{ id: 'wait', label: 'Wait' }
+		],
+		recommendation: { option: 'apply', rationale: 'r' },
+		consequence_of_no_decision: 'c'
+	});
+	hook(
+		'before_prompt_build',
+		{
+			prompt: 'Chicago. and yes apply it',
+			currentUserMessage: 'Chicago. and yes apply it',
+			messages: []
+		},
+		{ runId: 'a1', trigger: 'user' }
+	);
+	await settle();
+	const [city, budget] = await Promise.all(
+		q.questions.map((id) => call('falcon_work_read', { view: 'get', id }))
+	);
+	assert.equal(city.status, 'answered', JSON.stringify(city));
+	assert.match(city.answers[0].text, /Chicago/);
+	assert.equal(budget.status, 'open');
+	const dec = await call('falcon_work_read', { view: 'get', id: d.id });
+	assert.equal(dec.status, 'decided');
+	assert.equal(dec.chosen_option, 'apply');
+	assert.equal(runtime.decisions.calls[0].options.purpose, 'falcon-work.answers_open_item');
 });

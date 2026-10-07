@@ -10,11 +10,28 @@ import type { Actor, Envelope } from './store/types.js';
 import type { Kind } from './store/engine.js';
 import { classify, raisesAsk } from './plugin/activity.js';
 import { asksThePerson } from './plugin/asks.js';
+import {
+	ANSWERS_THRESHOLD,
+	LEFT_WAITING,
+	LEFT_WAITING_THRESHOLD,
+	answersDecision,
+	answersQuestion,
+	askingPart,
+	decide,
+	fromPerson
+} from './plugin/gates.js';
 import { GUIDANCE, renderBrief } from './plugin/brief.js';
 import { currentHuman } from './plugin/identity.js';
 
 /** Per-run bookkeeping for the end-of-turn nudge (spec §10). */
-type RunState = { untracked: number; recorded: boolean; asked: boolean; nudged: boolean };
+type RunState = {
+	untracked: number;
+	recorded: boolean;
+	asked: boolean;
+	nudged: boolean;
+	/** The person's message that started the turn, when a person started it. */
+	request: string | null;
+};
 
 /** Who is calling: the agent behind a tool call, or the signed-in person behind the Control UI. */
 function actorFor(context: FeatureInvocationContext): Actor {
@@ -110,7 +127,7 @@ const feature = defineFeaturePlugin({
 			if (!id) return null;
 			let state = runs.get(id);
 			if (!state) {
-				state = { untracked: 0, recorded: false, asked: false, nudged: false };
+				state = { untracked: 0, recorded: false, asked: false, nudged: false, request: null };
 				runs.set(id, state);
 				if (runs.size > 500) runs.delete(runs.keys().next().value as string);
 			}
@@ -127,16 +144,224 @@ const feature = defineFeaturePlugin({
 		});
 
 		// The guidance (static, so it caches) and the agent's brief, every turn (spec §10).
-		api.on('before_prompt_build', (_event, ctx) => {
+		/** The agent's last reply per session: what the person's next message answers. */
+		const lastReply = new Map<string, string>();
+		/** One-off lines for the agent's next brief in a session (captured asks, reminders). */
+		const notes = new Map<string, string[]>();
+		const note = (session: string, line: string) =>
+			notes.set(session, [...(notes.get(session) ?? []), line].slice(-5));
+		const decisions = () =>
+			(api as unknown as { runtime?: { decisions?: Parameters<typeof decide>[0] } }).runtime
+				?.decisions;
+		const changed = (w: Work) => {
+			try {
+				events.emit('changed', { at: w.now() });
+			} catch {
+				/* best effort */
+			}
+		};
+
+		// The guidance (static, so it caches) and the agent's brief, every turn (spec §10).
+		api.on('before_prompt_build', (event, ctx) => {
 			const work = ctx.agentId ? maybe() : null;
 			if (!work || !ctx.agentId) return { prependSystemContext: GUIDANCE };
 			const agent = `agent:${ctx.agentId}`;
 			const key = ctx.sessionKey ?? agent;
 			const now = work.now();
+			const message =
+				(event as { currentUserMessage?: string }).currentUserMessage ?? event.prompt ?? '';
+			const person = fromPerson(ctx as never, message);
+			const state = runState(ctx.runId);
+			if (state && person) state.request = message;
+			if (person) void matchAnswers(work, key, message, ctx.runId ?? now);
+			const extra = notes.get(key) ?? [];
+			notes.delete(key);
 			const brief = renderBrief(work.reads, agent, lastBrief.get(key) ?? null, now);
 			lastBrief.set(key, now);
-			return { prependSystemContext: GUIDANCE, prependContext: brief };
+			return {
+				prependSystemContext: GUIDANCE,
+				prependContext: extra.length ? `${brief}\n${extra.join('\n')}` : brief
+			};
 		});
+
+		/** Gate answers_open_item: record the person's chat reply against what is open for them. */
+		async function matchAnswers(w: Work, session: string, message: string, runId: string) {
+			const open = w.views.overview(w.owner, w.now()).needs_you;
+			const items = [
+				...open.questions.map((q) => ({
+					id: q.id,
+					kind: 'question' as const,
+					prompt: q.prompt,
+					version: q.version
+				})),
+				...open.decisions.map((d) => ({
+					id: d.id,
+					kind: 'decision' as const,
+					prompt: d.prompt,
+					version: d.version,
+					options: Object.fromEntries(
+						(d.options as { id: string; label: string }[]).map((o) => [o.id, o.label])
+					),
+					recommendation: (d.recommendation as { option?: string } | null)?.option ?? null
+				}))
+			].slice(0, 20);
+			if (!items.length) return;
+			const open_items: Record<string, unknown> = {};
+			const questions: Record<string, unknown> = {};
+			items.forEach((it, n) => {
+				if (it.kind === 'question') {
+					open_items[it.id] = { n: n + 1, prompt: it.prompt };
+					questions[it.id] = answersQuestion(it.id);
+				} else {
+					open_items[it.id] = {
+						n: n + 1,
+						prompt: it.prompt,
+						options: it.options,
+						recommendation: it.recommendation
+					};
+					questions[it.id] = answersDecision(it.id, it.options);
+				}
+			});
+			const answers = await decide(
+				decisions(),
+				{
+					state: {
+						previous_reply: (lastReply.get(session) ?? '').slice(-2000),
+						message,
+						open_items
+					},
+					questions
+				},
+				'answers_open_item'
+			);
+			if (!answers) return;
+			const human = { kind: 'human' as const, id: w.owner };
+			let recorded = false;
+			for (const it of items) {
+				const a = answers[it.id];
+				if (
+					it.kind === 'question' &&
+					a?.type === 'boolean' &&
+					a.probabilityTrue >= ANSWERS_THRESHOLD
+				) {
+					const r = w.do(
+						{
+							command: 'answer',
+							id: it.id,
+							idempotency_key: `gate-answer:${runId}:${it.id}`,
+							input: {
+								answer: message.slice(0, 12000),
+								confidence: 'confirmed',
+								sources: [{ kind: 'session', ref: session, label: 'Answered in chat' }]
+							}
+						},
+						human
+					);
+					recorded ||= r.outcome !== 'rejected';
+				}
+				if (
+					it.kind === 'decision' &&
+					a?.type === 'choice' &&
+					a.choice !== 'not_decided' &&
+					(a.probabilities?.[a.choice] ?? 0) >= ANSWERS_THRESHOLD
+				) {
+					const r = w.do(
+						{
+							command: 'decide',
+							id: it.id,
+							idempotency_key: `gate-decide:${runId}:${it.id}`,
+							input: { option: a.choice, rationale: `Decided in chat: ${message.slice(0, 1900)}` }
+						},
+						human
+					);
+					recorded ||= r.outcome !== 'rejected';
+				}
+			}
+			if (recorded) changed(w);
+		}
+
+		/** Gate left_waiting: capture what the agent's reply leaves waiting on the person. */
+		async function captureAsks(
+			w: Work,
+			agentId: string,
+			session: string,
+			request: string,
+			reply: string,
+			runId: string
+		) {
+			const agent = `agent:${agentId}`;
+			const task = w.reads.brief(agent, null, w.now()).in_progress[0] ?? null;
+			const answers = await decide(
+				decisions(),
+				{
+					state: {
+						request: request.slice(0, 2000),
+						raised_in_work: [],
+						task_in_progress: task?.title ?? null,
+						reply: reply.slice(-6000)
+					},
+					questions: { gate: LEFT_WAITING }
+				},
+				'left_waiting',
+				agentId
+			);
+			if (!answers) {
+				// No decision model: the plain text check, as a reminder only.
+				if (asksThePerson(reply))
+					note(
+						session,
+						'Your last reply asked the person for something that is not in Falcon Work. If the work depends on it, record it with falcon_work_ask so it stays under Needs you.'
+					);
+				return;
+			}
+			const a = answers.gate;
+			const outcome = a?.type === 'choice' ? a.choice : 'nothing';
+			if (
+				!String(outcome).startsWith('needs_') ||
+				(a.probabilities?.[outcome] ?? 0) < LEFT_WAITING_THRESHOLD
+			)
+				return;
+			const kind =
+				outcome === 'needs_decision'
+					? 'a decision'
+					: outcome === 'needs_action'
+						? 'an action'
+						: 'an answer';
+			const prompt = askingPart(reply);
+			const r = w.do(
+				{
+					command: 'raise_question',
+					idempotency_key: `gate-capture:${runId}`,
+					input: {
+						prompt,
+						impact: `Asked in chat; captured by Falcon Work because the reply needs ${kind} from you.`,
+						answerable_by: [w.owner],
+						...(task ? { targets: [{ kind: 'task', id: task.id }] } : {})
+					}
+				},
+				{ kind: 'agent', id: agent }
+			);
+			if (r.outcome === 'rejected') return;
+			if (outcome === 'needs_action' && task)
+				w.do(
+					{
+						command: 'wait',
+						id: task.id,
+						idempotency_key: `gate-wait:${runId}`,
+						input: {
+							waiting_for: prompt.slice(0, 2000),
+							waiting_on: { kind: 'person', ref: w.owner },
+							resume_when: 'The person has done it and said so'
+						}
+					},
+					{ kind: 'agent', id: agent }
+				);
+			note(
+				session,
+				`Falcon Work captured what your last reply asked of the person as a Question (${(r as { id?: string }).id}). Refine it, split it into separate Questions with falcon_work_ask, or withdraw it if the work does not depend on it.`
+			);
+			changed(w);
+		}
 
 		// What the agent actually did: attached to its in-progress Task, or kept as untracked.
 		api.on('after_tool_call', (event, ctx) => {
@@ -171,32 +396,33 @@ const feature = defineFeaturePlugin({
 		// One more pass at the end of a turn, at most, for what Work should hold but does not:
 		// changes no Task explains, and things the reply asks of the person that were not raised in
 		// Work (they would live only in this chat).
-		api.on('before_agent_finalize', (event) => {
+		api.on('before_agent_finalize', (event, ctx) => {
 			if (event.stopHookActive) return;
 			const state = runState(event.runId);
-			if (!state || state.nudged) return;
-			const untracked = !state.recorded && state.untracked > 0;
-			const unasked = !state.asked && asksThePerson(event.lastAssistantMessage);
-			if (!untracked && !unasked) return;
+			const reply = event.lastAssistantMessage ?? '';
+			const session = ctx?.sessionKey ?? event.sessionKey ?? '';
+			const work = ctx?.agentId ? maybe() : null;
+			if (work && ctx?.agentId && state?.request && !state.asked && reply && !state.nudged)
+				void captureAsks(
+					work,
+					ctx.agentId,
+					session,
+					state.request,
+					reply,
+					event.runId ?? work.now()
+				);
+			if (session && reply) lastReply.set(session, reply);
+			// Changes no Task explains get one more pass, where the runtime allows it (OpenClaw does
+			// not revise after side effects, so on many turns this cannot fire; activity is still
+			// captured as untracked).
+			if (!state || state.nudged || state.recorded || state.untracked === 0) return;
 			state.nudged = true;
-			const steps = [
-				untracked
-					? 'You changed things this turn that no Task in Falcon Work explains: put them under the Task they belong to (falcon_work_task: create with start, or start an existing one), or attach the activity to an existing Task (falcon_work attach_activity).'
-					: null,
-				unasked
-					? 'Your reply asks the person for something that is not in Falcon Work, so it lives only in this chat. Record it with falcon_work_ask so it stays under Needs you and the answer returns in your brief: kind question with questions[] (one per thing you need, with your best guess as hypothesis), or kind decision for a choice they must make; about the Task or Project it concerns, and holds the Tasks that wait on it (create the Task first if this request has none). If it was only a passing conversational question, leave it.'
-					: null
-			].filter(Boolean);
 			return {
 				action: 'revise',
-				reason:
-					untracked && unasked
-						? 'Untracked changes and unrecorded asks'
-						: untracked
-							? 'Untracked changes'
-							: 'Unrecorded asks',
+				reason: 'Untracked changes',
 				retry: {
-					instruction: `${steps.join(' ')} Then give your reply.`,
+					instruction:
+						'You changed things this turn that no Task in Falcon Work explains: put them under the Task they belong to (falcon_work_task: create with start, or start an existing one), or attach the activity to an existing Task (falcon_work attach_activity). Then give your reply.',
 					idempotencyKey: `${PLUGIN_ID}-nudge:${event.runId}`,
 					maxAttempts: 1
 				}

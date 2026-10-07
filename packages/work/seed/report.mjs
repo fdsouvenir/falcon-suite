@@ -25,7 +25,10 @@ const taskSession = (tid) => {
 };
 const subjectSession = (kind, sid) => {
 	if (kind === 'task') return taskSession(sid);
-	for (const l of all(`SELECT target_kind k, target_id id FROM link WHERE kind='targets' AND source_id=?`, sid)) {
+	for (const l of all(
+		`SELECT target_kind k, target_id id FROM link WHERE kind='targets' AND source_id=?`,
+		sid
+	)) {
 		const r = l.k === 'task' ? taskSession(l.id) : l.k === 'project' ? projectSession(l.id) : null;
 		if (r) return { key: r.key, from: l.k === 'task' ? 'its Task' : 'its Project' };
 	}
@@ -35,7 +38,8 @@ const sessionLabel = (r) =>
 	r ? `session “${sessionTitles[r.key] ?? r.key}”${r.from ? ` (from ${r.from})` : ''}` : null;
 const sessionNote = (r) => (r ? ` · ${sessionLabel(r)}` : '');
 const day = (t) => (t ? t.slice(0, 10) : '');
-const title = (id) => one('SELECT title FROM task_definition WHERE task_id=? ORDER BY rev DESC', id)?.title;
+const title = (id) =>
+	one('SELECT title FROM task_definition WHERE task_id=? ORDER BY rev DESC', id)?.title;
 const src = (json) =>
 	JSON.parse(json ?? '[]')
 		.map((s) => s.label ?? s.ref)
@@ -57,7 +61,8 @@ const blockers = (taskId) => {
 		taskId
 	)) {
 		const t = one('SELECT status FROM task WHERE id=?', d.id);
-		if (t && !['completed', 'abandoned'].includes(t.status)) why.push(`depends on "${title(d.id)}"`);
+		if (t && !['completed', 'abandoned'].includes(t.status))
+			why.push(`depends on "${title(d.id)}"`);
 	}
 	for (const q of all(
 		`SELECT q.prompt FROM link l JOIN question q ON q.id=l.source_id WHERE l.kind='targets' AND l.target_id=? AND q.status='open'`,
@@ -80,7 +85,9 @@ const projectStatus = (pr) => {
 
 p('# Work — seeded view');
 p();
-p(`_Generated from \`${process.argv[2] ?? 'work-seed.db'}\`. This is the Work tab's content rendered as text (spec §12)._`);
+p(
+	`_Generated from \`${process.argv[2] ?? 'work-seed.db'}\`. This is the Work tab's content rendered as text (spec §12)._`
+);
 p();
 
 // 1. Objectives
@@ -157,22 +164,45 @@ const hours = (t) => (Date.parse(today + 'T23:59:59Z') - Date.parse(t)) / 36e5;
 const warnings = [];
 for (const t of all("SELECT * FROM task WHERE status='in_progress'")) {
 	const last = one('SELECT max(at) at FROM activity WHERE task_id=?', t.id).at ?? t.updated_at;
-	if (hours(last) > 48) warnings.push(['Stalled Task', `${title(t.id)} — no recorded activity since ${day(last)}`]);
+	if (hours(last) > 48)
+		warnings.push(['Stalled Task', `${title(t.id)} — no recorded activity since ${day(last)}`]);
 }
 for (const t of all("SELECT * FROM task WHERE status='waiting' AND follow_up_at IS NOT NULL"))
-	if (hours(t.follow_up_at) > 0) warnings.push(['Follow-up overdue', `${title(t.id)} — follow-up was due ${day(t.follow_up_at)}`]);
-for (const q of all("SELECT prompt, created_at FROM question WHERE status='open' UNION ALL SELECT prompt, created_at FROM decision WHERE status='pending'"))
-	if (hours(q.created_at) > 7 * 24) warnings.push(['Unanswered', `${q.prompt} — open since ${day(q.created_at)}`]);
+	if (hours(t.follow_up_at) > 0)
+		warnings.push([
+			'Follow-up overdue',
+			`${title(t.id)} — follow-up was due ${day(t.follow_up_at)}`
+		]);
+for (const q of all(
+	"SELECT prompt, created_at FROM question WHERE status='open' UNION ALL SELECT prompt, created_at FROM decision WHERE status='pending'"
+))
+	if (hours(q.created_at) > 7 * 24)
+		warnings.push(['Unanswered', `${q.prompt} — open since ${day(q.created_at)}`]);
 for (const o of all("SELECT * FROM objective WHERE status='active'")) {
 	const at = lastProgress.get(o.id) ?? o.created_at;
-	if (hours(at) > 7 * 24) warnings.push(['Objective without progress', `${o.title} — ${lastProgress.has(o.id) ? `last progress ${day(at)}` : `no progress since it was set on ${day(at)}`}`]);
+	if (hours(at) > 7 * 24)
+		warnings.push([
+			'Objective without progress',
+			`${o.title} — ${lastProgress.has(o.id) ? `last progress ${day(at)}` : `no progress since it was set on ${day(at)}`}`
+		]);
 }
-const recentUntracked = all('SELECT at FROM activity WHERE task_id IS NULL').filter((a) => hours(a.at) <= 24).length;
-if (recentUntracked) warnings.push(['Untracked activity', `${recentUntracked} action(s) in the last 24 hours that no Task explains`]);
-for (const m of all("SELECT m.*, p.title pt FROM milestone m JOIN project p ON p.id=m.project_id WHERE m.status='open'")) {
+const recentUntracked = all('SELECT at FROM activity WHERE task_id IS NULL').filter(
+	(a) => hours(a.at) <= 24
+).length;
+if (recentUntracked)
+	warnings.push([
+		'Untracked activity',
+		`${recentUntracked} action(s) in the last 24 hours that no Task explains`
+	]);
+for (const m of all(
+	"SELECT m.*, p.title pt FROM milestone m JOIN project p ON p.id=m.project_id WHERE m.status='open'"
+)) {
 	const ts = all('SELECT status FROM task WHERE milestone_id=?', m.id);
 	if (ts.length && ts.every((t) => ['completed', 'abandoned'].includes(t.status)))
-		warnings.push(['Milestone ready', `${m.pt}: “${m.title}” — every Task is finished but it is not achieved`]);
+		warnings.push([
+			'Milestone ready',
+			`${m.pt}: “${m.title}” — every Task is finished but it is not achieved`
+		]);
 }
 for (const [kind, text] of warnings) p(`- ⚠ **${kind}**: ${text}`);
 if (warnings.length) p();
@@ -198,16 +228,22 @@ for (const q of qs) {
 	if (q.hypothesis) p(`  - Agent's hypothesis meanwhile: ${q.hypothesis}`);
 }
 for (const a of asks.filter((x) => !['question', 'decision'].includes(x.subject_kind)))
-	p(`- **Ask** to ${who(a.addressed_to)} in ${a.session_key ?? 'Work tab'} (${day(a.created_at)}): ${a.prompt}`);
+	p(
+		`- **Ask** to ${who(a.addressed_to)} in ${a.session_key ?? 'Work tab'} (${day(a.created_at)}): ${a.prompt}`
+	);
 if (!asks.length && !qs.length && !ds.length) p('_Nothing._');
 p();
 
 // 3. Now
 p('## 3. Now — in progress');
 p();
-for (const t of all("SELECT * FROM task WHERE status='in_progress' ORDER BY agent, updated_at DESC")) {
+for (const t of all(
+	"SELECT * FROM task WHERE status='in_progress' ORDER BY agent, updated_at DESC"
+)) {
 	const b = blockers(t.id);
-	p(`- **${who(t.agent)}** — ${title(t.id)}${sessionNote(taskSession(t.id))}${b.length ? ` _(blocked: ${b.join('; ')})_` : ''}`);
+	p(
+		`- **${who(t.agent)}** — ${title(t.id)}${sessionNote(taskSession(t.id))}${b.length ? ` _(blocked: ${b.join('; ')})_` : ''}`
+	);
 }
 p();
 
@@ -215,18 +251,26 @@ p();
 p('## 4. Waiting');
 p();
 for (const t of all("SELECT * FROM task WHERE status='waiting' ORDER BY follow_up_at")) {
-	p(`- ${title(t.id)} — waiting on **${who(t.waiting_on_ref)}** (${t.waiting_on_kind})${sessionNote(taskSession(t.id))}`);
+	p(
+		`- ${title(t.id)} — waiting on **${who(t.waiting_on_ref)}** (${t.waiting_on_kind})${sessionNote(taskSession(t.id))}`
+	);
 	p(`  - ${t.waiting_for}`);
-	p(`  - Resume when: ${t.resume_when}${t.follow_up_at ? ` · follow up ${day(t.follow_up_at)}` : ''}`);
+	p(
+		`  - Resume when: ${t.resume_when}${t.follow_up_at ? ` · follow up ${day(t.follow_up_at)}` : ''}`
+	);
 }
 p();
 
 // 5. Recently completed
 p('## 5. Recently completed');
 p();
-for (const t of all("SELECT * FROM task WHERE status='completed' ORDER BY updated_at DESC LIMIT 25")) {
+for (const t of all(
+	"SELECT * FROM task WHERE status='completed' ORDER BY updated_at DESC LIMIT 25"
+)) {
 	const r = one('SELECT * FROM task_result WHERE task_id=? AND accepted=1', t.id);
-	p(`- **${title(t.id)}** (${day(t.updated_at)}, ${t.agent ? who(t.agent) : 'unassigned'})${sessionNote(taskSession(t.id))}`);
+	p(
+		`- **${title(t.id)}** (${day(t.updated_at)}, ${t.agent ? who(t.agent) : 'unassigned'})${sessionNote(taskSession(t.id))}`
+	);
 	if (r) p(`  - Result: ${r.content}`);
 	if (r) p(`  - Evidence: ${src(r.sources)}`);
 }
@@ -236,7 +280,8 @@ p();
 p('## 6. Untracked activity');
 p();
 const un = all('SELECT * FROM activity WHERE task_id IS NULL ORDER BY at DESC');
-for (const a of un) p(`- ${day(a.at)} ${who(a.agent)} · ${a.kind}: ${a.summary}${a.ref ? ` (${a.ref})` : ''}`);
+for (const a of un)
+	p(`- ${day(a.at)} ${who(a.agent)} · ${a.kind}: ${a.summary}${a.ref ? ` (${a.ref})` : ''}`);
 if (!un.length) p('_Nothing — every recorded action is explained by a Task._');
 p();
 
@@ -250,7 +295,9 @@ for (const a of all("SELECT * FROM area WHERE status='active' ORDER BY title")) 
 	p();
 	for (const pr of all('SELECT * FROM project WHERE area_id=? ORDER BY created_at', a.id)) {
 		const ms = all('SELECT * FROM milestone WHERE project_id=? ORDER BY ord', pr.id);
-		p(`- **Project: ${pr.title}** — ${projectStatus(pr)}${pr.session_key ? sessionNote({ key: pr.session_key }) : ''}`);
+		p(
+			`- **Project: ${pr.title}** — ${projectStatus(pr)}${pr.session_key ? sessionNote({ key: pr.session_key }) : ''}`
+		);
 		p(`  - Outcome: ${pr.outcome}`);
 		for (const m of ms) {
 			p(`  - Milestone ${m.ord}. ${m.title} — ${m.status}`);
@@ -272,7 +319,9 @@ for (const f of all("SELECT * FROM finding WHERE status='current' ORDER BY creat
 	p(`- **Finding** (${f.confidence}, ${day(f.created_at)}): ${f.conclusion} — _${src(f.sources)}_`);
 for (const d of all("SELECT * FROM decision WHERE status='decided' ORDER BY resolved_at DESC")) {
 	const opt = JSON.parse(d.options).find((x) => x.id === d.chosen_option);
-	p(`- **Decision** (${day(d.resolved_at)}, ${who(d.decided_by)}): ${d.prompt} → **${opt?.label}**. ${d.rationale}`);
+	p(
+		`- **Decision** (${day(d.resolved_at)}, ${who(d.decided_by)}): ${d.prompt} → **${opt?.label}**. ${d.rationale}`
+	);
 }
 for (const q of all("SELECT * FROM question WHERE status='answered' ORDER BY resolved_at DESC"))
 	p(`- **Answered** (${day(q.resolved_at)}): ${q.prompt} → ${q.answer}`);

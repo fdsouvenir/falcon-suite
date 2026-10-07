@@ -34,7 +34,8 @@ export function open(path, schemaPath) {
 	const AGENT = 'agent:verl';
 	const FRED = 'person:fred';
 	const sessionOf = (table, oid, key) =>
-		key && run(`UPDATE ${table} SET session_key=?, session_linked_by=? WHERE id=?`, key, AGENT, oid);
+		key &&
+		run(`UPDATE ${table} SET session_key=?, session_linked_by=? WHERE id=?`, key, AGENT, oid);
 
 	const api = {
 		db,
