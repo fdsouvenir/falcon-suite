@@ -1,0 +1,43 @@
+{
+  "id": "falcon-vault",
+  "name": "Falcon Vault",
+  "description": "Your password manager inside OpenClaw, and where config credentials come from.",
+  "version": "5.0.0-dev.0",
+  "categories": [
+    "security"
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "secretProviderIntegrations": {
+    "falcon-vault": {
+      "displayName": "Falcon Vault",
+      "description": "Entries in the Falcon Vault KeePassXC database. Reference an entry by its path, or path:Field.",
+      "source": "exec",
+      "command": "${node}",
+      "args": [
+        "./bin/resolve-secrets.mjs"
+      ],
+      "passEnv": [
+        "OPENCLAW_STATE_DIR"
+      ],
+      "jsonOnly": true
+    }
+  },
+  "controlUi": {
+    "entry": "dist/control-ui/103f19aef4cf9eb29ad762d0b5cad898ef0f9c3818f5606a162dd2d56433985c/index.js",
+    "styles": [
+      "dist/control-ui/103f19aef4cf9eb29ad762d0b5cad898ef0f9c3818f5606a162dd2d56433985c/index.css"
+    ]
+  },
+  "contracts": {
+    "tools": [
+      "falcon_vault"
+    ]
+  }
+}
