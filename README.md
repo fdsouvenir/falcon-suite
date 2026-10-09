@@ -5,6 +5,7 @@ installed and configured on its own.
 
 - `docs/work-spec.md` — the Work 5 specification.
 - `docs/work-commands.md` — the Work command list.
+- `docs/vault-spec.md` — the Vault 5 specification.
 - `packages/work/src/store/schema.ts` — the Work data model.
 - `packages/work/seed/` — tooling for an evaluation database: `lib.mjs` (a builder over the draft
   schema) and `report.mjs` (renders the Work tab's content as text). The seed data itself was real
@@ -15,10 +16,12 @@ installed and configured on its own.
 ## Packages
 
 - `packages/work` — **Falcon Work** (`@fdsouvenir/falcon-work`, plugin id `falcon-work`).
+- `packages/vault` — **Falcon Vault** (`@fdsouvenir/falcon-vault`, plugin id `falcon-vault`).
 
 ## Develop
 
-Node 24.16+. From the repository root:
+Node 24.16+. From the repository root (with `NODE_ENV=production` in the environment, npm skips the
+dev dependencies the build needs: use `npm install --include=dev`):
 
 ```sh
 npm install

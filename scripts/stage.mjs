@@ -3,6 +3,7 @@
 //
 //   node scripts/stage.mjs work preview 5.0.0-preview.1            # stage + build + validate + dry run
 //   node scripts/stage.mjs work preview 5.0.0-preview.1 --publish  # ...and publish
+//   node scripts/stage.mjs vault preview 5.0.0-preview.1            # the same for Vault
 //
 // Preview and production differ only in identity: plugin id, display name and npm package name.
 // The staged copy lives in .stage/ (gitignored) inside the repository, so the workspace's
@@ -31,11 +32,19 @@ const IDENTITIES = {
 			name: 'Falcon Work Preview',
 			npm: '@fdsouvenir/falcon-work-preview'
 		}
+	},
+	vault: {
+		production: { id: 'falcon-vault', name: 'Falcon Vault', npm: '@fdsouvenir/falcon-vault' },
+		preview: {
+			id: 'falcon-vault-preview',
+			name: 'Falcon Vault Preview',
+			npm: '@fdsouvenir/falcon-vault-preview'
+		}
 	}
 };
 const identity = IDENTITIES[pkgName]?.[channel];
 if (!identity || !/^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(version ?? '')) {
-	console.error('Usage: stage.mjs <work> <preview|production> <semver> [--publish]');
+	console.error('Usage: stage.mjs <work|vault> <preview|production> <semver> [--publish]');
 	process.exit(2);
 }
 if (channel === 'production' && version.includes('-')) {
