@@ -20,3 +20,19 @@
 | Activity tab              | `9fb33c0fc8924755b0dfff69b7a9b12b` | generated, 1 correction round                                                                          |
 | Overview, calm (proposed) | `5bfc8d87d0f346c587c78c841c8c67dc` | generated from the alpha sample data, 1 correction round                                               |
 | Overview + Decision panel | `9a36fda5d7b54fa3a2065ca69e769018` | generated, 1 correction round; that round dropped the DECIDE group, restored by hand in the local HTML |
+
+## Falcon Vault 5
+
+- Project: **Falcon Vault 5** — `projects/7201604652252946872`; design system asset
+  `assets/32ab4a7b5bd5445ebeccf3ad25edba7b`, created from `vault/DESIGN.md` (the Work design system
+  with Vault's page layout and secret-field components). Mockups use sample data only.
+
+| Screen                   | Stitch id                          | Rounds                                                          |
+| ------------------------ | ---------------------------------- | --------------------------------------------------------------- |
+| Browse + entry pane      | `42d8285ec80f4721a4e7c1913b119673` | generated, 2 correction rounds                                  |
+| Edit in place            | `e709a4f4ee684a06ba1218205ae681f1` | generated, 1 correction round                                   |
+| New entry panel          | `33f65569828d49079d2ce36ccfa1f72c` | generated                                                       |
+| Needs a value (fill in)  | `8e1d5d81ba224c70ba2ceff810d91791` | generated, 1 correction round                                   |
+| Delete step + group menu | `ee6b93b4fcd9471bb7f18e2718a2908c` | generated, 1 correction round; group menu is clipped (artifact) |
+| Mobile list              | `87e7f9becb1c4384a23da63ae5841e0d` | generated, 1 correction round                                   |
+| Mobile entry, editing    | `cfcba313416b4d289f11470772ddf721` | generated, 1 correction round                                   |
