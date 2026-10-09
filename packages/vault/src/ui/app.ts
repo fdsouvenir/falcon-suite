@@ -123,6 +123,8 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 				...body
 			} as any);
 			if (r?.outcome === 'rejected') throw new Error(r.reason);
+			// The form did its job: the next draw replaces it with the saved entry, not keep it.
+			shownPane = null;
 			void load();
 			return r;
 		},
@@ -388,7 +390,7 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 		root.classList.remove('is-unavailable');
 		const c = ctx();
 		const p = c.params;
-		search.placeholder = `Search ${overview.total} entries`;
+		search.placeholder = `Search ${overview.total} ${overview.total === 1 ? 'entry' : 'entries'}`;
 		if (document.activeElement !== search) search.value = p.q ?? '';
 		const key = paneKey(p);
 		const editing = !!pane?.querySelector('form, .fv-form') || pane?.tagName === 'FORM';
