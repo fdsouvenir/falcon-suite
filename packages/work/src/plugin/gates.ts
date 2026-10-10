@@ -10,7 +10,7 @@
  * messages from other sessions. Without a decision model they report "unavailable" and Work falls
  * back to a reminder in the agent's next brief.
  */
-export const RUBRIC_VERSION = 'falcon-work-gates-2026-10-07b';
+export const RUBRIC_VERSION = 'falcon-work-gates-2026-10-10';
 
 /** Gate left_waiting: after this turn, is the agent waiting on the person? */
 export const LEFT_WAITING = {

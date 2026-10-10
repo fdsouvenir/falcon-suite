@@ -91,12 +91,17 @@ export const DONE_QUESTION = (field: string) => ({
 	instructions: {
 		question: `After this turn, is ${field} met?`,
 		focus:
-			'Only what outcomes and reply_end show was actually done, not what is planned or promised.'
+			'Judge from outcomes and reply_end. You cannot open files or links: when reply_end says what was produced and outcomes show it was written, treat that as shown.',
+		ignore: ['work that is only planned, promised or proposed']
 	},
 	criteria: {
-		true: { description: `every part of ${field} is shown done` },
+		true: {
+			description: `everything ${field} asks for is reported done`,
+			includes: ['the reply says the file, change or fix was made, and outcomes show it']
+		},
 		false: {
-			description: `some part of ${field} is not shown done, or is still pending or failing`
+			description: `some part of ${field} is not reported done`,
+			includes: ['a step still pending', 'a test or check failing', 'only a plan or a promise']
 		}
 	}
 });
