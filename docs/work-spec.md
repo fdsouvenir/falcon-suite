@@ -9,10 +9,11 @@ Work is where an agent is **made to record what it is doing**, in a structure th
 
 Two things follow from that, and every rule below serves one of them:
 
-1. **The record is enforced, not requested.** An agent that has to remember to report will not.
-   The plugin uses OpenClaw's runtime hooks to require the record and to capture the evidence of
-   what actually happened. The agent writes only what needs judgment: intent, definition of done,
-   decisions, findings, results.
+1. **The record keeps itself.** An agent that has to remember to report will not, and nudging it
+   mid-work does not change that. Work writes the record from what actually happens (§10, The
+   record keeper): it files each turn's outcomes under the right Task, opens Tasks for new work and
+   completes them when their done-when is met. The agent can still record and correct through its
+   tools, and its entries win; it is never required to.
 2. **The structure matches how people delegate.** People hand their agent standing
    responsibilities, bounded efforts with checkpoints, individual tasks, and long-running aims they
    want progress on. The agent runs into unknowns, makes choices someone may need to approve, and
@@ -254,15 +255,41 @@ This is what makes Work a record rather than a diary.
 | OpenClaw hook                                                     | What Work does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `before_prompt_build`                                             | Injects a **short** live brief instead of a schema: active Objectives by rank, where work lives (active Areas and their open Projects, with the Objectives they serve and their current Milestone), the agent's in-progress Tasks, Questions/Decisions answered since its last turn, what is waiting on it. The static guidance only says what Work is (the person's view of the agent's work, and its vocabulary) and that the person's request goes ahead if Work fails; behaviour comes from the tools, which are named for intents (plan a Project, track a Task, ask the person, record a Finding) and describe themselves. Rules in the prompt were tried and got applied literally past their intent (commands §1). |
-| `after_tool_call`                                                 | Attaches what the agent actually did — command run, file changed, message sent, commit made, session link — to its in-progress Task. With no in-progress Task, it is recorded as **untracked activity**, visible to the human.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `after_tool_call`                                                 | Notes the turn's **outcomes** in memory (see The record keeper). Raw tool calls are never stored: OpenClaw's session transcript already holds them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `before_agent_finalize`                                           | Changes no Task explains get one more pass where the runtime allows it (OpenClaw does not grant one after side effects, so on many turns only the automatic capture applies). On turns the person started, gate **left_waiting** (below) decides whether the reply leaves the agent waiting on the person; if so Work records it as a Question addressed to them ("Asked in chat"), sets the in-progress Task waiting when an action is needed, and the agent's next brief asks it to refine or withdraw the capture.                                                                                                                                                                                                      |
 | `before_tool_call` _(strict mode, per agent, **off by default**)_ | Refuses tools that change things until the agent has a Task in progress.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
-What counts as work: any tool call that changes something (files, commands, outgoing messages,
-config, external APIs). Chat-only turns and read-only tool use are exempt.
+### The record keeper
 
-Evidence captured by hooks is stored as activity on the Task with its source; the agent never has
-to restate it. Results cite it.
+_Settled with Fred 2026-10-10 (§15.10)._ Work writes the record itself, after every turn in any
+session — the person's, a subagent's, or an automation's.
+
+- **Outcomes, not tool calls.** During a turn Work notes only what left a mark outside the chat:
+  commits, pushes, pull requests, releases and publishes, installs and deploys, messages sent,
+  files written (grouped by repository or folder), config changes and other external writes. Reads,
+  searches, listings and test runs are not outcomes. Nothing about the tool calls themselves is
+  kept: each entry links to its session and turn, and OpenClaw's transcript (with its own
+  retention) holds the detail.
+- **Which Task.** Each session has its own current Task: the one it started, or Work filed it
+  under. A subagent works under its parent's. At the end of a turn with outcomes, or one the person
+  started, one decision batch answers: continues the session's Task / belongs to another open Task /
+  new work / not work, and whether that Task's done-when is now met.
+- **Writing it.** The Office's utility model (OpenClaw's `utilityModel` role) writes what the
+  decision model cannot: the turn's one-sentence summary; for new work, a Task with title,
+  description, done-when and its place (Area or Project, Milestone); for a met done-when, the
+  Result. Work then commits it as **recorded by Work**, with the outcomes as evidence.
+- **One Task per piece of work.** A session doing several things produces several Tasks, not one
+  umbrella Task (Fred: the provisioning session should have been five).
+- **The agent and the person stay in charge.** The agent's own Work calls take precedence over the
+  record keeper for that turn; the person can edit, merge or move anything, and everything Work
+  wrote is marked as such.
+- **Without the models** outcomes are still filed under the session's current Task; with no
+  current Task they wait as **unfiled work** (a Warning) until something files them.
+
+**Timeline.** A Task's history is its timeline: one entry per outcome-bearing turn, showing the
+outcomes as chips (commit, PR, file, message) and opening to that turn's summary. Turns on the
+Task that changed nothing outside the chat fold into one line ("3 turns of discussion"). The
+Activity tab is every Task's timeline, newest first.
 
 ### Decision gates
 
@@ -285,12 +312,12 @@ holds.
 
 | Warning                           | Condition (thresholds configurable)                                                            |
 | --------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Stalled Task                      | In progress with no recorded activity for 48 hours.                                            |
+| Stalled Task                      | In progress with no timeline entry for 48 hours.                                               |
 | Session mismatch _(deferred, §9)_ | In progress, but its discussion session has been idle for 48 hours, has failed, or is missing. |
 | Follow-up overdue                 | Waiting past its `follow_up_at`.                                                               |
 | Unanswered                        | A Question or Decision open for more than 7 days.                                              |
 | Objective without progress        | An active Objective with no completed serving Task for 7 days.                                 |
-| Untracked activity                | Activity no Task explains, in the last 24 hours.                                               |
+| Unfiled work                      | Outcomes the record keeper could not file under a Task.                                        |
 | Milestone ready                   | Every associated Task is finished but the Milestone is not achieved.                           |
 
 Warnings appear in **Needs you** and feed the agent's daily Objective review.
@@ -310,7 +337,7 @@ nothing listed twice, and acting happens in the side panel, not on the page.
 3. **Happening now** — Tasks in progress, waiting (on whom; "waiting on your decision" when it is
    covered above) and ready.
 4. **Heads up** — the remaining Warnings (§11), quietly: Objectives without progress, stalled
-   Tasks, untracked activity, Milestones ready to mark achieved.
+   Tasks, unfiled work, Milestones ready to mark achieved.
 5. **Objectives** — each active Objective by rank with its first KPI and last progress (the full
    view, with reviews and serving Work, is the Objectives tab).
 6. **Recently completed** — the latest finished Tasks; the rest is in Activity.
@@ -388,3 +415,8 @@ transcripts (OpenClaw owns sessions; Work links to them) · runtime permission e
 9. _(2026-10-07)_ One agent per Office is assumed. Agents do not abandon Projects or take other
    agents' Tasks; a person does both. Multi-agent handover is revisited once there are real
    multi-agent scenarios.
+10. _(2026-10-10)_ Work writes the record itself (§10, The record keeper): the agent is not required
+    to, and its own entries win. One Task per piece of work. A Task's history is a timeline of
+    outcomes, each opening to its turn summary; turns without outcomes fold. Raw tool calls are not
+    stored by Work; entries link to the session transcript. Supersedes enforcement by nudging and
+    the untracked-activity feed.
