@@ -10,7 +10,9 @@ import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'nod
 import path from 'node:path';
 import type { Actor, Envelope } from './store/types.js';
 import type { Kind } from './store/engine.js';
-import { classify, raisesAsk } from './plugin/activity.js';
+import { outcome, raisesAsk, recordsWork } from './plugin/outcomes.js';
+import { keepRecord } from './plugin/keeper.js';
+import type { TurnOutcome } from './store/work.js';
 import { asksThePerson } from './plugin/asks.js';
 import {
 	ANSWERS_THRESHOLD,
@@ -30,15 +32,38 @@ import {
 import { GUIDANCE, renderBrief } from './plugin/brief.js';
 import { currentHuman } from './plugin/identity.js';
 
-/** Per-run bookkeeping for the end-of-turn nudge (spec §10). */
+/** Per-run bookkeeping for the record keeper and the end-of-turn gates (spec §10). */
 type RunState = {
-	untracked: number;
+	/** What the turn left outside the chat, in order. */
+	outcomes: TurnOutcome[];
+	/** The agent recorded or corrected Work itself this turn. */
 	recorded: boolean;
 	asked: boolean;
-	nudged: boolean;
+	done: boolean;
 	/** The person's message that started the turn, when a person started it. */
 	request: string | null;
+	/** What the turn was asked, whoever asked it (a subagent's task, a scheduled prompt). */
+	prompt: string | null;
 };
+
+/** Provider small-model defaults OpenClaw uses when no utility model is set (concepts/models). */
+const SMALL_DEFAULTS: Record<string, string> = {
+	openai: 'openai/gpt-5.6-luna',
+	'openai-codex': 'openai/gpt-5.6-luna',
+	anthropic: 'anthropic/claude-haiku-4-5'
+};
+
+/** The Office's utility model for an agent: its own, the default, or its provider's small model. */
+function utilityModel(cfg: any, agentId: string): string | null {
+	const entry =
+		cfg?.agents?.entries?.[agentId] ?? cfg?.agents?.list?.find?.((a: any) => a?.id === agentId);
+	const set = entry?.utilityModel ?? cfg?.agents?.defaults?.utilityModel;
+	if (set === '') return null;
+	if (typeof set === 'string') return set;
+	const primary = entry?.model ?? cfg?.agents?.defaults?.model;
+	const ref = typeof primary === 'string' ? primary : primary?.primary;
+	return typeof ref === 'string' ? (SMALL_DEFAULTS[ref.split('/')[0]] ?? null) : null;
+}
 
 /** Who is calling: the agent behind a tool call, or the signed-in person behind the Control UI. */
 function actorFor(context: FeatureInvocationContext): Actor {
@@ -134,7 +159,14 @@ const feature = defineFeaturePlugin({
 			if (!id) return null;
 			let state = runs.get(id);
 			if (!state) {
-				state = { untracked: 0, recorded: false, asked: false, nudged: false, request: null };
+				state = {
+					outcomes: [],
+					recorded: false,
+					asked: false,
+					done: false,
+					request: null,
+					prompt: null
+				};
 				runs.set(id, state);
 				if (runs.size > 500) runs.delete(runs.keys().next().value as string);
 			}
@@ -185,10 +217,18 @@ const feature = defineFeaturePlugin({
 				);
 			const state = runState(ctx.runId);
 			if (state && person) state.request = message;
+			if (state && !state.prompt && message.trim()) state.prompt = message;
 			if (person) void matchAnswers(work, key, message, ctx.runId ?? now);
 			const extra = notes.get(key) ?? [];
 			notes.delete(key);
-			const brief = renderBrief(work.reads, agent, lastBrief.get(key) ?? null, now);
+			const current = work.sessionTask(ctx.sessionKey);
+			const brief = renderBrief(
+				work.reads,
+				agent,
+				lastBrief.get(key) ?? null,
+				now,
+				current ? { id: current, title: work.reads.taskTitle(current) } : null
+			);
 			lastBrief.set(key, now);
 			return {
 				prependSystemContext: GUIDANCE,
@@ -445,46 +485,71 @@ const feature = defineFeaturePlugin({
 			if (acted.length) changed(w);
 		}
 
-		// What the agent actually did: attached to its in-progress Task, or kept as untracked.
+		// What the turn left outside the chat (spec §10, The record keeper). Tool calls themselves
+		// are not kept: the session transcript has them.
 		api.on('after_tool_call', (event, ctx) => {
-			const work = ctx.agentId ? maybe() : null;
-			if (!work || !ctx.agentId) return;
+			if (!ctx.agentId) return;
 			const state = runState(event.runId ?? ctx.runId);
-			if (state && !event.error && raisesAsk(event.toolName, event.params ?? {}))
-				state.asked = true;
-			if (
-				event.toolName.startsWith('falcon_work') &&
-				event.toolName !== 'falcon_work_read' &&
-				!event.error
-			) {
-				if (state) state.recorded = true;
+			if (!state) return;
+			const params = (event.params ?? {}) as Record<string, unknown>;
+			if (!event.error && raisesAsk(event.toolName, params)) state.asked = true;
+			if (!event.error && recordsWork(event.toolName)) {
+				state.recorded = true;
 				return;
 			}
-			const e = event as typeof event & { toolKind?: string; toolInputKind?: string };
+			const e = event as typeof event & {
+				toolKind?: string;
+				toolInputKind?: string;
+				result?: unknown;
+			};
+			const c = ctx as { toolKind?: string; toolInputKind?: string };
 			const kind =
 				e.toolKind ??
-				ctx.toolKind ??
-				(e.toolInputKind || ctx.toolInputKind ? 'code_mode_exec' : undefined);
-			const c = classify(event.toolName, event.params ?? {}, event.error, kind);
-			if (!c) return;
-			const r = work.recordActivity({
-				agent: `agent:${ctx.agentId}`,
-				session: ctx.sessionKey ?? null,
-				...c
+				c.toolKind ??
+				(e.toolInputKind || c.toolInputKind ? 'code_mode_exec' : undefined);
+			const o = outcome(event.toolName, params, {
+				error: event.error,
+				toolKind: kind,
+				result: e.result
 			});
-			if (!r.task && state) state.untracked++;
+			if (o) state.outcomes.push(o);
 		});
 
-		// One more pass at the end of a turn, at most, for what Work should hold but does not:
-		// changes no Task explains, and things the reply asks of the person that were not raised in
-		// Work (they would live only in this chat).
+		// A subagent works under the Task of the session that spawned it.
+		api.on('subagent_spawned', (_event, ctx) => {
+			const c = ctx as { childSessionKey?: string; requesterSessionKey?: string };
+			if (!c.childSessionKey || !c.requesterSessionKey) return;
+			maybe()?.setParent(c.childSessionKey, c.requesterSessionKey);
+		});
+
+		type Llm = { complete?: (p: unknown) => Promise<{ text: string }> };
+		/** The utility model writes the record's words; never the agent's main model. */
+		const writer = (agentId: string) => {
+			const model = utilityModel((api as { config?: unknown }).config, agentId);
+			const llm = (api as unknown as { runtime?: { llm?: Llm } }).runtime?.llm;
+			if (!model || !llm?.complete) return undefined;
+			return async (prompt: string) =>
+				(
+					await llm.complete!({
+						messages: [{ role: 'user', content: prompt }],
+						model,
+						agentId,
+						maxTokens: 600,
+						temperature: 0.2,
+						purpose: 'falcon-work.record'
+					})
+				).text;
+		};
+
+		// At the end of every turn: the record keeper files what changed; on turns the person started,
+		// the gates catch what the reply leaves waiting on them.
 		api.on('before_agent_finalize', (event, ctx) => {
 			if (event.stopHookActive) return;
 			const state = runState(event.runId);
 			const reply = event.lastAssistantMessage ?? '';
 			const session = ctx?.sessionKey ?? event.sessionKey ?? '';
 			const work = ctx?.agentId ? maybe() : null;
-			if (work && ctx?.agentId && state?.request && reply && !state.nudged)
+			if (work && ctx?.agentId && state?.request && reply)
 				void captureTurn(
 					work,
 					ctx.agentId,
@@ -495,21 +560,27 @@ const feature = defineFeaturePlugin({
 					state.asked
 				);
 			if (session && reply) lastReply.set(session, reply);
-			// Changes no Task explains get one more pass, where the runtime allows it (OpenClaw does
-			// not revise after side effects, so on many turns this cannot fire; activity is still
-			// captured as untracked).
-			if (!state || state.nudged || state.recorded || state.untracked === 0) return;
-			state.nudged = true;
-			return {
-				action: 'revise',
-				reason: 'Untracked changes',
-				retry: {
-					instruction:
-						'You changed things this turn that no Task in Falcon Work explains: put them under the Task they belong to (falcon_work_task: create with start, or start an existing one), or attach the activity to an existing Task (falcon_work attach_activity). Then give your reply.',
-					idempotencyKey: `${PLUGIN_ID}-nudge:${event.runId}`,
-					maxAttempts: 1
-				}
-			};
+			if (!work || !ctx?.agentId || !state || state.done) return;
+			state.done = true;
+			const agentId = ctx.agentId;
+			void keepRecord(
+				work,
+				{
+					agentId,
+					session: session || null,
+					run: event.runId ?? work.now(),
+					request: state.request ?? state.prompt,
+					reply,
+					outcomes: state.outcomes,
+					person: !!state.request,
+					agentRecorded: state.recorded
+				},
+				{ decisions: decisions(), write: writer(agentId), log, logDecisions }
+			)
+				.then((r) => {
+					if (r.acted.length) changed(work);
+				})
+				.catch((error) => log(`record keeper failed: ${(error as Error).message}`));
 		});
 
 		/** Run one command; tell open pages a change happened (best effort: it is already committed). */
@@ -546,7 +617,12 @@ const feature = defineFeaturePlugin({
 							? (w.views.panel(input.id, actorFor(context).id) ?? { error: 'not_found' })
 							: { error: 'id_required' };
 					case 'feed':
-						return w.views.feed({ filter: f.feed, area: f.area, limit: f.limit });
+						return w.views.feed({
+							filter: f.feed,
+							agent: f.agent,
+							limit: f.limit,
+							before: f.before
+						});
 					case 'brief': {
 						const actor = actorFor(context);
 						return actor.kind === 'agent'
@@ -566,9 +642,11 @@ const feature = defineFeaturePlugin({
 						return input.kind && (KINDS as readonly string[]).includes(input.kind)
 							? w.reads.list(input.kind as Kind, f)
 							: { error: 'kind_required' };
-					case 'activity':
-						return w.reads.activity({
-							untracked: f.untracked,
+					case 'timeline':
+						return w.reads.timeline({
+							task: f.task,
+							session: f.session,
+							unfiled: f.unfiled,
 							agent: f.agent,
 							limit: f.limit,
 							before: f.before
@@ -631,6 +709,8 @@ const feature = defineFeaturePlugin({
 							actor
 						);
 						if (!i.start || !('id' in created) || !created.id) return created;
+						if (context.source === 'tool' && context.tool.sessionKey)
+							w.setSessionTask(context.tool.sessionKey, created.id);
 						const started = commit(
 							w,
 							envelopeFor(
@@ -642,8 +722,12 @@ const feature = defineFeaturePlugin({
 						);
 						return { ...created, started: started.outcome };
 					}
-					case 'start':
-						return on('start', { claim: true });
+					case 'start': {
+						const r = on('start', { claim: true });
+						if (r.outcome !== 'rejected' && context.source === 'tool' && context.tool.sessionKey)
+							w.setSessionTask(context.tool.sessionKey, i.id);
+						return r;
+					}
 					case 'wait':
 						if (!i.waiting_on) return invalid('wait: say who or what it waits on (waiting_on)');
 						return on('wait', {

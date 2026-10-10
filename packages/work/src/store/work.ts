@@ -17,17 +17,12 @@ export const COMMANDS: CommandDef[] = [
 	...knowledgeCommands
 ];
 
-const ACTIVITY_KINDS = [
-	'command',
-	'file',
-	'message',
-	'commit',
-	'release',
-	'config',
-	'api',
-	'session'
-] as const;
-export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+/** What a turn left outside the chat (spec §10, The record keeper). */
+export type TurnOutcome = {
+	kind: 'commit' | 'push' | 'pr' | 'release' | 'deploy' | 'message' | 'file' | 'config' | 'change';
+	label: string;
+	ref?: string;
+};
 
 /** The Work store: commands (`do`), reads, and the writes the hooks make (spec §10). */
 export class Work {
@@ -76,41 +71,83 @@ export class Work {
 			: null;
 	}
 
+	/** The session a subagent was spawned from, recorded by the subagent_spawned hook. */
+	setParent(session: string, parent: string): void {
+		if (session === parent) return;
+		this.db
+			.prepare(
+				'INSERT INTO session_parent (session_key, parent_key) VALUES (?, ?) ON CONFLICT (session_key) DO UPDATE SET parent_key = excluded.parent_key'
+			)
+			.run(session, parent);
+	}
+
 	/**
-	 * Record what an agent actually did (from after_tool_call). It is attached to the agent's
-	 * in-progress Task — the one discussed in this session if there is one, else the most recently
-	 * touched — or kept as untracked activity.
+	 * The Task a session is working on: its own, or else its parent's (a subagent works under the
+	 * Task it was spawned for). Only an unfinished Task counts.
 	 */
-	recordActivity(a: {
+	sessionTask(session: string | null | undefined): string | null {
+		const seen = new Set<string>();
+		for (let key = session ?? null; key && !seen.has(key);) {
+			seen.add(key);
+			const row = this.db
+				.prepare(
+					"SELECT s.task_id AS id FROM session_task s JOIN task t ON t.id = s.task_id WHERE s.session_key = ? AND t.status IN ('open','ready','in_progress','waiting')"
+				)
+				.get(key) as { id: string } | undefined;
+			if (row) return row.id;
+			key =
+				(
+					this.db
+						.prepare('SELECT parent_key FROM session_parent WHERE session_key = ?')
+						.get(key) as { parent_key: string } | undefined
+				)?.parent_key ?? null;
+		}
+		return null;
+	}
+
+	/** Make a Task the session's current Task (the agent started it here, or Work filed work under it). */
+	setSessionTask(session: string, task: string): void {
+		this.db
+			.prepare(
+				'INSERT INTO session_task (session_key, task_id, set_at) VALUES (?, ?, ?) ON CONFLICT (session_key) DO UPDATE SET task_id = excluded.task_id, set_at = excluded.set_at'
+			)
+			.run(session, task, this.clock());
+	}
+
+	/** One turn on the timeline: its outcomes and summary, under a Task or unfiled. */
+	recordTurn(e: {
 		agent: string;
 		session?: string | null;
-		kind: ActivityKind;
-		summary: string;
-		ref?: string | null;
-	}): { id: string; task: string | null } {
-		const inProgress = this.db
-			.prepare(
-				"SELECT id, session_key FROM task WHERE agent = ? AND status = 'in_progress' ORDER BY updated_at DESC"
-			)
-			.all(a.agent) as { id: string; session_key: string | null }[];
-		const task =
-			(a.session && inProgress.find((t) => t.session_key === a.session)) || inProgress[0];
+		run?: string | null;
+		task?: string | null;
+		outcomes: TurnOutcome[];
+		summary?: string | null;
+		by: 'work' | 'agent';
+	}): string {
 		const id = randomUUID();
 		this.db
 			.prepare(
-				'INSERT INTO activity (id, task_id, agent, session_key, at, kind, summary, ref) VALUES (?,?,?,?,?,?,?,?)'
+				'INSERT INTO timeline_entry (id, task_id, agent, session_key, run_id, at, outcomes, summary, recorded_by) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (run_id) DO NOTHING'
 			)
 			.run(
 				id,
-				task?.id ?? null,
-				a.agent,
-				a.session ?? null,
+				e.task ?? null,
+				e.agent,
+				e.session ?? null,
+				e.run ?? null,
 				this.clock(),
-				a.kind,
-				a.summary.slice(0, 1000),
-				a.ref ?? null
+				JSON.stringify(e.outcomes.slice(0, 50)),
+				e.summary ? e.summary.slice(0, 2000) : null,
+				e.by
 			);
-		return { id, task: task?.id ?? null };
+		return id;
+	}
+
+	/** Mark something the record keeper wrote, so the person can tell it apart. */
+	markRecordedByWork(id: string): void {
+		this.db
+			.prepare('INSERT OR IGNORE INTO work_recorded (object_id, at) VALUES (?, ?)')
+			.run(id, this.clock());
 	}
 
 	now(): string {

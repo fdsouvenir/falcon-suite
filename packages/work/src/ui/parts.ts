@@ -94,7 +94,7 @@ export function taskRow(c: Ctx, t: any, opts: { place?: boolean } = {}) {
 }
 
 export function warningRow(c: Ctx, w: any) {
-	const target = w.object?.id && w.object.kind !== 'activity' ? w.object : null;
+	const target = w.object?.id && w.object.kind !== 'timeline' ? w.object : null;
 	return h(
 		'div',
 		{
@@ -137,7 +137,7 @@ const labelFor = (kind: string) =>
 		follow_up_overdue: 'Follow-up overdue',
 		unanswered: 'Unanswered',
 		objective_without_progress: 'Objective without progress',
-		untracked_activity: 'Untracked activity',
+		unfiled_work: 'Unfiled work',
 		milestone_ready: 'Milestone ready',
 		session_mismatch: 'Session mismatch'
 	})[kind] ?? kind;
@@ -333,4 +333,107 @@ export function kpiBar(k: any) {
 			h('span', { class: 'fw-bar-fill', style: `width:${pct}%` })
 		)
 	);
+}
+
+const OUTCOME_LABEL: Record<string, string> = {
+	commit: 'Commit',
+	push: 'Push',
+	pr: 'Pull request',
+	release: 'Release',
+	deploy: 'Deploy',
+	message: 'Message',
+	file: 'File',
+	config: 'Config',
+	change: 'Change'
+};
+
+/** One outcome as a chip: what kind, and the commit, file or target it names. */
+const outcomeChip = (o: { kind: string; label: string; ref?: string }) =>
+	h(
+		'span',
+		{ class: `fw-chip fw-outcome fw-outcome-${o.kind}`, title: o.ref ?? o.label },
+		h('span', { class: 'fw-muted' }, `${OUTCOME_LABEL[o.kind] ?? o.kind} `),
+		o.kind === 'commit' && o.ref ? h('span', { class: 'fw-mono' }, `${o.ref.slice(0, 7)} `) : null,
+		o.label.length > 60 ? o.label.slice(0, 59) + '…' : o.label
+	);
+
+/**
+ * A timeline (spec §10, Timeline): one entry per turn that changed something, its outcomes as
+ * chips and its summary folded underneath; turns without outcomes fold into one line. With
+ * `showTask`, each entry names its Task (the Activity tab); unfiled entries offer `file`.
+ */
+export function timeline(
+	c: Ctx,
+	entries: any[],
+	opts: { showTask?: boolean; file?: (entry: any) => void } = {}
+) {
+	const rows: HTMLElement[] = [];
+	let talk: any[] = [];
+	const flush = () => {
+		if (!talk.length) return;
+		rows.push(
+			h(
+				'li',
+				{ class: 'fw-tl fw-tl-talk fw-muted' },
+				`${talk.length} turn${talk.length > 1 ? 's' : ''} of discussion`,
+				talk[0].session ? sessionChip(c, { key: talk[0].session, from: 'own' }) : null
+			)
+		);
+		talk = [];
+	};
+	for (const e of entries) {
+		if (!e.outcomes.length) {
+			talk.push(e);
+			continue;
+		}
+		flush();
+		rows.push(
+			h(
+				'li',
+				{ class: `fw-tl${e.task ? '' : ' fw-tl-unfiled'}` },
+				h(
+					'div',
+					{ class: 'fw-tl-head' },
+					h('span', { class: 'fw-mono fw-muted' }, `${day(e.at)} ${since(e.at)}`),
+					opts.showTask
+						? e.task
+							? h(
+									'button',
+									{
+										class: 'fw-chip',
+										type: 'button',
+										on: { click: () => openPanel(c, e.task.id) }
+									},
+									`Task: ${e.task.title}`
+								)
+							: h('span', { class: 'fw-pill fw-pill-warn' }, 'unfiled')
+						: null,
+					e.recorded_by === 'work'
+						? h('span', { class: 'fw-muted fw-tl-by' }, 'recorded by Work')
+						: null
+				),
+				h('div', { class: 'fw-tl-outcomes' }, e.outcomes.map(outcomeChip)),
+				e.summary || e.session
+					? h(
+							'details',
+							{ class: 'fw-tl-detail' },
+							h('summary', null, e.summary ? 'What happened' : 'Where it happened'),
+							e.summary ? h('p', null, e.summary) : null,
+							e.session
+								? sessionChip(c, { key: e.session, from: 'own' }, { prefix: 'Open session: ' })
+								: null
+						)
+					: null,
+				!e.task && opts.file
+					? h(
+							'button',
+							{ class: 'fw-link', type: 'button', on: { click: () => opts.file!(e) } },
+							'File under a Task →'
+						)
+					: null
+			)
+		);
+	}
+	flush();
+	return h('ol', { class: 'fw-timeline' }, rows);
 }

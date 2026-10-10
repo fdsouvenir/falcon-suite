@@ -419,9 +419,6 @@
 	justify-items: start;
 	color: var(--danger);
 }
-.fw-untracked {
-	background: color-mix(in srgb, var(--warn) 6%, transparent);
-}
 .fw-milestones,
 .fw-objectives,
 .fw-plain,
@@ -760,4 +757,48 @@ button.fw-choice:hover {
 	display: flex;
 	justify-content: flex-end;
 	gap: var(--space-2);
+}
+
+/* Timeline (spec §10): outcomes as chips, the turn summary folded underneath. */
+.fw-timeline {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.fw-tl {
+	display: grid;
+	gap: var(--space-2);
+	min-width: 0;
+	padding: var(--space-3);
+	border-bottom: 1px solid var(--border);
+}
+.fw-tl:last-child {
+	border-bottom: 0;
+}
+.fw-tl-head,
+.fw-tl-outcomes,
+.fw-tl-talk {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+.fw-tl-by {
+	margin-left: auto;
+	font-size: var(--control-ui-text-xs);
+}
+.fw-tl-detail summary {
+	cursor: pointer;
+	color: var(--muted);
+	font-size: var(--control-ui-text-sm);
+}
+.fw-tl-detail p {
+	margin: var(--space-2) 0;
+}
+.fw-tl-talk {
+	font-size: var(--control-ui-text-sm);
+}
+.fw-tl-unfiled {
+	background: color-mix(in srgb, var(--warn) 6%, transparent);
 }

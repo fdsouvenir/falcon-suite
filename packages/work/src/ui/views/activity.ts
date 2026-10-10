@@ -1,16 +1,14 @@
 import type { Ctx } from '../app.js';
 import { formDialog, messageDialog } from '../dialog.js';
-import { h, empty, time, who, avatar } from '../dom.js';
-import { openPanel } from '../parts.js';
+import { h, empty } from '../dom.js';
+import { timeline } from '../parts.js';
 
 const FILTERS = [
 	{ id: 'all', label: 'All' },
-	{ id: 'changes', label: 'Changes' },
-	{ id: 'activity', label: 'Agent activity' },
-	{ id: 'untracked', label: 'Untracked' }
+	{ id: 'unfiled', label: 'Unfiled' }
 ] as const;
 
-/** One feed of recorded changes and captured activity, newest first, grouped by day. */
+/** Every Task's timeline, newest first, grouped by day (spec §10, Timeline). */
 export async function activityView(c: Ctx) {
 	const filter = (c.params.feed as (typeof FILTERS)[number]['id']) ?? 'all';
 	const v = await c.read({ view: 'feed', filters: { feed: filter } });
@@ -36,8 +34,8 @@ export async function activityView(c: Ctx) {
 						on: { click: (e: Event) => (e.preventDefault(), c.go({ tab: 'activity', feed: f.id })) }
 					},
 					f.label,
-					f.id === 'untracked' && v.untracked_count
-						? h('span', { class: 'fw-count' }, String(v.untracked_count))
+					f.id === 'unfiled' && v.unfiled_count
+						? h('span', { class: 'fw-count' }, String(v.unfiled_count))
 						: null
 				)
 			)
@@ -50,97 +48,59 @@ export async function activityView(c: Ctx) {
 						h('h2', { class: 'fw-day' }, d),
 						h(
 							'div',
-							{ class: 'fw-list fw-card' },
-							items.map((i) => feedRow(c, i))
+							{ class: 'fw-card' },
+							timeline(c, items, { showTask: true, file: (e) => fileEntry(c, e) })
 						)
 					)
 				)
-			: empty(
-					filter === 'untracked'
-						? 'Every recorded action is explained by a Task.'
-						: 'Nothing recorded yet.'
-				)
+			: empty(filter === 'unfiled' ? 'All work is filed under a Task.' : 'Nothing done yet.')
 	);
 }
 
-function feedRow(c: Ctx, i: any) {
-	const object = i.object?.id
-		? h(
-				'button',
-				{
-					class: 'fw-chip',
-					type: 'button',
-					on: {
-						click: () =>
-							i.object.kind === 'project'
-								? c.go({ project: i.object.id })
-								: i.object.kind === 'objective'
-									? c.go({ objective: i.object.id })
-									: openPanel(c, i.object.id)
-					}
-				},
-				`${cap(i.object.kind)}: ${clip(i.object.title)}`
-			)
-		: null;
-	const text =
-		i.type === 'change'
-			? `${cap(i.command.replace(/_/g, ' '))}${i.object?.title ? `: ${i.object.title}` : ''}`
-			: i.summary;
-	return h(
-		'div',
-		{ class: `fw-row fw-feed${i.untracked ? ' fw-untracked' : ''}` },
-		h('span', { class: 'fw-mono fw-muted' }, time(i.at)),
-		avatar(i.actor),
-		h('span', { class: 'fw-muted fw-who' }, who(i.actor)),
-		i.untracked ? h('span', { class: 'fw-pill fw-pill-warn' }, 'untracked') : null,
-		h('span', { class: 'fw-row-main' }, text),
-		i.type === 'activity' && !i.untracked ? h('span', { class: 'fw-muted' }, 'captured') : null,
-		i.ref ? h('span', { class: 'fw-chip fw-mono' }, clip(i.ref, 24)) : null,
-		i.type === 'change' ? object : null,
-		i.untracked
-			? h(
-					'button',
-					{ class: 'fw-link', type: 'button', on: { click: () => createFromActivity(c, i) } },
-					'Create Task from this →'
-				)
-			: null
+/** File an unfiled turn under an open Task, or under a new one. */
+async function fileEntry(c: Ctx, e: any) {
+	const [tasks, areas] = await Promise.all([
+		c.read({ view: 'list', kind: 'task', filters: { limit: 100 } }),
+		c.read({ view: 'areas' })
+	]);
+	const open = ((tasks.items ?? tasks) as any[]).filter(
+		(t) => !['completed', 'abandoned'].includes(t.status)
 	);
-}
-
-async function createFromActivity(c: Ctx, i: any) {
-	const areas = (await c.read({ view: 'areas' })).areas as any[];
-	if (!areas.length)
+	const areaList = (areas.areas ?? []) as any[];
+	if (!open.length && !areaList.length)
 		return messageDialog(
 			c,
 			'Create an Area first',
 			'Every Task lives in an Area or a Project. Add an Area on the Areas & Projects tab, then come back.'
 		);
+	const what = e.summary ?? e.outcomes.map((o: any) => o.label).join(', ');
 	formDialog(c, {
-		title: 'Create a Task from this activity',
-		description: `Explains: ${i.summary}`,
+		title: 'File this work',
+		description: what,
 		fields: [
-			{ id: 'title', label: 'Task title', value: i.summary.slice(0, 200) },
 			{
-				id: 'area',
-				label: 'Area',
+				id: 'task',
+				label: 'Under',
 				kind: 'select',
-				options: areas.map((a) => ({ value: a.id, label: a.title }))
-			}
+				options: [
+					...open.map((t) => ({ value: t.id, label: `Task: ${t.title}` })),
+					...areaList.map((a) => ({ value: `area:${a.id}`, label: `New Task in ${a.title}` }))
+				]
+			},
+			{ id: 'title', label: 'New Task title (for a new Task)', value: what.slice(0, 200) }
 		],
-		submitLabel: 'Create Task',
+		submitLabel: 'File it',
 		submit: async (v) => {
-			if (!v.title.trim()) return 'Give the Task a title.';
-			const r = await c.act('create_task_from_activity', undefined, {
-				title: v.title.trim(),
-				description: `Explains: ${i.summary}`,
-				done_when: 'Recorded what this activity was for.',
-				area: v.area,
-				activity: [i.id]
-			});
+			const r = v.task.startsWith('area:')
+				? await c.act('create_task_from_entries', undefined, {
+						title: v.title.trim() || what.slice(0, 200),
+						description: what,
+						done_when: 'The work recorded here is finished.',
+						area: v.task.slice(5),
+						entries: [e.id]
+					})
+				: await c.act('file_entries', v.task, { entries: [e.id] });
 			return r?.outcome === 'rejected' ? r.reason : undefined;
 		}
 	});
 }
-
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const clip = (s: string, n = 40) => (s && s.length > n ? s.slice(0, n - 1) + '…' : (s ?? ''));

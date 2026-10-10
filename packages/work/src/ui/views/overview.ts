@@ -273,11 +273,10 @@ function happeningRow(c: Ctx, t: any) {
 
 function headsUpItem(c: Ctx, w: any) {
 	const o = w.object;
-	const text =
-		w.kind === 'untracked_activity' ? w.detail : `${w.title}: ${readableDates(w.detail)}`;
+	const text = w.kind === 'unfiled_work' ? w.detail : `${w.title}: ${readableDates(w.detail)}`;
 	const go =
-		w.kind === 'untracked_activity'
-			? () => c.go({ tab: 'activity', feed: 'untracked' })
+		w.kind === 'unfiled_work'
+			? () => c.go({ tab: 'activity', feed: 'unfiled' })
 			: o?.kind === 'objective'
 				? () => c.go({ objective: o.id })
 				: o?.kind === 'task'
@@ -297,7 +296,7 @@ function headsUpItem(c: Ctx, w: any) {
 						h(
 							'button',
 							{ class: 'fw-link', type: 'button', on: { click: go } },
-							w.kind === 'untracked_activity' ? 'Review' : 'Open'
+							w.kind === 'unfiled_work' ? 'File it' : 'Open'
 						)
 					]
 				: null

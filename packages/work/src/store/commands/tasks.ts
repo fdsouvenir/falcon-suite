@@ -166,25 +166,25 @@ export const taskCommands = [
 		}
 	}),
 	defineCommand({
-		name: 'create_task_from_activity',
-		summary: 'Create a Task that explains untracked activity.',
-		input: obj({ ...NewTask, activity: Type.Array(Id, { minItems: 1, maxItems: 100 }) }),
+		name: 'create_task_from_entries',
+		summary: 'Create a Task for timeline entries (turns of work), moving them under it.',
+		input: obj({ ...NewTask, entries: Type.Array(Id, { minItems: 1, maxItems: 100 }) }),
 		run(ctx, i) {
-			const { activity, ...rest } = i;
+			const { entries, ...rest } = i;
 			const id = insertTask(ctx, rest, placement(ctx, rest));
-			attach(ctx, id, activity);
+			fileEntries(ctx, id, entries);
 			ctx.done(id, 1);
 		}
 	}),
 	defineCommand({
-		name: 'attach_activity',
+		name: 'file_entries',
 		on: 'task',
-		summary: 'Explain untracked activity with an existing Task.',
-		input: obj({ activity: Type.Array(Id, { minItems: 1, maxItems: 100 }) }),
+		summary: 'File timeline entries (turns of work) under this Task, from another Task or unfiled.',
+		input: obj({ entries: Type.Array(Id, { minItems: 1, maxItems: 100 }) }),
 		run(ctx, i, t) {
-			attach(ctx, t!.id as string, i.activity);
+			fileEntries(ctx, t!.id as string, i.entries);
 			const v = ctx.update('task', t!.id as string, { updated_at: ctx.now });
-			ctx.event('task', t!.id as string, v, { attached: i.activity });
+			ctx.event('task', t!.id as string, v, { filed: i.entries });
 			ctx.done(t!.id as string, v);
 		}
 	}),
@@ -544,12 +544,11 @@ export const taskCommands = [
 	})
 ];
 
-function attach(ctx: Context, task: string, ids: string[]) {
+/** Moving an entry is how the person or agent corrects where the record keeper filed it. */
+function fileEntries(ctx: Context, task: string, ids: string[]) {
 	for (const a of ids) {
-		const row = ctx.one<{ task_id: string | null }>('SELECT task_id FROM activity WHERE id = ?', a);
-		if (!row) reject('not_found', `No activity ${a}`);
-		if (row!.task_id && row!.task_id !== task)
-			reject('already_explained', `Activity ${a} already belongs to another Task`);
-		ctx.run('UPDATE activity SET task_id = ? WHERE id = ?', task, a);
+		if (!ctx.one('SELECT 1 FROM timeline_entry WHERE id = ?', a))
+			reject('not_found', `No timeline entry ${a}`);
+		ctx.run('UPDATE timeline_entry SET task_id = ? WHERE id = ?', task, a);
 	}
 }

@@ -10,13 +10,11 @@ export type Thresholds = {
 	stalledHours: number;
 	unansweredDays: number;
 	objectiveDays: number;
-	untrackedHours: number;
 };
 export const DEFAULT_THRESHOLDS: Thresholds = {
 	stalledHours: 48,
 	unansweredDays: 7,
-	objectiveDays: 7,
-	untrackedHours: 24
+	objectiveDays: 7
 };
 
 export type WarningItem = {
@@ -177,14 +175,14 @@ export class Reads {
 		const out: WarningItem[] = [];
 		for (const task of this.all("SELECT * FROM task WHERE status = 'in_progress'")) {
 			const last =
-				this.one('SELECT max(at) AS at FROM activity WHERE task_id = ?', task.id)?.at ??
+				this.one('SELECT max(at) AS at FROM timeline_entry WHERE task_id = ?', task.id)?.at ??
 				task.updated_at;
 			if (age(last) > t.stalledHours)
 				out.push({
 					kind: 'stalled_task',
 					object: { kind: 'task', id: task.id },
 					title: this.taskTitle(task.id),
-					detail: `No recorded activity since ${last}`,
+					detail: `Nothing on its timeline since ${last}`,
 					since: last
 				});
 		}
@@ -232,16 +230,14 @@ export class Reads {
 					since
 				});
 		}
-		const untracked = this.all('SELECT at FROM activity WHERE task_id IS NULL').filter(
-			(a) => age(a.at) <= t.untrackedHours
-		);
-		if (untracked.length)
+		const unfiled = this.all('SELECT at FROM timeline_entry WHERE task_id IS NULL ORDER BY at');
+		if (unfiled.length)
 			out.push({
-				kind: 'untracked_activity',
-				object: { kind: 'activity', id: '' },
-				title: 'Untracked activity',
-				detail: `${untracked.length} action(s) in the last ${t.untrackedHours} hours that no Task explains`,
-				since: untracked.map((a) => a.at).sort()[0]
+				kind: 'unfiled_work',
+				object: { kind: 'timeline', id: '' },
+				title: 'Unfiled work',
+				detail: `${unfiled.length} turn(s) of work not filed under a Task`,
+				since: unfiled[0].at
 			});
 		for (const m of this.all(
 			"SELECT m.*, p.title AS project_title FROM milestone m JOIN project p ON p.id = m.project_id WHERE m.status = 'open' AND p.abandoned_at IS NULL"
@@ -373,10 +369,8 @@ export class Reads {
 				detail.definition = detail.definitions.at(-1);
 				detail.plans = this.all('SELECT * FROM task_plan WHERE task_id = ? ORDER BY rev', id);
 				detail.results = this.all('SELECT * FROM task_result WHERE task_id = ? ORDER BY at', id);
-				detail.activity = this.all(
-					'SELECT * FROM activity WHERE task_id = ? ORDER BY at DESC LIMIT 50',
-					id
-				);
+				detail.timeline = this.timeline({ task: id, limit: 100 }).entries;
+				detail.recorded_by_work = !!this.one('SELECT 1 FROM work_recorded WHERE object_id = ?', id);
 				detail.depends_on = this.all(
 					"SELECT target_id AS id FROM link WHERE kind = 'depends_on' AND source_id = ?",
 					id
@@ -497,20 +491,47 @@ export class Reads {
 		};
 	}
 
-	activity(f: { untracked?: boolean; agent?: string; limit?: number; before?: number } = {}) {
+	/**
+	 * Timeline entries, newest first (spec §10, Timeline): a Task's, a session's, the unfiled ones,
+	 * or everything. Outcomes are parsed; entries without outcomes are turns of discussion.
+	 */
+	timeline(
+		f: {
+			task?: string;
+			session?: string;
+			unfiled?: boolean;
+			agent?: string;
+			limit?: number;
+			before?: string;
+		} = {}
+	) {
+		const where: string[] = [];
+		const args: string[] = [];
+		if (f.task) (where.push('e.task_id = ?'), args.push(f.task));
+		if (f.unfiled) where.push('e.task_id IS NULL');
+		if (f.session) (where.push('e.session_key = ?'), args.push(f.session));
+		if (f.agent) (where.push('e.agent = ?'), args.push(f.agent));
+		if (f.before) (where.push('e.at < ?'), args.push(f.before));
 		const limit = Math.min(f.limit ?? 50, 200);
-		const events = f.untracked
-			? []
-			: this.all(
-					`SELECT seq, at, actor, command, object_kind, object_id, detail FROM event ${f.before ? 'WHERE seq < ?' : ''} ORDER BY seq DESC LIMIT ?`,
-					...(f.before ? [f.before, limit] : [limit])
-				);
-		const activity = this.all(
-			`SELECT * FROM activity WHERE 1 = 1 ${f.untracked ? 'AND task_id IS NULL' : ''} ${f.agent ? 'AND agent = ?' : ''} ORDER BY at DESC LIMIT ?`,
-			...(f.agent ? [f.agent, limit] : [limit])
+		const rows = this.all(
+			`SELECT e.*, (SELECT d.title FROM task t JOIN task_definition d ON d.task_id = t.id AND d.rev = t.definition_rev WHERE t.id = e.task_id) AS task_title
+			 FROM timeline_entry e ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY e.at DESC LIMIT ?`,
+			...args,
+			limit
 		);
-		return { changes: f.agent ? events.filter((e) => e.actor === f.agent) : events, activity };
+		return {
+			entries: rows.map((r) => ({
+				id: r.id,
+				task: r.task_id ? { id: r.task_id, title: r.task_title } : null,
+				agent: r.agent,
+				session: r.session_key,
+				run: r.run_id,
+				at: r.at,
+				outcomes: JSON.parse(r.outcomes),
+				summary: r.summary,
+				recorded_by: r.recorded_by
+			})),
+			next_before: rows.length === limit ? rows.at(-1)!.at : null
+		};
 	}
 }
-
-export { UNFINISHED };

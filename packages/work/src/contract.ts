@@ -9,7 +9,7 @@ export const COMMAND_NAMES = [
 	'add_kpi edit_kpi remove_kpi record_kpi_reading write_review',
 	'create_area edit_area retire_area',
 	'create_project edit_project move_project abandon_project resume_project add_milestone plan_project edit_milestone reorder_milestones achieve_milestone reopen_milestone serve unserve set_session',
-	'create_task create_task_from_activity attach_activity revise_definition revise_plan ready unready assign start wait resume record_result complete reopen abandon move_task detach_from_milestone depend undepend',
+	'create_task create_task_from_entries file_entries revise_definition revise_plan ready unready assign start wait resume record_result complete reopen abandon move_task detach_from_milestone depend undepend',
 	'raise_question add_hypothesis answer accept_hypothesis withdraw_question raise_decision revise_decision decide defer_decision withdraw_decision supersede_decision record_finding retract_finding supersede_finding dismiss_ask'
 ]
 	.join(' ')
@@ -29,7 +29,7 @@ export const VIEWS = [
 	'objectives',
 	'get',
 	'list',
-	'activity',
+	'timeline',
 	'warnings',
 	'help'
 ] as const;
@@ -93,7 +93,7 @@ export const contract = defineFeatureContract({
 		read: {
 			kind: 'query',
 			description:
-				'Read Falcon Work. view: brief (your Tasks, answers, warnings) · needs_you · objectives · get (id) · list (kind + filters) · activity · warnings · help (command: the full input of one falcon_work command).',
+				'Read Falcon Work. view: brief (your Tasks, answers, warnings) · needs_you · objectives · get (id) · list (kind + filters) · timeline (what was done, turn by turn: filters task, session, unfiled) · warnings · help (command: the full input of one falcon_work command).',
 			input: Type.Object(
 				{
 					view: Lit(VIEWS),
@@ -109,12 +109,14 @@ export const contract = defineFeatureContract({
 								status: Type.Optional(Type.String({ maxLength: 32 })),
 								agent: Type.Optional(Type.String({ maxLength: 160 })),
 								text: Type.Optional(Type.String({ maxLength: 200 })),
-								untracked: Type.Optional(Type.Boolean()),
+								task: Type.Optional(Id),
+								session: Type.Optional(Type.String({ maxLength: 256 })),
+								unfiled: Type.Optional(Type.Boolean()),
 								include_inactive: Type.Optional(Type.Boolean()),
 								limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200 })),
 								offset: Type.Optional(Type.Integer({ minimum: 0 })),
-								before: Type.Optional(Type.Integer({ minimum: 1 })),
-								feed: Type.Optional(Lit(['all', 'changes', 'activity', 'untracked']))
+								before: Type.Optional(Type.String({ maxLength: 64 })),
+								feed: Type.Optional(Lit(['all', 'unfiled']))
 							},
 							{ additionalProperties: false }
 						)

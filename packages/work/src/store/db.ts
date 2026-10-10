@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { chmodSync, lstatSync, mkdirSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
-import { SCHEMA, SCHEMA_VERSION } from './schema.js';
+import { RECORD_TABLES, SCHEMA, SCHEMA_VERSION } from './schema.js';
 
 /**
  * Open (or create) the private Work database. `:memory:` is accepted for tests.
@@ -36,6 +36,16 @@ export function openWorkDatabase(file: string): DatabaseSync {
 		try {
 			db.exec(SCHEMA);
 			db.exec(`PRAGMA user_version=${SCHEMA_VERSION}`);
+			db.exec('COMMIT');
+		} catch (error) {
+			db.exec('ROLLBACK');
+			throw error;
+		}
+	} else if (version === 1) {
+		// Preview databases from before the record keeper: its tables replace raw activity.
+		db.exec('BEGIN IMMEDIATE');
+		try {
+			db.exec(`DROP TABLE activity; ${RECORD_TABLES} PRAGMA user_version=2;`);
 			db.exec('COMMIT');
 		} catch (error) {
 			db.exec('ROLLBACK');

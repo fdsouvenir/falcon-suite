@@ -1,4 +1,4 @@
-// The OpenClaw wiring (spec §10): tools, the brief, captured activity and the end-of-turn nudge.
+// The OpenClaw wiring (spec §10): tools, the brief, outcomes and the record keeper.
 // Runs the built plugin against a recording stand-in for the plugin API.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import plugin from '../dist/index.js';
 import { COMMANDS } from '../dist/store/work.js';
 import { COMMAND_NAMES } from '../dist/contract.js';
-import { classify } from '../dist/plugin/activity.js';
+import { outcome } from '../dist/plugin/outcomes.js';
 import { resetWork } from '../dist/plugin/runtime.js';
 import { humanFromClient } from '../dist/plugin/identity.js';
 
@@ -20,6 +20,7 @@ function load(runtime) {
 			get(_, key) {
 				if (key === 'pluginConfig') return {};
 				if (key === 'runtime') return runtime;
+				if (key === 'config') return runtime?.cfg ?? {};
 				if (key === 'logger')
 					return { info: (m) => reg.logs.push(m), warn: (m) => reg.logs.push(m) };
 				if (key === 'id') return 'falcon-work';
@@ -50,36 +51,78 @@ async function started(runtime) {
 	return { reg, call, hook };
 }
 
+const model = (answer) => ({
+	decisions: {
+		calls: [],
+		async evaluate(batch, options) {
+			this.calls.push({ batch, options });
+			return { status: 'ok', result: { model: 'fake', answers: answer(batch, options) } };
+		}
+	}
+});
+const settle = () => new Promise((r) => setTimeout(r, 150));
+
 test('the contract lists exactly the store commands', () => {
 	assert.deepEqual([...COMMAND_NAMES].sort(), COMMANDS.map((c) => c.name).sort());
 });
 
-test('read-only tool calls are not work; changes are', () => {
-	assert.equal(classify('read', { path: '/x' }), null);
-	assert.equal(classify('exec', { command: 'git status && ls -la | grep x' }), null);
-	assert.equal(classify('exec', { command: 'rm -rf build' }).kind, 'command');
-	assert.equal(classify('exec', { command: 'git commit -m "x"' }).kind, 'commit');
+test('outcomes are what a turn left outside the chat; reads and unknown calls are not', () => {
+	const kind = (tool, params, opts) => outcome(tool, params, opts)?.kind ?? null;
+	assert.equal(kind('read', { path: '/x' }), null);
+	assert.equal(kind('exec', { command: 'git status && ls -la | grep x' }), null);
+	// Claude Code's tools count like OpenClaw's own (the cause of the untracked flood, 2026-10-08).
 	assert.equal(
-		classify('exec', { command: 'clawhub package publish packages/work' }).kind,
-		'release'
+		kind('Bash', {
+			command: 'grep -rn -i "falcon\\|hook" ~/.claude/settings.json 2>/dev/null | head -40'
+		}),
+		null
 	);
-	assert.equal(classify('write', { path: 'USER.md' }).kind, 'file');
-	assert.equal(classify('message', { action: 'send', target: 'discord:1' }).kind, 'message');
-	assert.equal(classify('message', { action: 'read' }), null);
-	assert.equal(classify('automations', { action: 'list' }), null);
-	assert.equal(classify('automations', { action: 'add' }).kind, 'config');
-	assert.equal(classify('falcon_work', { command: 'start' }), null);
-	assert.equal(classify('write', { path: 'x' }, 'EACCES'), null, 'failed calls changed nothing');
-	assert.equal(classify('some_new_tool', {}).kind, 'api', 'unknown tools count as changes');
+	assert.equal(kind('Bash', { command: 'cd ~/x; sed -n 130,160p a.mjs; echo ---; ls y' }), null);
 	assert.equal(
-		classify(
-			'exec',
-			{ script: 'return await falcon_work_read({view:"help"})' },
-			undefined,
-			'code_mode_exec'
-		),
+		kind('Bash', { command: 'd=$(find ~ -maxdepth 4 -type d | head -3); echo "$d"' }),
+		null
+	);
+	assert.equal(kind('Read', { file_path: '/x' }), null);
+	assert.equal(kind('Grep', { pattern: 'x' }), null);
+	assert.equal(
+		kind('Bash', { command: 'npm test 2>&1 | tail -20' }),
 		null,
-		'code-mode wrappers are not activity'
+		'test runs are not outcomes'
+	);
+	assert.equal(kind('some_new_tool', {}), null, 'unknown calls are not outcomes');
+	const commit = outcome(
+		'Bash',
+		{ command: 'git add -A && git commit -qm "feat: timeline"' },
+		{ result: '[main 4fdd0ff] feat: timeline' }
+	);
+	assert.deepEqual(commit, { kind: 'commit', label: 'feat: timeline', ref: '4fdd0ff' });
+	assert.equal(kind('exec', { command: 'git push -q' }), 'push');
+	assert.equal(kind('exec', { command: 'clawhub package publish packages/work' }), 'release');
+	assert.equal(
+		kind('exec', {
+			command: "ssh building-902 'podman exec c openclaw plugins update falcon-work-preview'"
+		}),
+		'deploy'
+	);
+	assert.equal(kind('exec', { command: 'gh issue comment 382 -R x/y -F /tmp/c.md' }), 'message');
+	assert.equal(
+		kind('exec', { command: 'rm -rf /tmp/scratch' }),
+		null,
+		'scratch cleanup is not an outcome'
+	);
+	assert.equal(kind('Edit', { file_path: 'src/a.ts' }), 'file');
+	assert.equal(kind('write', { path: 'USER.md' }), 'file');
+	assert.equal(kind('message', { action: 'send', target: 'discord:1' }), 'message');
+	assert.equal(kind('message', { action: 'read' }), null);
+	assert.equal(kind('automations', { action: 'list' }), null);
+	assert.equal(kind('automations', { action: 'add' }), 'config');
+	assert.equal(kind('falcon_work', { command: 'start' }), null);
+	assert.equal(kind('mcp__openclaw__falcon_work_task', { action: 'start' }), null);
+	assert.equal(kind('sessions_spawn', { task: 'x' }), null, 'coordination is not an outcome');
+	assert.equal(
+		kind('write', { path: 'x' }, { error: 'EACCES' }),
+		null,
+		'failed calls changed nothing'
 	);
 });
 
@@ -101,27 +144,45 @@ test('registers the tools, the UI operations and the three hooks', async () => {
 		'read',
 		'task'
 	]);
-	for (const h of ['before_prompt_build', 'after_tool_call', 'before_agent_finalize'])
+	for (const h of [
+		'before_prompt_build',
+		'after_tool_call',
+		'before_agent_finalize',
+		'subagent_spawned'
+	])
 		assert.ok(reg.hooks[h], h);
 });
 
-test('untracked changes get exactly one nudge; recorded work gets none', async () => {
+const finalize = (hook, runId, reply = 'Done.', ctx = {}) =>
+	hook(
+		'before_agent_finalize',
+		{ runId, sessionId: 's', stopHookActive: false, lastAssistantMessage: reply },
+		{ runId, ...ctx }
+	);
+
+test("without models, a turn is filed under the session's Task, or waits as unfiled work", async () => {
 	const { call, hook } = await started();
 	const brief = hook('before_prompt_build', {});
-	assert.match(brief.prependSystemContext, /Falcon Work/);
-	assert.match(brief.prependContext, /no Task in progress/);
+	assert.match(brief.prependSystemContext, /records what each turn changes on its own/);
+	assert.doesNotMatch(brief.prependContext, /no Task in progress/, 'no pressure line');
+
+	hook('after_tool_call', { toolName: 'Bash', params: { command: 'grep -rn x .' }, runId: 'r0' });
+	assert.equal(finalize(hook, 'r0'), undefined, 'never asks the agent to redo its reply');
+	await settle();
+	assert.equal(
+		(await call('falcon_work_read', { view: 'timeline' })).entries.length,
+		0,
+		'reads leave nothing'
+	);
 
 	hook('after_tool_call', { toolName: 'write', params: { path: 'USER.md' }, runId: 'r1' });
-	const nudge = hook('before_agent_finalize', {
-		runId: 'r1',
-		sessionId: 's',
-		stopHookActive: false
-	});
-	assert.equal(nudge.action, 'revise');
-	assert.equal(
-		hook('before_agent_finalize', { runId: 'r1', sessionId: 's', stopHookActive: false }),
-		undefined
-	);
+	finalize(hook, 'r1');
+	await settle();
+	const unfiled = await call('falcon_work_read', { view: 'timeline', filters: { unfiled: true } });
+	assert.equal(unfiled.entries.length, 1);
+	assert.deepEqual(unfiled.entries[0].outcomes, [
+		{ kind: 'file', label: 'USER.md', ref: 'USER.md' }
+	]);
 
 	const area = (
 		await call('falcon_work', {
@@ -129,30 +190,169 @@ test('untracked changes get exactly one nudge; recorded work gets none', async (
 			input: { title: 'Home', description: 'd' }
 		})
 	).id;
-	const t = await call('falcon_work', {
-		command: 'create_task',
-		input: { title: 'Fix plunge', description: 'd', done_when: 'x', area }
+	const t = await call('falcon_work_task', {
+		action: 'create',
+		title: 'Fix plunge',
+		description: 'd',
+		done_when: 'x',
+		area,
+		start: true
 	});
 	assert.equal(t.outcome, 'committed');
-	assert.equal(
-		(await call('falcon_work', { command: 'start', id: t.id, input: { claim: true } })).outcome,
-		'committed'
+	assert.match(
+		hook('before_prompt_build', {}).prependContext,
+		/This session's work is recorded under: Fix plunge/
 	);
 	hook('after_tool_call', {
 		toolName: 'exec',
 		params: { command: 'git commit -m fix' },
+		result: '[main abc1234] fix',
 		runId: 'r2'
 	});
+	finalize(hook, 'r2');
+	await settle();
+	const task = await call('falcon_work_read', { view: 'get', id: t.id });
+	assert.equal(task.timeline.length, 1);
+	assert.equal(task.timeline[0].outcomes[0].kind, 'commit');
+	assert.equal(task.timeline[0].recorded_by, 'work');
+
+	// Another session does not inherit this session's Task.
+	hook(
+		'after_tool_call',
+		{ toolName: 'write', params: { path: 'other.md' }, runId: 'r3' },
+		{ sessionKey: 'agent:verl:other' }
+	);
+	finalize(hook, 'r3', 'Done.', { sessionKey: 'agent:verl:other' });
+	await settle();
 	assert.equal(
-		hook('before_agent_finalize', { runId: 'r2', sessionId: 's', stopHookActive: false }),
-		undefined,
-		'attached to the in-progress Task'
+		(await call('falcon_work_read', { view: 'timeline', filters: { unfiled: true } })).entries
+			.length,
+		2
+	);
+});
+
+test('the record keeper opens a Task for new work and completes it when its done-when is met', async () => {
+	const runtime = {
+		...model((batch, options) =>
+			options.purpose !== 'falcon-work.record'
+				? {}
+				: batch.questions.done
+					? {
+							place: { type: 'choice', choice: 'current', probabilities: { current: 0.9 } },
+							done: { type: 'boolean', probabilityTrue: 0.95 }
+						}
+					: {
+							place: { type: 'choice', choice: 'new_work', probabilities: { new_work: 0.9 } },
+							where: { type: 'choice', choice: 'a1', probabilities: { a1: 0.9 } }
+						}
+		),
+		cfg: { agents: { defaults: { utilityModel: 'openai/gpt-5.6-luna' } } },
+		llm: {
+			prompts: [],
+			async complete(p) {
+				this.prompts.push(p);
+				const text = p.messages[0].content;
+				return {
+					text: JSON.stringify({
+						summary: 'Enrolled the Building in NetBird.',
+						...(text.includes('"task"')
+							? {
+									task: {
+										title: 'Protected NetBird enrollment',
+										description: 'Enroll new Buildings.',
+										done_when: 'A new Building enrolls itself.'
+									}
+								}
+							: {}),
+						...(text.includes('"result"') ? { result: 'Buildings now enroll themselves.' } : {})
+					})
+				};
+			}
+		}
+	};
+	const { reg, call, hook } = await started(runtime);
+	// The writer uses the utility model, never the agent's main one.
+	const api = reg;
+	await call('falcon_work', {
+		command: 'create_area',
+		input: { title: 'Fredbot Platform', description: 'd' }
+	});
+	hook(
+		'before_prompt_build',
+		{
+			prompt: 'wire NetBird enrollment',
+			currentUserMessage: 'wire NetBird enrollment',
+			messages: []
+		},
+		{ runId: 'n1', trigger: 'user' }
+	);
+	hook('after_tool_call', {
+		toolName: 'Bash',
+		params: { command: 'git commit -m "NetBird enrollment"' },
+		result: '[main 16593e1] NetBird enrollment',
+		runId: 'n1'
+	});
+	finalize(hook, 'n1');
+	await settle();
+	const tasks = (await call('falcon_work_read', { view: 'list', kind: 'task' })).items;
+	assert.equal(tasks.length, 1);
+	const t = await call('falcon_work_read', { view: 'get', id: tasks[0].id });
+	assert.equal(t.definition.title, 'Protected NetBird enrollment');
+	assert.equal(t.status, 'in_progress');
+	assert.equal(t.recorded_by_work, true);
+	assert.equal(t.timeline[0].summary, 'Enrolled the Building in NetBird.');
+	assert.equal(t.timeline[0].outcomes[0].ref, '16593e1');
+	assert.equal(runtime.llm.prompts[0].purpose, 'falcon-work.record');
+	assert.equal(
+		runtime.llm.prompts[0].model,
+		'openai/gpt-5.6-luna',
+		'the utility model, not the main one'
 	);
 
+	hook('after_tool_call', {
+		toolName: 'Bash',
+		params: { command: 'git commit -m "enrollment test"' },
+		runId: 'n2'
+	});
+	finalize(hook, 'n2');
+	await settle();
+	const done = await call('falcon_work_read', { view: 'get', id: t.id });
+	assert.equal(done.status, 'completed');
+	assert.equal(done.timeline.length, 2);
+	void api;
+});
+
+test('a subagent works under the Task of the session that spawned it', async () => {
+	const { call, hook } = await started();
+	const area = (
+		await call('falcon_work', {
+			command: 'create_area',
+			input: { title: 'Home', description: 'd' }
+		})
+	).id;
+	const t = await call('falcon_work_task', {
+		action: 'create',
+		title: 'Provisioning',
+		description: 'd',
+		done_when: 'x',
+		area,
+		start: true
+	});
+	hook(
+		'subagent_spawned',
+		{ childSessionKey: 'agent:verl:sub1', agentId: 'verl', mode: 'run', threadRequested: false },
+		{ childSessionKey: 'agent:verl:sub1', requesterSessionKey: 'agent:verl:main' }
+	);
+	hook(
+		'after_tool_call',
+		{ toolName: 'Edit', params: { file_path: 'src/netbird.ts' }, runId: 's1' },
+		{ sessionKey: 'agent:verl:sub1' }
+	);
+	finalize(hook, 's1', 'Done.', { sessionKey: 'agent:verl:sub1' });
+	await settle();
 	const task = await call('falcon_work_read', { view: 'get', id: t.id });
-	assert.equal(task.activity.length, 1);
-	assert.equal(task.activity[0].kind, 'commit');
-	assert.match(hook('before_prompt_build', {}).prependContext, /In progress: Fix plunge/);
+	assert.equal(task.timeline.length, 1);
+	assert.equal(task.timeline[0].session, 'agent:verl:sub1');
 });
 
 test('the objectives, Project and Activity pages load through the UI read', async () => {
@@ -193,9 +393,9 @@ test('the objectives, Project and Activity pages load through the UI read', asyn
 				input: { outcome: `${n}`.padEnd(12000, 'x'), reason: `round ${n}` }
 			})
 		);
-	const feed = await unwrap(read({ view: 'feed', filters: { feed: 'changes' } }));
+	const feed = await unwrap(read({ view: 'feed', filters: { feed: 'all' } }));
 	assert.equal(feed.error, undefined, feed.error);
-	assert.equal(feed.items[0].detail.reason, 'round 29');
+	assert.deepEqual(feed.items, [], 'Activity is timelines, not command history');
 });
 
 test('a retried tool call with the same id does not apply twice', async () => {
@@ -392,10 +592,10 @@ test('the intent tools: plan a Project, track a Task, ask the person, record a F
 	assert.equal(bad.code, 'invalid_input');
 });
 
-test('Code Mode scripts passed as code, and progress cards, are not activity', () => {
-	assert.equal(classify('exec', { code: 'const p = await falcon_work_read({view:"get"})' }), null);
-	assert.equal(classify('progress_card', { markdown: 'x' }), null);
-	assert.equal(classify('falcon_work_task', { action: 'start' }), null);
+test('Code Mode scripts passed as code, and progress cards, are not outcomes', () => {
+	assert.equal(outcome('exec', { code: 'const p = await falcon_work_read({view:"get"})' }), null);
+	assert.equal(outcome('progress_card', { markdown: 'x' }), null);
+	assert.equal(outcome('falcon_work_task', { action: 'start' }), null);
 });
 
 test('several Questions in one call, holding the Tasks they block on the person asked', async () => {
@@ -446,14 +646,14 @@ test('several Questions in one call, holding the Tasks they block on the person 
 	assert.equal(noWho.code, 'invalid_input', 'a wait always says who or what');
 });
 
-test('Code Mode scripts are not activity however they start', () => {
+test('Code Mode scripts are not outcomes however they start', () => {
 	for (const command of [
 		"const ts = await catalog.search('memory_search'); text(await ts[0]({}))",
 		'text(await falcon_work_read({view:"brief"}))',
 		'for (const id of ids) text(await falcon_work_read({view:"get", id}))'
 	])
-		assert.equal(classify('exec', { command }), null, command);
-	assert.equal(classify('exec', { command: 'for f in *.log; do rm "$f"; done' }).kind, 'command');
+		assert.equal(outcome('exec', { command }), null, command);
+	assert.equal(outcome('exec', { command: 'for f in *.log; do rm "$f"; done' }).kind, 'change');
 });
 
 test('the text check behind the fallback reminder recognises asks, including requests without a question mark', async () => {
@@ -469,16 +669,6 @@ test('the text check behind the fallback reminder recognises asks, including req
 });
 
 /** A stand-in decision model: answers come from a function of the request. */
-const model = (answer) => ({
-	decisions: {
-		calls: [],
-		async evaluate(batch, options) {
-			this.calls.push({ batch, options });
-			return { status: 'ok', result: { model: 'fake', answers: answer(batch, options) } };
-		}
-	}
-});
-const settle = () => new Promise((r) => setTimeout(r, 150));
 const turn = async (hook, runId, message, reply, ctx = {}) => {
 	hook(
 		'before_prompt_build',

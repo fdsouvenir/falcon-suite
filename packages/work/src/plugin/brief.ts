@@ -1,7 +1,7 @@
 import type { Reads } from '../store/reads.js';
 
 /** Static guidance, cacheable in the system prompt. Kept short on purpose (spec §10). */
-export const GUIDANCE = `Falcon Work is the person's view of your work: their Objectives (what they want progress toward), Areas (standing responsibilities), Projects (outcomes, reached through ordered Milestones), Tasks (units of work with a definition of done), and the Questions, Decisions and Findings around them. Your brief each turn shows what is there. The falcon_work_* tools describe what each one does.
+export const GUIDANCE = `Falcon Work is the person's view of your work: their Objectives (what they want progress toward), Areas (standing responsibilities), Projects (outcomes, reached through ordered Milestones), Tasks (units of work with a definition of done), and the Questions, Decisions and Findings around them. Your brief each turn shows what is there. The falcon_work_* tools describe what each one does. Work records what each turn changes on its own, under the session's Task; your falcon_work calls add to or correct that record.
 If Falcon Work errors or is unavailable, do what was asked anyway.`;
 
 /** The per-turn brief for one agent, as compact text. Empty sections are omitted. */
@@ -9,10 +9,14 @@ export function renderBrief(
 	reads: Reads,
 	agent: string,
 	since: string | null,
-	now: string
+	now: string,
+	/** The Task this session's work is recorded under, if any. */
+	sessionTask: { id: string; title: string } | null = null
 ): string {
 	const b = reads.brief(agent, since, now);
 	const lines: string[] = ['Falcon Work — your brief'];
+	if (sessionTask)
+		lines.push(`This session's work is recorded under: ${sessionTask.title} (${sessionTask.id})`);
 	if (b.objectives.length)
 		lines.push(
 			'Objectives (by rank): ' +
@@ -57,10 +61,11 @@ export function renderBrief(
 				: `Decided by ${r.by}: "${r.prompt}" → ${r.chosen}`
 		);
 	for (const a of b.asks_for_you) lines.push(`Asked of you: ${a.prompt} (ask ${a.id})`);
-	for (const w of b.warnings.slice(0, 5))
+	// Unfiled work is the record keeper's, not the agent's, to sort out.
+	const warnings = b.warnings.filter((w) => w.kind !== 'unfiled_work');
+	for (const w of warnings.slice(0, 5))
 		lines.push(`Warning — ${w.kind.replace(/_/g, ' ')}: ${w.title}. ${w.detail}`);
-	if (b.warnings.length > 5)
-		lines.push(`…and ${b.warnings.length - 5} more warnings (falcon_work_read warnings).`);
-	if (!b.in_progress.length) lines.push('You have no Task in progress.');
+	if (warnings.length > 5)
+		lines.push(`…and ${warnings.length - 5} more warnings (falcon_work_read warnings).`);
 	return lines.join('\n');
 }

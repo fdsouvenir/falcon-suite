@@ -249,8 +249,8 @@ export class Views {
 			happening,
 			heads_up,
 			completed,
-			untracked: {
-				count: this.one('SELECT count(*) AS n FROM activity WHERE task_id IS NULL')!.n
+			unfiled: {
+				count: this.one('SELECT count(*) AS n FROM timeline_entry WHERE task_id IS NULL')!.n
 			},
 			objectives: this.objectivesTab()
 		};
@@ -493,54 +493,22 @@ export class Views {
 		};
 	}
 
-	/** One feed of recorded changes and captured activity, newest first. */
-	feed(f: {
-		filter?: 'all' | 'changes' | 'activity' | 'untracked';
-		area?: string;
-		limit?: number;
-	}) {
-		const limit = Math.min(f.limit ?? 100, 300);
-		const filter = f.filter ?? 'all';
-		const items: Row[] = [];
-		if (filter === 'all' || filter === 'changes')
-			for (const e of this.all('SELECT * FROM event ORDER BY seq DESC LIMIT ?', limit))
-				items.push({
-					type: 'change',
-					at: e.at,
-					actor: e.actor,
-					command: e.command,
-					object: {
-						kind: e.object_kind,
-						id: e.object_id,
-						title: this.title(e.object_kind, e.object_id)
-					},
-					detail: parse(e.detail)
-				});
-		if (filter !== 'changes')
-			for (const a of this.all(
-				`SELECT * FROM activity ${filter === 'untracked' ? 'WHERE task_id IS NULL' : ''} ORDER BY at DESC LIMIT ?`,
-				limit
-			))
-				items.push({
-					type: 'activity',
-					id: a.id,
-					at: a.at,
-					actor: a.agent,
-					kind: a.kind,
-					summary: a.summary,
-					ref: a.ref,
-					untracked: !a.task_id,
-					object: a.task_id
-						? { kind: 'task', id: a.task_id, title: this.reads.taskTitle(a.task_id) }
-						: null
-				});
+	/**
+	 * The Activity tab: every Task's timeline, newest first (spec §10, Timeline). Each entry is one
+	 * turn: its outcomes, its summary, and the session it happened in.
+	 */
+	feed(f: { filter?: 'all' | 'unfiled'; agent?: string; limit?: number; before?: string }) {
+		const t = this.reads.timeline({
+			unfiled: f.filter === 'unfiled',
+			agent: f.agent,
+			limit: Math.min(f.limit ?? 100, 200),
+			before: f.before
+		});
 		// Long text is clipped (the full record stays on the object); the newest entries that fit are kept.
 		const kept: unknown[] = [];
 		let used = { values: 4, bytes: 64 };
-		for (const item of items
-			.sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0))
-			.slice(0, limit)) {
-			const c = clip(item);
+		for (const item of t.entries) {
+			const c = clip(item as unknown as Row);
 			const next = {
 				values: used.values + values(c),
 				bytes: used.bytes + Buffer.byteLength(JSON.stringify(c)) + 1
@@ -550,9 +518,10 @@ export class Views {
 			used = next;
 		}
 		return {
-			untracked_count: this.one('SELECT count(*) AS n FROM activity WHERE task_id IS NULL')!.n,
+			unfiled_count: this.one('SELECT count(*) AS n FROM timeline_entry WHERE task_id IS NULL')!.n,
 			items: kept,
-			truncated: kept.length < Math.min(items.length, limit)
+			next_before: kept.length < t.entries.length ? null : t.next_before,
+			truncated: kept.length < t.entries.length
 		};
 	}
 

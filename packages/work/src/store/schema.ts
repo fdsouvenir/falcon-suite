@@ -1,8 +1,43 @@
-// Work 5 schema, version 1. Mirrors docs/work-spec.md.
+// Work 5 schema, version 2. Mirrors docs/work-spec.md.
 // Ids are text. Times are ISO-8601 UTC text. Mutable objects carry an optimistic `version`.
 // JSON columns hold arrays/objects that are always read and written whole.
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
+
+/**
+ * The record keeper's tables (spec §10, The record keeper). Raw tool calls are never stored: a
+ * timeline entry holds a turn's outcomes and summary and points at the session transcript.
+ */
+export const RECORD_TABLES = `
+CREATE TABLE timeline_entry (
+	id TEXT PRIMARY KEY,
+	task_id TEXT REFERENCES task(id),
+	agent TEXT NOT NULL,
+	session_key TEXT,
+	run_id TEXT UNIQUE,
+	at TEXT NOT NULL,
+	outcomes TEXT NOT NULL CHECK (json_valid(outcomes)),
+	summary TEXT,
+	recorded_by TEXT NOT NULL CHECK (recorded_by IN ('work','agent'))
+) STRICT;
+CREATE INDEX timeline_task ON timeline_entry(task_id, at);
+
+CREATE TABLE session_task (
+	session_key TEXT PRIMARY KEY,
+	task_id TEXT NOT NULL REFERENCES task(id),
+	set_at TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE session_parent (
+	session_key TEXT PRIMARY KEY,
+	parent_key TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE work_recorded (
+	object_id TEXT PRIMARY KEY,
+	at TEXT NOT NULL
+) STRICT;
+`;
 
 export const SCHEMA = `
 CREATE TABLE objective (
@@ -152,17 +187,7 @@ CREATE TABLE task_result (
 	at TEXT NOT NULL
 ) STRICT;
 
-CREATE TABLE activity (
-	id TEXT PRIMARY KEY,
-	task_id TEXT REFERENCES task(id),
-	agent TEXT NOT NULL,
-	session_key TEXT,
-	at TEXT NOT NULL,
-	kind TEXT NOT NULL CHECK (kind IN ('command','file','message','commit','release','config','api','session')),
-	summary TEXT NOT NULL,
-	ref TEXT
-) STRICT;
-CREATE INDEX activity_task ON activity(task_id, at);
+${RECORD_TABLES}
 
 CREATE TABLE question (
 	id TEXT PRIMARY KEY,

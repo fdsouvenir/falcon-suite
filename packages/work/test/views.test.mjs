@@ -69,7 +69,7 @@ function world() {
 		command: 'raise_question',
 		input: { prompt: 'Which model?', impact: 'i', answerable_by: [FRED.id], hypothesis: 'gpt-5.5' }
 	});
-	w.recordActivity({ agent: 'agent:otto', kind: 'file', summary: 'edited USER.md' }); // otto has no Task in progress
+	w.recordTurn({ agent: 'agent:otto', outcomes: [{ kind: 'file', label: 'USER.md' }], by: 'work' }); // unfiled
 	return { w, o, area, p, m, t1, t2, d, q };
 }
 
@@ -93,7 +93,7 @@ test('overview: what needs the person, what is happening, and sessions with fall
 	assert.equal(v.happening[0].id, t1);
 	assert.deepEqual(v.happening[0].session, { key: 'agent:main:dashboard:proj', from: 'project' });
 	assert.deepEqual(v.summary, { decide: 1, answer: 1, todo: 0, in_progress: 1 });
-	assert.equal(v.untracked.count, 1);
+	assert.equal(v.unfiled.count, 1);
 	assert.equal(v.objectives[0].serving.projects[0].tasks_total, 2);
 	assert.equal(
 		w.views.overview('person:other', w.now()).needs_you.decisions.length,
@@ -180,12 +180,13 @@ test('areas, project and objective pages carry the closure rule and dependencies
 	assert.equal(obj.autonomy, 'act');
 });
 
-test('feed merges changes and captured activity; panel shows a Task in full', () => {
+test('feed is every timeline, newest first; panel shows a Task in full', () => {
 	const { w, t1, t2 } = world();
 	const feed = w.views.feed({});
-	assert.ok(feed.items.some((x) => x.type === 'activity' && x.untracked));
-	assert.ok(feed.items.some((x) => x.type === 'change' && x.command === 'start'));
-	assert.equal(w.views.feed({ filter: 'untracked' }).items.length, 1);
+	assert.equal(feed.items.length, 1);
+	assert.equal(feed.items[0].task, null);
+	assert.equal(feed.unfiled_count, 1);
+	assert.equal(w.views.feed({ filter: 'unfiled' }).items.length, 1);
 	const panel = w.views.panel(t1, FRED.id);
 	assert.equal(panel.card.status, 'in_progress');
 	assert.deepEqual(

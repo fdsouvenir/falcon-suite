@@ -1,6 +1,6 @@
 import type { Ctx } from '../app.js';
 import { h, day, since, who, avatar, icon } from '../dom.js';
-import { sessionChip, evidence, openPanel } from '../parts.js';
+import { sessionChip, evidence, openPanel, timeline } from '../parts.js';
 
 /** The side panel for a Task, Question, Decision or Finding, over the current page. */
 export async function panelView(c: Ctx, id: string) {
@@ -138,16 +138,10 @@ export async function panelView(c: Ctx, id: string) {
 				)
 			: null,
 		field(
-			'Activity (captured automatically)',
-			d.activity.length
-				? h(
-						'ul',
-						{ class: 'fw-history' },
-						d.activity
-							.slice(0, 10)
-							.map((a: any) => h('li', null, `${day(a.at)} · ${a.kind} · ${a.summary}`))
-					)
-				: h('p', { class: 'fw-muted' }, 'Nothing captured yet.')
+			'Timeline',
+			d.timeline.length
+				? timeline(c, d.timeline)
+				: h('p', { class: 'fw-muted' }, 'Nothing done on it yet.')
 		),
 		field(
 			'Result',

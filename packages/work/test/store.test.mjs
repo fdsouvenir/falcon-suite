@@ -441,26 +441,41 @@ test('Commands are idempotent per key and refuse stale versions', () => {
 	);
 });
 
-test('Activity: attached to the in-progress Task, else untracked; Warnings need no reporting', () => {
+test('Timeline: session turns go under its Task, else unfiled; Warnings need no reporting', () => {
 	const { w, ok, task, advance } = setup();
 	const o = ok(
 		{ command: 'create_objective', input: { title: 'Revenue', statement: 's' } },
 		FRED
 	).id;
 	const t = task();
-	assert.equal(
-		w.recordActivity({ agent: VERL.id, kind: 'file', summary: 'edited USER.md' }).task,
-		null
-	);
+	const file = { kind: 'file', label: 'USER.md' };
+	w.recordTurn({
+		agent: VERL.id,
+		session: 's1',
+		task: w.sessionTask('s1'),
+		outcomes: [file],
+		by: 'work'
+	});
 	ok({ command: 'start', id: t, input: { claim: true } });
-	assert.equal(
-		w.recordActivity({ agent: VERL.id, kind: 'commit', summary: 'committed', ref: 'abc' }).task,
-		t
-	);
-	const untracked = w.reads.activity({ untracked: true }).activity;
-	assert.equal(untracked.length, 1);
-	ok({ command: 'attach_activity', id: t, input: { activity: [untracked[0].id] } });
-	assert.equal(w.reads.activity({ untracked: true }).activity.length, 0);
+	w.setSessionTask('s1', t);
+	w.setParent('s1-sub', 's1');
+	assert.equal(w.sessionTask('s1-sub'), t, "a subagent inherits its parent session's Task");
+	assert.equal(w.sessionTask('s2'), null, 'another session does not');
+	w.recordTurn({
+		agent: VERL.id,
+		session: 's1',
+		run: 'r',
+		task: w.sessionTask('s1'),
+		outcomes: [{ kind: 'commit', label: 'c', ref: 'abc' }],
+		by: 'work'
+	});
+	w.recordTurn({ agent: VERL.id, session: 's1', run: 'r', task: t, outcomes: [], by: 'work' });
+	assert.equal(w.reads.timeline({ task: t }).entries.length, 1, 'one entry per run');
+	const unfiled = w.reads.timeline({ unfiled: true }).entries;
+	assert.equal(unfiled.length, 1);
+	assert.ok(w.reads.warnings(w.now()).some((x) => x.kind === 'unfiled_work'));
+	ok({ command: 'file_entries', id: t, input: { entries: [unfiled[0].id] } });
+	assert.equal(w.reads.timeline({ unfiled: true }).entries.length, 0);
 	advance(24 * 8);
 	const kinds = w.reads
 		.warnings(w.now())
