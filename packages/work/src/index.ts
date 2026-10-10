@@ -533,7 +533,6 @@ const feature = defineFeaturePlugin({
 					await llm.complete!({
 						messages: [{ role: 'user', content: prompt }],
 						model,
-						agentId,
 						maxTokens: 600,
 						temperature: 0.2,
 						purpose: 'falcon-work.record'
