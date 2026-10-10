@@ -322,6 +322,7 @@ export async function keepRecord(
 	const other = others.find((t) => t.key === choice);
 	if (other) task = other.id;
 	const isNew = choice === 'new_work';
+	let doneP: number | null = answers?.done?.probabilityTrue ?? null;
 	let done =
 		!isNew &&
 		task === currentId &&
@@ -383,7 +384,8 @@ export async function keepRecord(
 					turn.agentId,
 					deps.log
 				);
-				done = (check?.done?.probabilityTrue ?? 0) >= DONE_THRESHOLD;
+				doneP = check?.done?.probabilityTrue ?? null;
+				done = (doneP ?? 0) >= DONE_THRESHOLD;
 			}
 		} else task = null; // new work Work could not write up waits as unfiled
 	}
@@ -406,7 +408,7 @@ export async function keepRecord(
 		if (r.outcome !== 'rejected') acted.push(`completed ${task}`);
 	}
 	deps.log?.(
-		`record keeper: ${choice}${p ? ` ${p.toFixed(2)}` : ''} → ${task ?? 'unfiled'}${acted.length ? ` (${acted.join(', ')})` : ''}`
+		`record keeper: ${choice}${p ? ` ${p.toFixed(2)}` : ''} → ${task ?? 'unfiled'}${doneP !== null ? `, done ${doneP.toFixed(2)}` : ''}${acted.length ? ` (${acted.join(', ')})` : ''}`
 	);
 	deps.logDecisions?.({
 		at: w.now(),
@@ -416,6 +418,7 @@ export async function keepRecord(
 		run: turn.run,
 		outcomes,
 		answers,
+		done: doneP,
 		task,
 		acted
 	});

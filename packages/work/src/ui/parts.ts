@@ -1,5 +1,5 @@
 import type { Ctx } from './app.js';
-import { h, icon, statusIcon, day, since, who, avatar, kicker } from './dom.js';
+import { h, icon, statusIcon, day, since, time, who, avatar, kicker } from './dom.js';
 
 type SessionRef = { key: string; from: 'own' | 'project' | 'task' } | null;
 
@@ -354,8 +354,14 @@ const outcomeChip = (o: { kind: string; label: string; ref?: string }) =>
 		{ class: `fw-chip fw-outcome fw-outcome-${o.kind}`, title: o.ref ?? o.label },
 		h('span', { class: 'fw-muted' }, `${OUTCOME_LABEL[o.kind] ?? o.kind} `),
 		o.kind === 'commit' && o.ref ? h('span', { class: 'fw-mono' }, `${o.ref.slice(0, 7)} `) : null,
-		o.label.length > 60 ? o.label.slice(0, 59) + '…' : o.label
+		short(o.label)
 	);
+
+/** Paths read from the workspace or the home folder; long labels are clipped. */
+function short(label: string) {
+	const s = label.replace(/^.*\/\.openclaw\/workspace\//, '').replace(/^\/home\/[^/]+\//, '~/');
+	return s.length > 60 ? s.slice(0, 59) + '…' : s;
+}
 
 /**
  * A timeline (spec §10, Timeline): one entry per turn that changed something, its outcomes as
@@ -394,7 +400,7 @@ export function timeline(
 				h(
 					'div',
 					{ class: 'fw-tl-head' },
-					h('span', { class: 'fw-mono fw-muted' }, `${day(e.at)} ${since(e.at)}`),
+					h('span', { class: 'fw-mono fw-muted', title: e.at }, `${day(e.at)} ${time(e.at)}`),
 					opts.showTask
 						? e.task
 							? h(
