@@ -829,6 +829,10 @@ button.fw-choice:hover {
 .fw-tl-unfiled {
 	background: color-mix(in srgb, var(--warn) 6%, transparent);
 }
+/* A pill keeps its own width when it sits in a grid (the panel header). */
+.fw-pill {
+	justify-self: start;
+}
 .fw-pill-done {
 	background: color-mix(in srgb, var(--ok) 14%, transparent);
 	color: var(--ok);
