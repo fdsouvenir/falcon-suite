@@ -44,6 +44,8 @@ type RunState = {
 	request: string | null;
 	/** What the turn was asked, whoever asked it (a subagent's task, a scheduled prompt). */
 	prompt: string | null;
+	/** The agent's final reply, from before_agent_finalize. */
+	reply?: string;
 };
 
 /** Provider small-model defaults OpenClaw uses when no utility model is set (concepts/models). */
@@ -540,7 +542,7 @@ const feature = defineFeaturePlugin({
 				).text;
 		};
 
-		// At the end of every turn: the record keeper files what changed; on turns the person started,
+		// At the end of every turn: keep the reply for the record keeper; on turns the person started,
 		// the gates catch what the reply leaves waiting on them.
 		api.on('before_agent_finalize', (event, ctx) => {
 			if (event.stopHookActive) return;
@@ -559,27 +561,36 @@ const feature = defineFeaturePlugin({
 					state.asked
 				);
 			if (session && reply) lastReply.set(session, reply);
+			if (state) state.reply = reply;
+		});
+
+		// After the turn, inside the hook's own awaited scope (model calls need one): the record
+		// keeper files what the turn changed (spec §10, The record keeper).
+		api.on('agent_end', async (event, ctx) => {
+			const state = runState(event.runId ?? ctx?.runId);
+			const work = ctx?.agentId ? maybe() : null;
 			if (!work || !ctx?.agentId || !state || state.done) return;
 			state.done = true;
 			const agentId = ctx.agentId;
-			void keepRecord(
-				work,
-				{
-					agentId,
-					session: session || null,
-					run: event.runId ?? work.now(),
-					request: state.request ?? state.prompt,
-					reply,
-					outcomes: state.outcomes,
-					person: !!state.request,
-					agentRecorded: state.recorded
-				},
-				{ decisions: decisions(), write: writer(agentId), log, logDecisions }
-			)
-				.then((r) => {
-					if (r.acted.length) changed(work);
-				})
-				.catch((error) => log(`record keeper failed: ${(error as Error).message}`));
+			try {
+				const r = await keepRecord(
+					work,
+					{
+						agentId,
+						session: ctx.sessionKey ?? null,
+						run: event.runId ?? ctx.runId ?? work.now(),
+						request: state.request ?? state.prompt,
+						reply: state.reply ?? '',
+						outcomes: state.outcomes,
+						person: !!state.request,
+						agentRecorded: state.recorded
+					},
+					{ decisions: decisions(), write: writer(agentId), log, logDecisions }
+				);
+				if (r.acted.length) changed(work);
+			} catch (error) {
+				log(`record keeper failed: ${(error as Error).message}`);
+			}
 		});
 
 		/** Run one command; tell open pages a change happened (best effort: it is already committed). */

@@ -153,12 +153,15 @@ test('registers the tools, the UI operations and the three hooks', async () => {
 		assert.ok(reg.hooks[h], h);
 });
 
-const finalize = (hook, runId, reply = 'Done.', ctx = {}) =>
-	hook(
+const finalize = async (hook, runId, reply = 'Done.', ctx = {}) => {
+	const r = hook(
 		'before_agent_finalize',
 		{ runId, sessionId: 's', stopHookActive: false, lastAssistantMessage: reply },
 		{ runId, ...ctx }
 	);
+	await hook('agent_end', { runId, messages: [], success: true }, { runId, ...ctx });
+	return r;
+};
 
 test("without models, a turn is filed under the session's Task, or waits as unfiled work", async () => {
 	const { call, hook } = await started();
@@ -167,7 +170,7 @@ test("without models, a turn is filed under the session's Task, or waits as unfi
 	assert.doesNotMatch(brief.prependContext, /no Task in progress/, 'no pressure line');
 
 	hook('after_tool_call', { toolName: 'Bash', params: { command: 'grep -rn x .' }, runId: 'r0' });
-	assert.equal(finalize(hook, 'r0'), undefined, 'never asks the agent to redo its reply');
+	assert.equal(await finalize(hook, 'r0'), undefined, 'never asks the agent to redo its reply');
 	await settle();
 	assert.equal(
 		(await call('falcon_work_read', { view: 'timeline' })).entries.length,
@@ -176,7 +179,7 @@ test("without models, a turn is filed under the session's Task, or waits as unfi
 	);
 
 	hook('after_tool_call', { toolName: 'write', params: { path: 'USER.md' }, runId: 'r1' });
-	finalize(hook, 'r1');
+	await finalize(hook, 'r1');
 	await settle();
 	const unfiled = await call('falcon_work_read', { view: 'timeline', filters: { unfiled: true } });
 	assert.equal(unfiled.entries.length, 1);
@@ -209,7 +212,7 @@ test("without models, a turn is filed under the session's Task, or waits as unfi
 		result: '[main abc1234] fix',
 		runId: 'r2'
 	});
-	finalize(hook, 'r2');
+	await finalize(hook, 'r2');
 	await settle();
 	const task = await call('falcon_work_read', { view: 'get', id: t.id });
 	assert.equal(task.timeline.length, 1);
@@ -222,7 +225,7 @@ test("without models, a turn is filed under the session's Task, or waits as unfi
 		{ toolName: 'write', params: { path: 'other.md' }, runId: 'r3' },
 		{ sessionKey: 'agent:verl:other' }
 	);
-	finalize(hook, 'r3', 'Done.', { sessionKey: 'agent:verl:other' });
+	await finalize(hook, 'r3', 'Done.', { sessionKey: 'agent:verl:other' });
 	await settle();
 	assert.equal(
 		(await call('falcon_work_read', { view: 'timeline', filters: { unfiled: true } })).entries
@@ -292,7 +295,7 @@ test('the record keeper opens a Task for new work and completes it when its done
 		result: '[main 16593e1] NetBird enrollment',
 		runId: 'n1'
 	});
-	finalize(hook, 'n1');
+	await finalize(hook, 'n1');
 	await settle();
 	const tasks = (await call('falcon_work_read', { view: 'list', kind: 'task' })).items;
 	assert.equal(tasks.length, 1);
@@ -314,7 +317,7 @@ test('the record keeper opens a Task for new work and completes it when its done
 		params: { command: 'git commit -m "enrollment test"' },
 		runId: 'n2'
 	});
-	finalize(hook, 'n2');
+	await finalize(hook, 'n2');
 	await settle();
 	const done = await call('falcon_work_read', { view: 'get', id: t.id });
 	assert.equal(done.status, 'completed');
@@ -348,7 +351,7 @@ test('a subagent works under the Task of the session that spawned it', async () 
 		{ toolName: 'Edit', params: { file_path: 'src/netbird.ts' }, runId: 's1' },
 		{ sessionKey: 'agent:verl:sub1' }
 	);
-	finalize(hook, 's1', 'Done.', { sessionKey: 'agent:verl:sub1' });
+	await finalize(hook, 's1', 'Done.', { sessionKey: 'agent:verl:sub1' });
 	await settle();
 	const task = await call('falcon_work_read', { view: 'get', id: t.id });
 	assert.equal(task.timeline.length, 1);
