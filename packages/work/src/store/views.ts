@@ -330,7 +330,63 @@ export class Views {
 	}
 
 	/** Areas & Projects: the Area chips with counts, and Projects grouped by Area. */
-	areas(person: string, area?: string) {
+	/**
+	 * A Project as one row of the Areas & Projects list: its current Milestone, how many Tasks are
+	 * done, whether anything in it needs the person or has stalled, and when it last moved. The
+	 * full detail is the Project page.
+	 */
+	private projectRow(p: Row, person: string, stalled: Set<string>) {
+		const tasks = this.all(
+			"SELECT id, status, waiting_on_kind, waiting_on_ref, updated_at FROM task WHERE project_id = ? AND status <> 'abandoned'",
+			p.id
+		);
+		const ms = this.all(
+			'SELECT id, position, title, status FROM milestone WHERE project_id = ? ORDER BY position',
+			p.id
+		);
+		const current = ms.find((m) => m.status !== 'achieved');
+		const ids = [p.id, ...tasks.map((t) => t.id), ...ms.map((m) => m.id)];
+		const marks = ids.map(() => '?').join(',');
+		const needsYou =
+			tasks.some(
+				(t) =>
+					t.status === 'waiting' && t.waiting_on_kind === 'person' && t.waiting_on_ref === person
+			) ||
+			this.all(
+				`SELECT d.* FROM link l JOIN decision d ON d.id = l.source_id WHERE l.kind = 'targets' AND l.target_id IN (${marks}) AND d.status IN ('pending','deferred')`,
+				...ids
+			).some((d) => this.decisionCard(d, person).can_decide) ||
+			this.all(
+				`SELECT q.* FROM link l JOIN question q ON q.id = l.source_id WHERE l.kind = 'targets' AND l.target_id IN (${marks}) AND q.status = 'open'`,
+				...ids
+			).some((q) => this.questionCard(q, person).can_answer);
+		const lastTurn = tasks.length
+			? this.one(
+					`SELECT max(at) AS at FROM timeline_entry WHERE task_id IN (${tasks.map(() => '?').join(',')})`,
+					...tasks.map((t) => t.id)
+				)?.at
+			: null;
+		const last = [lastTurn, ...tasks.map((t) => t.updated_at), p.updated_at ?? p.created_at]
+			.filter(Boolean)
+			.sort()
+			.at(-1);
+		return {
+			id: p.id,
+			title: p.title,
+			outcome: p.outcome,
+			status: this.reads.projectStatus(p),
+			milestone: current
+				? { position: current.position, of: ms.length, title: current.title }
+				: null,
+			tasks_total: tasks.length,
+			tasks_done: tasks.filter((t) => t.status === 'completed').length,
+			needs_you: needsYou,
+			stalled: tasks.some((t) => stalled.has(t.id)),
+			last_at: last ?? null
+		};
+	}
+
+	areas(person: string, area?: string, now: string = new Date().toISOString()) {
 		const areas = this.all("SELECT * FROM area WHERE status = 'active' ORDER BY title").map((a) => {
 			const projects = this.one(
 				'SELECT count(*) AS n FROM project WHERE area_id = ? AND abandoned_at IS NULL',
@@ -352,6 +408,12 @@ export class Views {
 			};
 		});
 		const shown = area ? areas.filter((a) => a.id === area) : areas;
+		const stalled = new Set(
+			this.reads
+				.warnings(now)
+				.filter((w) => w.kind === 'stalled_task')
+				.map((w) => w.object.id)
+		);
 		return {
 			areas,
 			groups: shown.map((a) => ({
@@ -359,7 +421,7 @@ export class Views {
 				projects: this.all(
 					'SELECT * FROM project WHERE area_id = ? ORDER BY abandoned_at IS NOT NULL, created_at',
 					a.id
-				).map((p) => this.projectCard(p, person)),
+				).map((p) => this.projectRow(p, person, stalled)),
 				tasks: this.all(
 					"SELECT * FROM task WHERE area_id = ? AND status <> 'abandoned' ORDER BY status = 'completed', updated_at DESC",
 					a.id

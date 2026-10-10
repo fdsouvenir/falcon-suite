@@ -12,61 +12,64 @@ import {
 } from '../parts.js';
 import { breadcrumb } from './objectives.js';
 
-/** Areas & Projects: Area chips (never a second sidebar) and Projects grouped by Area. */
+/**
+ * Areas & Projects: Area chips (never a second sidebar), then a calm list of Projects grouped by
+ * Area — one row each; the detail lives on the Project page. Tasks that sit directly in an Area
+ * fold into one row under it.
+ */
 export async function areasView(c: Ctx) {
 	const selected = c.params.area;
 	const v = await c.read({ view: 'areas', filters: selected ? { area: selected } : {} });
 	const q = (c.params.q ?? '').toLowerCase();
-	const total = v.areas.length;
 	const chips = h(
 		'div',
 		{ class: 'fw-chips', role: 'tablist', 'aria-label': 'Areas' },
-		chip(c, 'All', total, !selected, { tab: 'areas' }),
-		v.areas.map((a: any) =>
-			chip(c, a.title, a.projects + a.open_tasks, selected === a.id, { tab: 'areas', area: a.id })
-		)
+		chip(c, 'All', !selected, { tab: 'areas' }),
+		v.areas.map((a: any) => chip(c, a.title, selected === a.id, { tab: 'areas', area: a.id }))
 	);
+	const quiet: string[] = [];
 	const groups = v.groups.map((g: any) => {
 		const projects = g.projects.filter(
 			(p: any) =>
-				!q ||
-				p.title.toLowerCase().includes(q) ||
-				p.milestones.some((m: any) => m.tasks.some((t: any) => t.title.toLowerCase().includes(q)))
+				p.status !== 'abandoned' &&
+				(!q || p.title.toLowerCase().includes(q) || (p.outcome ?? '').toLowerCase().includes(q))
 		);
-		const tasks = g.tasks.filter((t: any) => !q || t.title.toLowerCase().includes(q));
-		if (q && !projects.length && !tasks.length) return null;
+		const tasks = g.tasks.filter(
+			(t: any) => t.status !== 'completed' && (!q || t.title.toLowerCase().includes(q))
+		);
+		if (!projects.length && !tasks.length) {
+			if (!q) quiet.push(g.area.title);
+			return null;
+		}
 		return h(
 			'section',
 			{ class: 'fw-section' },
+			h('h2', { class: 'fw-day' }, g.area.title),
 			h(
 				'div',
-				{ class: 'fw-area-line' },
-				kicker('Area'),
-				h('h2', { class: 'fw-area-title' }, g.area.title),
-				h('span', { class: 'fw-muted' }, g.area.description),
-				h(
-					'span',
-					{ class: 'fw-muted' },
-					'Accountable: ',
-					avatar(g.area.accountable_human),
-					' ',
-					who(g.area.accountable_human)
-				)
-			),
-			projects.map((p: any) => projectCard(c, p)),
-			tasks.length
-				? h(
-						'div',
-						{ class: 'fw-card' },
-						h('h3', { class: 'fw-card-title' }, 'Tasks'),
-						h(
-							'div',
-							{ class: 'fw-list' },
-							tasks.map((t: any) => taskRow(c, t))
+				{ class: 'fw-list' },
+				projects.map((p: any) => projectListRow(c, p)),
+				tasks.length
+					? h(
+							'details',
+							{ class: 'fw-fold fw-area-tasks' },
+							h(
+								'summary',
+								{ class: 'fw-row' },
+								h(
+									'span',
+									{ class: 'fw-row-main fw-muted' },
+									` ${tasks.length} Task${tasks.length > 1 ? 's' : ''} outside a Project`
+								)
+							),
+							h(
+								'div',
+								{ class: 'fw-list fw-indent-list' },
+								tasks.map((t: any) => taskRow(c, t))
+							)
 						)
-					)
-				: null,
-			!projects.length && !tasks.length ? empty('Nothing in this Area yet.') : null
+					: null
+			)
 		);
 	});
 	return h(
@@ -78,18 +81,79 @@ export async function areasView(c: Ctx) {
 			: empty(
 					q
 						? `Nothing matches "${c.params.q}".`
-						: 'No Areas yet. Add the standing responsibilities your agents look after.'
-				)
+						: v.areas.length
+							? 'No open Projects or Tasks here.'
+							: 'No Areas yet. Add the standing responsibilities your agents look after.'
+				),
+		quiet.length && groups.some(Boolean)
+			? h('p', { class: 'fw-muted' }, `No open Projects in ${quiet.join(', ')}`)
+			: null
 	);
 }
 
-function chip(
-	c: Ctx,
-	label: string,
-	count: number,
-	active: boolean,
-	params: Record<string, string>
-) {
+/** One Project in the list: what it is for, where it stands, and whether it needs you. */
+function projectListRow(c: Ctx, p: any) {
+	const open = () => c.go({ project: p.id });
+	return h(
+		'div',
+		{
+			class: 'fw-row fw-project-row',
+			role: 'button',
+			tabindex: '0',
+			on: {
+				click: open,
+				keydown: (e: Event) => {
+					if ((e as KeyboardEvent).key === 'Enter') open();
+				}
+			}
+		},
+		h(
+			'span',
+			{ class: 'fw-row-main' },
+			h('span', { class: 'fw-row-title' }, p.title),
+			h('span', { class: 'fw-row-sub' }, p.outcome)
+		),
+		h(
+			'span',
+			{ class: 'fw-muted fw-pl-milestone' },
+			p.milestone
+				? `Milestone ${p.milestone.position} of ${p.milestone.of} · ${p.milestone.title}`
+				: p.status === 'completed'
+					? 'All Milestones achieved'
+					: '—'
+		),
+		h(
+			'span',
+			{ class: 'fw-pl-progress' },
+			p.tasks_total
+				? [
+						h('span', { class: 'fw-muted' }, `${p.tasks_done} of ${p.tasks_total} done`),
+						h(
+							'span',
+							{ class: 'fw-bar' },
+							h('span', {
+								class: 'fw-bar-fill',
+								style: `width:${Math.round((100 * p.tasks_done) / p.tasks_total)}%`
+							})
+						)
+					]
+				: h('span', { class: 'fw-muted' }, 'No Tasks yet')
+		),
+		h(
+			'span',
+			{ class: 'fw-pl-flag' },
+			p.needs_you
+				? h('span', { class: 'fw-pill fw-pill-warn' }, 'waiting on you')
+				: p.stalled
+					? h('span', { class: 'fw-pill fw-pill-warn' }, 'stalled')
+					: null
+		),
+		h('span', { class: 'fw-mono fw-muted fw-pl-date' }, p.last_at ? day(p.last_at) : ''),
+		h('span', { class: 'fw-muted', 'aria-hidden': 'true' }, '›')
+	);
+}
+
+function chip(c: Ctx, label: string, active: boolean, params: Record<string, string>) {
 	return h(
 		'a',
 		{
@@ -99,8 +163,7 @@ function chip(
 			href: c.href(params),
 			on: { click: (e: Event) => (e.preventDefault(), c.go(params)) }
 		},
-		label,
-		h('span', { class: 'fw-muted' }, ` ${count}`)
+		label
 	);
 }
 

@@ -169,6 +169,12 @@ test('areas, project and objective pages carry the closure rule and dependencies
 	const a = w.views.areas(FRED.id);
 	assert.equal(a.areas[0].projects, 1);
 	assert.equal(a.areas[0].open_tasks, 2);
+	const row = a.groups[0].projects[0];
+	assert.equal(row.id, p);
+	assert.deepEqual(row.milestone, { position: 1, of: 1, title: row.milestone.title });
+	assert.equal(row.tasks_total, 2);
+	assert.equal(row.needs_you, true, 'a pending Decision of the person targets a Task in it');
+	assert.equal(row.milestones, undefined, 'the list carries no Milestone detail');
 	const proj = w.views.project(p, FRED.id);
 	assert.equal(proj.area.id, area);
 	assert.equal(proj.milestones[0].tasks_done, 0);

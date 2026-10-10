@@ -349,7 +349,10 @@ decides. A Question shows why it matters, the agent's hypothesis with **Use its 
 own answer. Both show what they are for.
 
 **Navigation.** Areas are a row of filter chips under the tabs ("All" by default, grouping
-Projects under Area headings), never a second sidebar. Objectives, Projects and Areas open as full
+Projects under Area headings), never a second sidebar. The Areas & Projects tab is a list,
+not detail (Fred, 2026-10-10): one row per Project — outcome, current Milestone, Tasks done, a pill
+only when it is waiting on you or stalled, last activity — opening the Project page; open Tasks
+that sit directly in an Area fold into one row under it ("2 Tasks outside a Project"). Objectives, Projects and Areas open as full
 pages with a breadcrumb and Back. Tasks, Questions, Decisions and Findings open in a side panel
 over the current page, with "Open as page". Session chips open the session; evidence chips open
 the commit, PR or file. A Project page shows its header (status, serves, accountable, session with

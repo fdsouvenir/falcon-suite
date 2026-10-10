@@ -613,7 +613,7 @@ const feature = defineFeaturePlugin({
 					case 'overview':
 						return w.views.overview(actorFor(context).id, w.now());
 					case 'areas':
-						return w.views.areas(actorFor(context).id, f.area);
+						return w.views.areas(actorFor(context).id, f.area, w.now());
 					case 'project':
 						return input.id
 							? (w.views.project(input.id, actorFor(context).id) ?? { error: 'not_found' })
