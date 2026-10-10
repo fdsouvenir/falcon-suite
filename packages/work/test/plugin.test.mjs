@@ -322,7 +322,53 @@ test('the record keeper opens a Task for new work and completes it when its done
 	const done = await call('falcon_work_read', { view: 'get', id: t.id });
 	assert.equal(done.status, 'completed');
 	assert.equal(done.timeline.length, 2);
+
+	// A turn that opens a Task and already meets its done-when completes it there and then.
+	runtime.decisions.evaluate = async (batch, options) => ({
+		status: 'ok',
+		result: {
+			answers:
+				options.purpose === 'falcon-work.record-done'
+					? { done: { type: 'boolean', probabilityTrue: 0.9 } }
+					: {
+							place: { type: 'choice', choice: 'new_work', probabilities: { new_work: 0.9 } },
+							where: { type: 'choice', choice: 'a1', probabilities: { a1: 0.9 } }
+						}
+		}
+	});
+	hook(
+		'before_prompt_build',
+		{ prompt: 'x', currentUserMessage: 'write the list', messages: [] },
+		{ runId: 'n3', trigger: 'user', sessionKey: 'agent:verl:other' }
+	);
+	hook(
+		'after_tool_call',
+		{ toolName: 'Write', params: { file_path: 'list.md' }, runId: 'n3' },
+		{ sessionKey: 'agent:verl:other' }
+	);
+	await finalize(hook, 'n3', 'Wrote the list.', { sessionKey: 'agent:verl:other' });
+	const all = (
+		await call('falcon_work_read', { view: 'list', kind: 'task', filters: { status: 'completed' } })
+	).items;
+	assert.equal(all.length, 2, 'opened and completed in one turn');
 	void api;
+});
+
+test('new work goes into a Project only when clearly so, else the likeliest Area', async () => {
+	const { placeFor } = await import('../dist/plugin/keeper.js');
+	const places = [
+		{ key: 'a1', kind: 'area' },
+		{ key: 'p2', kind: 'project' },
+		{ key: 'a3', kind: 'area' }
+	];
+	assert.equal(placeFor(places, { p2: 0.7, a1: 0.2 }).key, 'p2');
+	assert.equal(
+		placeFor(places, { p2: 0.5, a3: 0.4 }).key,
+		'a3',
+		'a weak Project gives way to its Area'
+	);
+	assert.equal(placeFor(places, { a3: 0.39, a1: 0.1, none: 0.5 }).key, 'a3', 'the beach-day case');
+	assert.equal(placeFor(places, { a3: 0.2, none: 0.8 }), null);
 });
 
 test('a subagent works under the Task of the session that spawned it', async () => {

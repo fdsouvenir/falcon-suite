@@ -10,6 +10,20 @@ import { decide, RUBRIC_VERSION } from './gates.js';
 
 export const PLACE_THRESHOLD = 0.6;
 export const DONE_THRESHOLD = 0.8;
+/** New work goes to its Area on a weaker signal than into a Project: an Area is easy to move from. */
+export const AREA_THRESHOLD = 0.3;
+
+/** Where new work goes: a Project only when clearly so, else the likeliest Area, else nowhere. */
+export function placeFor<P extends { key: string; kind: 'project' | 'area' }>(
+	places: P[],
+	p: Record<string, number>
+): P | null {
+	const ranked = places.map((x) => ({ x, p: p[x.key] ?? 0 })).sort((a, b) => b.p - a.p);
+	const top = ranked[0];
+	if (top && top.x.kind === 'project' && top.p >= PLACE_THRESHOLD) return top.x;
+	const area = ranked.find((r) => r.x.kind === 'area');
+	return area && area.p >= AREA_THRESHOLD ? area.x : null;
+}
 
 type Decisions = Parameters<typeof decide>[0];
 export type Writer = (prompt: string) => Promise<string | null>;
@@ -70,6 +84,22 @@ function definition(w: Work, id: string) {
 		done_when: t?.definition?.done_when ?? ''
 	};
 }
+
+/** Is a Task's done-when met by what this turn shows? */
+export const DONE_QUESTION = (field: string) => ({
+	type: 'boolean',
+	instructions: {
+		question: `After this turn, is ${field} met?`,
+		focus:
+			'Only what outcomes and reply_end show was actually done, not what is planned or promised.'
+	},
+	criteria: {
+		true: { description: `every part of ${field} is shown done` },
+		false: {
+			description: `some part of ${field} is not shown done, or is still pending or failing`
+		}
+	}
+});
 
 /** The decision batch for one turn: where it belongs, whether that finishes it, and where new work would go. */
 export function placementBattery(input: {
@@ -146,21 +176,7 @@ export function placementBattery(input: {
 			])
 		}
 	};
-	if (current)
-		questions.done = {
-			type: 'boolean',
-			instructions: {
-				question: "After this turn, is session_task's done_when met?",
-				focus:
-					'Only what outcomes and reply_end show was actually done, not what is planned or promised.'
-			},
-			criteria: {
-				true: { description: 'every part of done_when is shown done' },
-				false: {
-					description: 'some part of done_when is not shown done, or is still pending or failing'
-				}
-			}
-		};
+	if (current) questions.done = DONE_QUESTION('session_task.done_when');
 	return { state, questions };
 }
 
@@ -306,7 +322,7 @@ export async function keepRecord(
 	const other = others.find((t) => t.key === choice);
 	if (other) task = other.id;
 	const isNew = choice === 'new_work';
-	const done =
+	let done =
 		!isNew &&
 		task === currentId &&
 		current &&
@@ -314,16 +330,17 @@ export async function keepRecord(
 
 	const shown = isNew ? null : task ? definition(w, task) : null;
 	const text = await write(
-		writerPrompt({ turn: { ...turn, outcomes }, task: shown, needTask: isNew, needResult: !!done })
+		writerPrompt({
+			turn: { ...turn, outcomes },
+			task: shown,
+			needTask: isNew,
+			needResult: !!done || isNew
+		})
 	);
 
 	if (isNew) {
 		const draft = text?.task;
-		const whereKey = answers?.where?.type === 'choice' ? String(answers.where.choice) : 'none';
-		const where = places.find(
-			(x) =>
-				x.key === whereKey && (answers?.where?.probabilities?.[whereKey] ?? 0) >= PLACE_THRESHOLD
-		);
+		const where = placeFor(places, answers?.where?.probabilities ?? {});
 		if (draft?.title && draft?.done_when && where) {
 			const created = w.do(
 				{
@@ -351,6 +368,22 @@ export async function keepRecord(
 				);
 				task = created.id;
 				acted.push(`created ${created.id}`);
+				// Work done in the turn that opened the Task may already finish it.
+				const check = await decide(
+					deps.decisions,
+					{
+						state: {
+							done_when: String(draft.done_when),
+							outcomes: outcomes.map((o) => `${o.kind}: ${o.label}`),
+							reply_end: clip(turn.reply.slice(-1500), 1500)
+						},
+						questions: { done: DONE_QUESTION('done_when') }
+					},
+					'record-done',
+					turn.agentId,
+					deps.log
+				);
+				done = (check?.done?.probabilityTrue ?? 0) >= DONE_THRESHOLD;
 			}
 		} else task = null; // new work Work could not write up waits as unfiled
 	}
