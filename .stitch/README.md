@@ -9,19 +9,20 @@
   (Stitch's own screenshot is 512px wide). Run from a directory where `playwright` resolves.
 - `screens/` — accepted screens (HTML + PNG).
 
-| Screen                    | Stitch id                          | Rounds                                                                                                                                  |
-| ------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Work overview             | `a1f5dee0b08b44dcb5c27a0cedfc9d92` | generated, 2 correction rounds, then Question/Decision interactions                                                                     |
-| Work overview, dark       | `b096ab84af9e4f48862dc4d87b5c07a6` | colour-only remap to the dark host tokens; some text left too dim (mockup artifact)                                                     |
-| Areas & Projects          | `ed1c650d99aa4640a49c394362a6b2e0` | generated, 1 correction round, then Area chip row replacing the Area pane                                                               |
-| Project page + Task panel | `e390e417ff9c47718183ff72dd451ebc` | generated, 2 correction rounds (second restored panel content an edit had replaced with placeholders)                                   |
-| Objectives tab            | `fc3e9f9e40a54548a51624f588aeda2e` | generated, 1 correction round                                                                                                           |
-| Objective page            | `cfe0d614345a4d5c918c053c5a567b7d` | generated, 1 correction round                                                                                                           |
-| Activity tab              | `9fb33c0fc8924755b0dfff69b7a9b12b` | generated, 1 correction round                                                                                                           |
-| Overview, calm (proposed) | `5bfc8d87d0f346c587c78c841c8c67dc` | generated from the alpha sample data, 1 correction round                                                                                |
-| Overview + Decision panel | `9a36fda5d7b54fa3a2065ca69e769018` | generated, 1 correction round; that round dropped the DECIDE group, restored by hand in the local HTML                                  |
-| Activity timeline         | `d6612fb92ad149339f3428a681c9d5e9` | generated from the Oct 9 provisioning work, 1 correction round (removed invented header controls, captions, per-row 'recorded by Work') |
-| Task panel timeline       | `5012da233bb04f12998a16d660514dc0` | generated, 1 correction round (removed invented entry labels and Task rows; real Milestone Tasks)                                       |
+| Screen                                | Stitch id                          | Rounds                                                                                                                                  |
+| ------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Work overview                         | `a1f5dee0b08b44dcb5c27a0cedfc9d92` | generated, 2 correction rounds, then Question/Decision interactions                                                                     |
+| Work overview, dark                   | `b096ab84af9e4f48862dc4d87b5c07a6` | colour-only remap to the dark host tokens; some text left too dim (mockup artifact)                                                     |
+| Areas & Projects                      | `ed1c650d99aa4640a49c394362a6b2e0` | generated, 1 correction round, then Area chip row replacing the Area pane                                                               |
+| Project page + Task panel             | `e390e417ff9c47718183ff72dd451ebc` | generated, 2 correction rounds (second restored panel content an edit had replaced with placeholders)                                   |
+| Objectives tab                        | `fc3e9f9e40a54548a51624f588aeda2e` | generated, 1 correction round                                                                                                           |
+| Objective page                        | `cfe0d614345a4d5c918c053c5a567b7d` | generated, 1 correction round                                                                                                           |
+| Activity tab                          | `9fb33c0fc8924755b0dfff69b7a9b12b` | generated, 1 correction round                                                                                                           |
+| Overview, calm (proposed)             | `5bfc8d87d0f346c587c78c841c8c67dc` | generated from the alpha sample data, 1 correction round                                                                                |
+| Overview + Decision panel             | `9a36fda5d7b54fa3a2065ca69e769018` | generated, 1 correction round; that round dropped the DECIDE group, restored by hand in the local HTML                                  |
+| Activity timeline                     | `d6612fb92ad149339f3428a681c9d5e9` | generated from the Oct 9 provisioning work, 1 correction round (removed invented header controls, captions, per-row 'recorded by Work') |
+| Task panel timeline                   | `5012da233bb04f12998a16d660514dc0` | generated, 1 correction round (removed invented entry labels and Task rows; real Milestone Tasks)                                       |
+| Areas & Projects as a list (proposed) | `5f30678e0577404fb60dcc13182b0e1d` | generated from the real Areas and Projects; no correction round yet                                                                     |
 
 ## Falcon Vault 5
 
