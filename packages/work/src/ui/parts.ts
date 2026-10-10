@@ -335,27 +335,17 @@ export function kpiBar(k: any) {
 	);
 }
 
-const OUTCOME_LABEL: Record<string, string> = {
-	commit: 'Commit',
-	push: 'Push',
-	pr: 'Pull request',
-	release: 'Release',
-	deploy: 'Deploy',
-	message: 'Message',
-	file: 'File',
-	config: 'Config',
-	change: 'Change'
+const OUTCOME: Record<string, { label: string; glyph: string }> = {
+	commit: { label: 'Commit', glyph: '◇' },
+	push: { label: 'Push', glyph: '↑' },
+	pr: { label: 'Pull request', glyph: '⇄' },
+	release: { label: 'Release', glyph: '⬡' },
+	deploy: { label: 'Deploy', glyph: '▸' },
+	message: { label: 'Message', glyph: '✉' },
+	file: { label: 'File', glyph: '▤' },
+	config: { label: 'Config', glyph: '⚙' },
+	change: { label: 'Change', glyph: '•' }
 };
-
-/** One outcome as a chip: what kind, and the commit, file or target it names. */
-const outcomeChip = (o: { kind: string; label: string; ref?: string }) =>
-	h(
-		'span',
-		{ class: `fw-chip fw-outcome fw-outcome-${o.kind}`, title: o.ref ?? o.label },
-		h('span', { class: 'fw-muted' }, `${OUTCOME_LABEL[o.kind] ?? o.kind} `),
-		o.kind === 'commit' && o.ref ? h('span', { class: 'fw-mono' }, `${o.ref.slice(0, 7)} `) : null,
-		short(o.label)
-	);
 
 /** Paths read from the workspace or the home folder; long labels are clipped. */
 function short(label: string) {
@@ -363,16 +353,54 @@ function short(label: string) {
 	return s.length > 60 ? s.slice(0, 59) + '…' : s;
 }
 
+/** One outcome as a chip: a kind glyph, then the commit (hash and message), file or target. */
+function outcomeChip(o: { kind: string; label: string; ref?: string }) {
+	const k = OUTCOME[o.kind] ?? { label: o.kind, glyph: '•' };
+	return h(
+		'span',
+		{ class: `fw-chip fw-outcome`, title: `${k.label}: ${o.ref ?? o.label}` },
+		h('span', { class: 'fw-outcome-glyph', 'aria-hidden': 'true' }, k.glyph),
+		o.kind === 'commit' && o.ref
+			? h('span', { class: 'fw-mono fw-strong' }, o.ref.slice(0, 7))
+			: null,
+		o.kind === 'config' ? h('span', { class: 'fw-muted' }, 'Config') : null,
+		h(
+			'span',
+			{ class: o.kind === 'file' ? 'fw-mono' : '' },
+			o.kind === 'commit' && o.ref ? `‘${short(o.label)}’` : short(o.label)
+		)
+	);
+}
+
+const dayLabel = (iso: string) => {
+	const d = new Date(iso);
+	const today = new Date();
+	const y = new Date(today.getTime() - 864e5);
+	return d.toDateString() === today.toDateString()
+		? 'Today'
+		: d.toDateString() === y.toDateString()
+			? 'Yesterday'
+			: day(iso);
+};
+
 /**
- * A timeline (spec §10, Timeline): one entry per turn that changed something, its outcomes as
- * chips and its summary folded underneath; turns without outcomes fold into one line. With
- * `showTask`, each entry names its Task (the Activity tab); unfiled entries offer `file`.
+ * A timeline (spec §10, Timeline): one row per turn that changed something — its outcomes as
+ * chips and its summary folded under "What happened" — newest first; turns without outcomes fold
+ * into one line. With `showTask` (the Activity tab) each row names its Task and Project, rows are
+ * grouped by day, and unfiled rows offer `file`.
  */
 export function timeline(
 	c: Ctx,
 	entries: any[],
 	opts: { showTask?: boolean; file?: (entry: any) => void } = {}
 ) {
+	const when = (iso: string) =>
+		h(
+			'span',
+			{ class: 'fw-mono fw-muted fw-tl-time', title: iso },
+			opts.showTask ? time(iso) : `${day(iso)} ${time(iso)}`
+		);
+	const session = (key: string | null) => (key ? sessionChip(c, { key, from: 'own' }) : null);
 	const rows: HTMLElement[] = [];
 	let talk: any[] = [];
 	const flush = () => {
@@ -380,9 +408,18 @@ export function timeline(
 		rows.push(
 			h(
 				'li',
-				{ class: 'fw-tl fw-tl-talk fw-muted' },
-				`${talk.length} turn${talk.length > 1 ? 's' : ''} of discussion`,
-				talk[0].session ? sessionChip(c, { key: talk[0].session, from: 'own' }) : null
+				{ class: 'fw-tl fw-tl-talk' },
+				when(talk[0].at),
+				h(
+					'div',
+					{ class: 'fw-tl-main fw-tl-line' },
+					h(
+						'span',
+						{ class: 'fw-muted' },
+						`${talk.length} turn${talk.length > 1 ? 's' : ''} of discussion`
+					),
+					session(talk[0].session)
+				)
 			)
 		);
 		talk = [];
@@ -397,49 +434,72 @@ export function timeline(
 			h(
 				'li',
 				{ class: `fw-tl${e.task ? '' : ' fw-tl-unfiled'}` },
+				when(e.at),
 				h(
 					'div',
-					{ class: 'fw-tl-head' },
-					h('span', { class: 'fw-mono fw-muted', title: e.at }, `${day(e.at)} ${time(e.at)}`),
-					opts.showTask
-						? e.task
-							? h(
-									'button',
-									{
-										class: 'fw-chip',
-										type: 'button',
-										on: { click: () => openPanel(c, e.task.id) }
-									},
-									`Task: ${e.task.title}`
-								)
-							: h('span', { class: 'fw-pill fw-pill-warn' }, 'unfiled')
+					{ class: 'fw-tl-main' },
+					opts.showTask || e.completed || e.recorded_by === 'agent' || !e.task
+						? h(
+								'div',
+								{ class: 'fw-tl-line' },
+								opts.showTask && e.task
+									? [
+											h(
+												'button',
+												{
+													class: 'fw-chip fw-tl-task',
+													type: 'button',
+													on: { click: () => openPanel(c, e.task.id) }
+												},
+												e.task.title
+											),
+											e.task.place ? h('span', { class: 'fw-muted' }, `· ${e.task.place}`) : null
+										]
+									: null,
+								!e.task ? h('span', { class: 'fw-pill fw-pill-warn' }, 'Unfiled') : null,
+								e.completed ? h('span', { class: 'fw-pill fw-pill-done' }, '✓ Completed') : null,
+								h('span', { class: 'fw-right' }),
+								e.recorded_by === 'agent'
+									? h('span', { class: 'fw-muted fw-tl-by' }, 'recorded by the agent')
+									: null,
+								!e.task && opts.file
+									? h(
+											'button',
+											{ class: 'fw-link', type: 'button', on: { click: () => opts.file!(e) } },
+											'File under a Task →'
+										)
+									: null
+							)
 						: null,
-					e.recorded_by === 'work'
-						? h('span', { class: 'fw-muted fw-tl-by' }, 'recorded by Work')
+					h('div', { class: 'fw-tl-line' }, e.outcomes.map(outcomeChip)),
+					e.summary || e.session
+						? h(
+								'details',
+								{ class: 'fw-fold fw-tl-detail' },
+								h('summary', null, ' What happened'),
+								h(
+									'div',
+									{ class: 'fw-tl-line' },
+									e.summary ? h('p', { class: 'fw-tl-summary' }, e.summary) : null,
+									h('span', { class: 'fw-right' }),
+									session(e.session)
+								)
+							)
 						: null
-				),
-				h('div', { class: 'fw-tl-outcomes' }, e.outcomes.map(outcomeChip)),
-				e.summary || e.session
-					? h(
-							'details',
-							{ class: 'fw-tl-detail' },
-							h('summary', null, e.summary ? 'What happened' : 'Where it happened'),
-							e.summary ? h('p', null, e.summary) : null,
-							e.session
-								? sessionChip(c, { key: e.session, from: 'own' }, { prefix: 'Open session: ' })
-								: null
-						)
-					: null,
-				!e.task && opts.file
-					? h(
-							'button',
-							{ class: 'fw-link', type: 'button', on: { click: () => opts.file!(e) } },
-							'File under a Task →'
-						)
-					: null
+				)
 			)
 		);
 	}
 	flush();
 	return h('ol', { class: 'fw-timeline' }, rows);
+}
+
+/** The Activity tab's day groups: Today, Yesterday, then dates. */
+export function byDay(entries: any[]): [string, any[]][] {
+	const days = new Map<string, any[]>();
+	for (const e of entries) {
+		const k = dayLabel(e.at);
+		days.set(k, [...(days.get(k) ?? []), e]);
+	}
+	return [...days];
 }

@@ -322,6 +322,10 @@ test('the record keeper opens a Task for new work and completes it when its done
 	const done = await call('falcon_work_read', { view: 'get', id: t.id });
 	assert.equal(done.status, 'completed');
 	assert.equal(done.timeline.length, 2);
+	assert.equal(done.timeline[0].completed, true, 'the turn that finished it says so');
+	assert.equal(done.timeline[1].completed, false);
+	assert.equal(done.timeline[0].task.place, 'Fredbot Platform');
+	assert.equal(done.origin.session, 'agent:verl:main', 'where Work opened it');
 
 	// A turn that opens a Task and already meets its done-when completes it there and then.
 	runtime.decisions.evaluate = async (batch, options) => ({

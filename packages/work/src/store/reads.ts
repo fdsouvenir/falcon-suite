@@ -371,6 +371,12 @@ export class Reads {
 				detail.results = this.all('SELECT * FROM task_result WHERE task_id = ? ORDER BY at', id);
 				detail.timeline = this.timeline({ task: id, limit: 100 }).entries;
 				detail.recorded_by_work = !!this.one('SELECT 1 FROM work_recorded WHERE object_id = ?', id);
+				// Where the Task came from: the session of its first turn.
+				detail.origin =
+					this.one(
+						'SELECT session_key AS session, at FROM timeline_entry WHERE task_id = ? ORDER BY at LIMIT 1',
+						id
+					) ?? null;
 				detail.depends_on = this.all(
 					"SELECT target_id AS id FROM link WHERE kind = 'depends_on' AND source_id = ?",
 					id
@@ -514,15 +520,23 @@ export class Reads {
 		if (f.before) (where.push('e.at < ?'), args.push(f.before));
 		const limit = Math.min(f.limit ?? 50, 200);
 		const rows = this.all(
-			`SELECT e.*, (SELECT d.title FROM task t JOIN task_definition d ON d.task_id = t.id AND d.rev = t.definition_rev WHERE t.id = e.task_id) AS task_title
-			 FROM timeline_entry e ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY e.at DESC LIMIT ?`,
+			`SELECT e.*, d.title AS task_title, coalesce(p.title, a.title) AS place_title,
+				(t.status = 'completed' AND e.at = (SELECT max(x.at) FROM timeline_entry x WHERE x.task_id = e.task_id)) AS completed_task
+			 FROM timeline_entry e
+			 LEFT JOIN task t ON t.id = e.task_id
+			 LEFT JOIN task_definition d ON d.task_id = t.id AND d.rev = t.definition_rev
+			 LEFT JOIN project p ON p.id = t.project_id
+			 LEFT JOIN area a ON a.id = t.area_id
+			 ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY e.at DESC LIMIT ?`,
 			...args,
 			limit
 		);
 		return {
 			entries: rows.map((r) => ({
 				id: r.id,
-				task: r.task_id ? { id: r.task_id, title: r.task_title } : null,
+				task: r.task_id ? { id: r.task_id, title: r.task_title, place: r.place_title } : null,
+				/** This turn finished its Task (the Task's last entry, and the Task is completed). */
+				completed: !!r.completed_task,
 				agent: r.agent,
 				session: r.session_key,
 				run: r.run_id,

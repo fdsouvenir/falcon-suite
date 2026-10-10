@@ -58,6 +58,13 @@ export async function panelView(c: Ctx, id: string) {
 		head('Task'),
 		h('h2', { class: 'fw-panel-title' }, def.title),
 		h('span', { class: `fw-pill fw-pill-${t.status}` }, t.status.replace('_', ' ')),
+		d.recorded_by_work
+			? h(
+					'p',
+					{ class: 'fw-muted' },
+					`Opened by Work${d.origin?.session ? ` from ${c.sessionTitle(d.origin.session) ?? 'a session'}` : ''}${d.origin?.at ? ` · ${day(d.origin.at)}` : ''}`
+				)
+			: null,
 		h(
 			'div',
 			{ class: 'fw-card fw-meta-box' },
@@ -114,7 +121,10 @@ export async function panelView(c: Ctx, id: string) {
 				)
 			: null,
 		field('Done when', h('div', { class: 'fw-card' }, def.done_when)),
-		field('Description', h('p', null, def.description)),
+		field(
+			'Description',
+			h('details', { class: 'fw-fold fw-clamp' }, h('summary', null, def.description))
+		),
 		d.depends_on.length
 			? field(
 					'Depends on',
@@ -140,14 +150,14 @@ export async function panelView(c: Ctx, id: string) {
 		field(
 			'Timeline',
 			d.timeline.length
-				? timeline(c, d.timeline)
+				? h('div', { class: 'fw-card fw-card-flush' }, timeline(c, d.timeline))
 				: h('p', { class: 'fw-muted' }, 'Nothing done on it yet.')
 		),
 		field(
 			'Result',
 			d.accepted_result
 				? [h('p', null, d.accepted_result.content), evidence(d.accepted_result.sources)]
-				: h('p', { class: 'fw-muted' }, 'No Result recorded yet.')
+				: h('p', { class: 'fw-muted' }, 'No Result yet — Work writes it when the done-when is met.')
 		),
 		d.definitions.length > 1
 			? field(

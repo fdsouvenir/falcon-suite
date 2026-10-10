@@ -1,7 +1,7 @@
 import type { Ctx } from '../app.js';
 import { formDialog, messageDialog } from '../dialog.js';
 import { h, empty } from '../dom.js';
-import { timeline } from '../parts.js';
+import { byDay, timeline } from '../parts.js';
 
 const FILTERS = [
 	{ id: 'all', label: 'All' },
@@ -12,11 +12,6 @@ const FILTERS = [
 export async function activityView(c: Ctx) {
 	const filter = (c.params.feed as (typeof FILTERS)[number]['id']) ?? 'all';
 	const v = await c.read({ view: 'feed', filters: { feed: filter } });
-	const days = new Map<string, any[]>();
-	for (const item of v.items) {
-		const key = new Date(item.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-		days.set(key, [...(days.get(key) ?? []), item]);
-	}
 	return h(
 		'div',
 		null,
@@ -41,7 +36,7 @@ export async function activityView(c: Ctx) {
 			)
 		),
 		v.items.length
-			? [...days].map(([d, items]) =>
+			? byDay(v.items).map(([d, items]) =>
 					h(
 						'section',
 						{ class: 'fw-section' },

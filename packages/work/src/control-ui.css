@@ -759,46 +759,95 @@ button.fw-choice:hover {
 	gap: var(--space-2);
 }
 
-/* Timeline (spec §10): outcomes as chips, the turn summary folded underneath. */
+/* Timeline (spec §10): one row per turn — time, then its Task, outcomes and folded summary. */
 .fw-timeline {
-	list-style: none;
 	margin: 0;
 	padding: 0;
+	list-style: none;
 }
 .fw-tl {
 	display: grid;
-	gap: var(--space-2);
-	min-width: 0;
-	padding: var(--space-3);
+	grid-template-columns: 4.5em minmax(0, 1fr);
+	gap: var(--space-3);
+	padding: var(--space-3) var(--space-4);
 	border-bottom: 1px solid var(--border);
 }
 .fw-tl:last-child {
 	border-bottom: 0;
 }
-.fw-tl-head,
-.fw-tl-outcomes,
-.fw-tl-talk {
+.fw-tl-time {
+	padding-top: 2px;
+	white-space: nowrap;
+}
+.fw-card-flush .fw-tl {
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-1);
+	padding: var(--space-3);
+}
+.fw-tl-main {
+	display: grid;
+	gap: var(--space-2);
+	min-width: 0;
+}
+.fw-tl-line {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-2);
 	min-width: 0;
 }
+.fw-tl-task {
+	border-color: var(--border);
+	color: var(--text-strong);
+	font-weight: 600;
+}
 .fw-tl-by {
-	margin-left: auto;
 	font-size: var(--control-ui-text-xs);
 }
-.fw-tl-detail summary {
-	cursor: pointer;
+.fw-outcome {
+	border-color: var(--border);
+	background: transparent;
+	cursor: default;
+}
+.fw-outcome-glyph {
+	color: var(--muted);
+}
+.fw-tl-detail > summary {
 	color: var(--muted);
 	font-size: var(--control-ui-text-sm);
 }
-.fw-tl-detail p {
-	margin: var(--space-2) 0;
+.fw-tl-summary {
+	flex: 1 1 320px;
+	margin: 0;
+	padding-left: var(--space-3);
+	border-left: 2px solid var(--border);
 }
 .fw-tl-talk {
+	background: color-mix(in srgb, var(--bg-hover) 50%, transparent);
 	font-size: var(--control-ui-text-sm);
 }
 .fw-tl-unfiled {
 	background: color-mix(in srgb, var(--warn) 6%, transparent);
+}
+.fw-pill-done {
+	background: color-mix(in srgb, var(--ok) 14%, transparent);
+	color: var(--ok);
+}
+.fw-card-flush {
+	padding: 0;
+}
+.fw-clamp > summary {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	cursor: pointer;
+	list-style: none;
+}
+.fw-clamp[open] > summary {
+	display: block;
+	-webkit-line-clamp: unset;
+}
+.fw-clamp > summary::before {
+	content: none;
 }
