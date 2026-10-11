@@ -1,23 +1,21 @@
 # Falcon Vault 5 — specification (draft)
 
-Status: **approved by Fred**, 2026-10-08. Screens: `.stitch/README.md` (Falcon Vault 5).
+Status: **approved by Fred**, revised credential-supply contract 2026-10-10. Screens: `.stitch/README.md` (Falcon Vault 5).
 
 Settled before drafting (Fred, 2026-10-08):
 
 1. Vault is its own KeePassXC vault, not a front end on OpenClaw's shared secret store.
-2. Agents reach a value only through a SecretRef in OpenClaw config. No executor grants, and only
-   one kind of entry.
+2. Agents retrieve credentials directly for authorized jobs; protected SecretRefs remain preferred
+   when an integration already supports them. No approval tiers or executor grants, one entry kind.
 3. Kept from 4.4: audit history, group management, an agent tool. Recovery snapshots are out.
-4. Agents may store a password they chose themselves: create-only, never overwriting, never reading
-   back (§7).
+4. Agents may store a password they chose themselves: create-only, never overwriting (§7).
 5. The plugin reads and writes the database itself with a JavaScript KDBX library. `keepassxc-cli`
    is not a prerequisite, and agents use the `falcon_vault` tool, not the CLI. Installing the
    plugin is the whole install.
 
 ## 1. Purpose
 
-Vault is **the operator's password manager, inside OpenClaw**, and the place OpenClaw's config
-credentials come from.
+Vault is **credential supply for agents and OpenClaw**, backed by the operator’s KeePassXC database.
 
 Two things follow from that, and every rule below serves one of them:
 
@@ -25,9 +23,9 @@ Two things follow from that, and every rule below serves one of them:
    groups, and can be searched, revealed and copied by a person. The database is an ordinary
    KeePassXC file the operator owns. It opens in the KeePassXC desktop app, can be backed up like
    any file, and outlives the plugin.
-2. **Values never reach a model.** A credential reaches OpenClaw at runtime through a SecretRef,
-   resolved inside the Gateway. Agents can see what exists and can ask for what is missing, but no
-   agent-facing surface ever returns a value.
+2. **Every stored credential is usable for authorized jobs.** Metadata browsing stays separate from
+   explicit retrieval. Prefer protected integrations where available, but retrieval does not depend
+   on the SecretRef subprocess. No deny/ask/allow tiers, approval prompts or standing grants.
 
 Vault is **gateway-scoped and shared**: anyone who can sign in to the Control UI sees and manages
 every entry. Per-person permissions are out of scope.
@@ -123,10 +121,12 @@ every entry. Per-person permissions are out of scope.
   the Vault tab. These are Control UI actions that require `operator.write`. No agent tool exists
   for them.
 - **The Gateway runtime** receives values through the resolver, to use config credentials.
-- **Agents never receive a value** from Vault, from any tool, in any form. An agent may hand Vault
-  a value it already has (§7); it cannot read one back.
+- **Agents explicitly retrieve a field** through `falcon_vault` action `retrieve` (§7). Values reach
+  the model provider, session transcripts and subsequent tool arguments. Task authorization still
+  governs actions; possession is not permission. Existing platform tool permissions still apply.
 - A revealed value hides again after 15 seconds, and is cleared when the UI disconnects.
-- Values never appear in logs, tool results, audit rows or errors.
+- Values appear in explicit retrieval results, not metadata results, plugin logs, audit rows or
+  errors. Keep secrets out of visible metadata (titles, usernames, URLs and request reasons).
 
 What this does not protect against: anything running as the Gateway's Unix user, including an
 agent with a host shell, can read the database and key file directly. Vault's boundary is the tool
@@ -140,7 +140,16 @@ One tool, `falcon_vault`, with these actions:
 - `list` — paths of groups and entries, optionally under a group or matching a search. For each
   entry: its UserName and URL, which fields are set, its Reference (or why it has none), and
   whether it is a Request. Never a Password or Notes value.
-- `get` — the same metadata for one path, plus its Usages.
+- `get` — the same metadata for one path, plus its Usages (unchanged).
+- `retrieve` — immediately return `{outcome: "retrieved", path, field, value}` for one exact path.
+  `field` defaults to Password; Password, UserName, URL, Notes and Title are supported. Optional
+  `uuid` disambiguates duplicate paths. Missing or recycled entries return not_found, duplicate
+  paths without a UUID return ambiguous. Empty fields return an empty value. Reads use the existing
+  database and locking, never a second secrets store or generic command runner. Each retrieval
+  records field, optional UUID, trusted runtime agent/session context, and outcome without values.
+  Caller-supplied actor/model identity is not accepted. If audit persistence fails, no value is returned.
+  Startup failures before the database opens cannot currently produce a retrieval event; service
+  health reports them instead. Schema-invalid calls are rejected by OpenClaw before Vault runs.
 - `store` — create a new entry with Title, UserName, **Password**, URL and Notes, for a credential
   the agent already holds (for example, one it chose when signing up for a service). Create-only: it
   fails if the path exists. The result confirms the path and Reference, never the value.

@@ -20,6 +20,7 @@ export function historyLine(ev: { actor: string; action: string; outcome: string
 		{
 			resolve: d.field && d.field !== 'Password' ? `read ${field}` : 'read',
 			store: 'stored',
+			retrieve: `retrieved ${field}`,
 			create_entry: 'created',
 			request: 'asked for a value',
 			fill_request: 'filled in the password',

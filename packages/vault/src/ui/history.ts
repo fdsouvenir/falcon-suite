@@ -15,6 +15,7 @@ export type HistoryEvent = {
 const ACTIONS = [
 	['', 'Any action'],
 	['resolve', 'Read by OpenClaw'],
+	['retrieve', 'Retrieved by an agent'],
 	['reveal', 'Revealed'],
 	['copy', 'Copied'],
 	['store', 'Stored by an agent'],

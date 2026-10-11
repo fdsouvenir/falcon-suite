@@ -210,6 +210,19 @@ test('identity is the exact path: never a title search, and a shared path is not
 	const [first] = await ops.list({ group: 'C' });
 	const picked = await ops.reveal(FRED, { path: 'C/dup', uuid: first.uuid }, 'Password', 'reveal');
 	assert.ok(['c1', 'c2'].includes(picked.value));
+	assert.equal(
+		(await ops.retrieve(VERL, { path: 'C/dup' }, 'Password', { session: null })).code,
+		'ambiguous'
+	);
+	assert.equal(
+		(await ops.retrieve(VERL, { path: 'C/dup', uuid: first.uuid }, 'Password', { session: null }))
+			.value,
+		picked.value
+	);
+	assert.equal(
+		(await ops.retrieve(VERL, { path: 'B/token' }, 'Notes', { session: null })).value,
+		''
+	);
 	// A renamed entry is a different path; the old one is gone.
 	ok(await ops.update(FRED, { path: 'A/token' }, { title: 'token-2' }));
 	assert.equal(
@@ -328,6 +341,11 @@ test('audit history is append-only and never holds a value', async () => {
 			[VERL, 'store', 'ok']
 		]
 	);
+	const retrieved = await ops.retrieve(VERL, { path: 'k' }, 'Password', {
+		session: 'agent:verl:test'
+	});
+	assert.equal(retrieved.value, 'rotated-SECRET');
+	assert.equal(ops.history({ action: 'retrieve' })[0].detail.session, 'agent:verl:test');
 	const db = new DatabaseSync(join(dir, 'falcon-vault', 'audit.db'));
 	assert.throws(() => db.exec("UPDATE events SET actor = 'person:x'"), /append-only/);
 	assert.throws(() => db.exec('DELETE FROM events'), /append-only/);
@@ -341,6 +359,11 @@ test('audit history is append-only and never holds a value', async () => {
 	db.close();
 	for (const f of readdirSync(join(dir, 'falcon-vault')).filter((f) => f.startsWith('audit.db')))
 		assert.doesNotMatch(readFileSync(join(dir, 'falcon-vault', f), 'latin1'), /SECRET/);
+	ops.audit.close();
+	await assert.rejects(
+		ops.retrieve(VERL, { path: 'k' }, 'Password', { session: null }),
+		/closed|not open/i
+	);
 });
 
 test('entries whose paths have spaces have no Reference, and say why', async () => {

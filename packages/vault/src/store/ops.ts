@@ -22,8 +22,7 @@ import { Vault } from './vault.js';
 
 /**
  * Vault's operations (spec §4–§8), shared by the agent tool and the Control UI. Each one is an
- * attempt recorded in audit history with its outcome. Nothing here returns a Password or Notes
- * value except `reveal` and `entry` (a person's entry view), which the agent tool never reaches.
+ * attempt recorded in audit history with its outcome. Metadata stays separate from explicit `retrieve`, UI `reveal`, and the person’s `entry` view.
  */
 
 /** `person:<id>`, `agent:<id>` or `resolver`. */
@@ -341,6 +340,41 @@ export class VaultOps {
 			return { path: at.path, detail: { field } };
 		});
 		return r.outcome === 'committed' ? { ...r, value } : r;
+	}
+
+	/** Explicit agent read, independent of the SecretRef subprocess. Audit before releasing a value. */
+	async retrieve(
+		actor: Actor,
+		at: { path: string; uuid?: string },
+		field: Field,
+		context: { session: string | null }
+	) {
+		const detail = { field, session: context.session, ...(at.uuid ? { uuid: at.uuid } : {}) };
+		let value: string;
+		try {
+			if (!at.path) reject('invalid_input', 'retrieve: give the entry path');
+			value = await this.vault.read((db) => {
+				const entry = entryAt(db, at.path, at.uuid);
+				if (inRecycleBin(db, entry)) reject('not_found', `No entry at ${at.path}`);
+				return fieldText(entry, field);
+			});
+		} catch (error) {
+			const known = error instanceof Rejection;
+			this.audit.record({
+				actor,
+				action: 'retrieve',
+				path: at.path,
+				outcome: known ? (error.code === 'not_found' ? 'not_found' : 'rejected') : 'failed',
+				detail: { ...detail, code: known ? error.code : 'read_failed' }
+			});
+			return {
+				outcome: 'rejected' as const,
+				code: known ? error.code : 'unavailable',
+				reason: known ? error.message : 'Vault credential read failed'
+			};
+		}
+		this.audit.record({ actor, action: 'retrieve', path: at.path, outcome: 'ok', detail });
+		return { outcome: 'retrieved' as const, path: at.path, field, value };
 	}
 
 	/** A person fills a Request's password (spec §9). Returns whom to tell. */

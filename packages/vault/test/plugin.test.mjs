@@ -1,4 +1,4 @@
-// The OpenClaw wiring (spec §6, §7, §9, §10): one agent tool that never returns a value, UI-only
+// The OpenClaw wiring (spec §6, §7, §9, §10): one agent tool with explicit credential retrieval, UI-only
 // operations without tools, Usages from live config, and the asking agent told when a Request is
 // filled. Runs the built plugin against a recording stand-in for the plugin API.
 import { test } from 'node:test';
@@ -123,7 +123,7 @@ test('one agent tool; reveal, copy and every write are UI operations without too
 	assert.deepEqual(health, ['ok']);
 });
 
-test('the tool never returns a Password or Notes value', async () => {
+test('metadata and store results never return a Password or Notes value', async () => {
 	const { call } = await started(ENTRIES);
 	const list = await call({ action: 'list' });
 	assert.deepEqual(
@@ -162,6 +162,44 @@ test('the tool never returns a Password or Notes value', async () => {
 	]);
 	assert.doesNotMatch(all, /SECRET/);
 	assert.ok(!('notes' in get) && !('password' in get));
+});
+
+test('retrieve supplies only the requested field and records trusted context without values', async () => {
+	const { call, ui } = await started(ENTRIES);
+	assert.equal(
+		(await call({ action: 'retrieve', path: 'Providers/google-gemini' })).value,
+		'gem-SECRET'
+	);
+	assert.equal(
+		(await call({ action: 'retrieve', path: 'Providers/google-gemini', field: 'Notes' })).value,
+		'notes-SECRET'
+	);
+	assert.equal((await call({ action: 'retrieve', path: 'missing' })).code, 'not_found');
+	await ui('edit', { command: 'recycle_entry', path: 'Home-Assistant' });
+	assert.equal(
+		(await call({ action: 'retrieve', path: 'Recycle Bin/Home-Assistant' })).code,
+		'not_found'
+	);
+	await assert.rejects(
+		call({ action: 'retrieve', path: 'Providers/google-gemini', actor: 'person:owner' })
+	);
+	await assert.rejects(
+		call({ action: 'retrieve', path: 'Providers/google-gemini', field: 'Custom' })
+	);
+	const { events } = await ui('browse', { view: 'history', action: 'retrieve' });
+	assert.equal(events.length, 4);
+	assert.ok(
+		events.every((e) => e.actor === 'agent:verl' && e.detail.session === 'agent:verl:main')
+	);
+	assert.deepEqual(
+		events.map((e) => e.outcome),
+		['not_found', 'not_found', 'ok', 'ok']
+	);
+	assert.deepEqual(
+		events.map((e) => e.detail.field),
+		['Password', 'Password', 'Notes', 'Password']
+	);
+	assert.doesNotMatch(JSON.stringify(events), /SECRET/);
 });
 
 test('store is create-only and never overwrites; the agent cannot change or remove entries', async () => {

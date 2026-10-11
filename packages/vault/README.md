@@ -1,12 +1,12 @@
 # Falcon Vault
 
-**Your password manager inside OpenClaw, and where config credentials come from** — for
+**Credentials for your agents and OpenClaw, in your own KeePassXC database** — for
 [OpenClaw](https://openclaw.ai).
 
 Vault is an ordinary KeePassXC database that you own: it opens in the KeePassXC desktop app, backs
 up like any file, and outlives the plugin. OpenClaw reads config credentials from it through
-SecretRefs, and your agents can see what exists and ask for what is missing, but no agent ever
-receives a value.
+SecretRefs. Agents browse metadata, retrieve credentials for authorized jobs, store credentials
+they already hold, and ask for missing ones.
 
 ## What you get
 
@@ -21,8 +21,20 @@ receives a value.
 - A SecretRef **resolver**, declared by the plugin, so `openclaw.json` holds no file path.
 
 Agents get one tool, `falcon_vault`: `list`, `get`, `store` (a credential the agent already holds,
-create-only, never echoed back) and `request` (ask you for one). Agents cannot read a password or
-notes, and cannot edit, move or remove entries.
+create-only, never echoed back) and `request` (ask you for one). `retrieve` (path, optional field, optional uuid for duplicate paths) immediately returns one field,
+Password by default, from the same database. There are no Vault approval tiers, prompts or standing
+grants. Agents cannot edit, move or remove entries.
+
+Prefer an existing protected authenticated integration when available. Retrieval works independently
+of the SecretRef subprocess, including when the host's executable-ownership policy blocks that path.
+**Retrieved values reach the model provider, session transcripts and subsequent tool arguments.**
+Retrieve only what the authorized job needs; possessing a credential does not authorize new actions.
+`list` and `get` remain free of Password and Notes values. Keep secrets out of titles, usernames,
+URLs and request reasons: those are visible metadata. Retrieval history records the entry, field,
+trusted calling agent/session when supplied by OpenClaw, and outcome—not the value. No model-supplied
+identity is accepted, and a value is not returned if its audit record cannot be written. Startup
+failures before the database opens are reported through service health, not retrieval history;
+schema-invalid calls are rejected by OpenClaw before Vault runs.
 
 ## Install
 

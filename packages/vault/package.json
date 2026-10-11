@@ -1,7 +1,7 @@
 {
   "name": "@fdsouvenir/falcon-vault",
   "version": "5.0.0-dev.0",
-  "description": "Falcon Vault for OpenClaw: your password manager inside OpenClaw, and where config credentials come from.",
+  "description": "Falcon Vault for OpenClaw: credentials for your agents and OpenClaw, stored in your KeePassXC database.",
   "type": "module",
   "license": "CC-BY-NC-4.0",
   "repository": {

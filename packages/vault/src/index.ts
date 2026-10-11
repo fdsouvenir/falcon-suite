@@ -57,7 +57,7 @@ async function answer<T>(run: () => Promise<T>) {
 const feature = defineFeaturePlugin({
 	contract,
 	name: 'Falcon Vault',
-	description: 'Your password manager inside OpenClaw, and where config credentials come from.',
+	description: 'Credentials for your agents and OpenClaw, stored in your KeePassXC database.',
 	setup(api, events) {
 		// The plugin's own directory, read while registering (the API does not answer it later).
 		let root: string | undefined;
@@ -157,6 +157,15 @@ const feature = defineFeaturePlugin({
 					case 'get':
 						if (!i.path) return invalid('get: give the entry path');
 						return answer(() => ops.agentEntry(i.path!, liveConfig(), PLUGIN_ID));
+					case 'retrieve':
+						return ops.retrieve(
+							actor,
+							{ path: i.path ?? '', uuid: i.uuid },
+							i.field ?? 'Password',
+							{
+								session: context.source === 'tool' ? (context.tool.sessionKey ?? null) : null
+							}
+						);
 					case 'store': {
 						if (!i.title) return invalid('store: give a title');
 						if (!i.password)
@@ -267,7 +276,7 @@ const feature = defineFeaturePlugin({
 						if (result.outcome === 'committed')
 							tell(
 								request,
-								`Falcon Vault: the entry you requested, ${result.path}, now has a value.${result.reference ? ` Use it in config through its reference "${result.reference}".` : ''}`
+								`Falcon Vault: the entry you requested, ${result.path}, now has a value.${result.reference ? ` Retrieve it with falcon_vault action retrieve, or use its config reference "${result.reference}".` : ''}`
 							);
 						return committed(result);
 					}

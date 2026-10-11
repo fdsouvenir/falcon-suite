@@ -1,7 +1,7 @@
 {
   "id": "falcon-vault",
   "name": "Falcon Vault",
-  "description": "Your password manager inside OpenClaw, and where config credentials come from.",
+  "description": "Credentials for your agents and OpenClaw, stored in your KeePassXC database.",
   "version": "5.0.0-dev.0",
   "categories": [
     "security"
@@ -30,9 +30,9 @@
     }
   },
   "controlUi": {
-    "entry": "dist/control-ui/17d5e0312f211f1dff2e17f4b28510ca96b1a621f8355f797b7e8826bbe7ea3b/index.js",
+    "entry": "dist/control-ui/adb238ef5226af9375c9ee74e876993d43f52f0404a6be3923297498318f3b30/index.js",
     "styles": [
-      "dist/control-ui/17d5e0312f211f1dff2e17f4b28510ca96b1a621f8355f797b7e8826bbe7ea3b/index.css"
+      "dist/control-ui/adb238ef5226af9375c9ee74e876993d43f52f0404a6be3923297498318f3b30/index.css"
     ]
   },
   "contracts": {

@@ -73,7 +73,10 @@ export function entryAt(db: Kdbx, path: string, uuid?: string): KdbxEntry {
 	}
 	if (matches.length === 1) return matches[0].entry;
 	if (!matches.length) return reject('not_found', `No entry at ${path}`);
-	return reject('ambiguous', `${matches.length} entries share the path ${path}; rename one first`);
+	return reject(
+		'ambiguous',
+		`${matches.length} entries share the path ${path}; supply the entry UUID or ask the person to rename one`
+	);
 }
 
 export const hasEntryAt = (db: Kdbx, path: string) => allEntries(db).some((e) => e.path === path);

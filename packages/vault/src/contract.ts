@@ -32,11 +32,13 @@ export const contract = defineFeatureContract({
 		agent: {
 			kind: 'action',
 			description:
-				'Falcon Vault, the password manager config credentials come from. You never receive a password or notes value from it, in any form; credentials reach OpenClaw through config references. action list (group?, search?): groups and entries with username, URL, which fields are set, and the config reference. get (path): one entry, plus where OpenClaw config uses it. store (title, group?, username?, password, url?, notes?): save a credential you already hold, for example one you chose when signing up; create-only, fails if the path exists, and the result never repeats the value. request (title, group?, username?, url?, notes?, reason): ask the person for a credential only they have; it waits under Needs a value in the Vault tab, and you are told in this session when it is filled. You cannot edit, move, rename or remove entries.',
+				'Falcon Vault supplies credentials for authorized jobs. list/get browse metadata without Password or Notes values. retrieve (path, field? default Password, uuid? for duplicate paths) immediately returns one stored field to you; prefer existing protected authenticated integrations when available. Retrieved values reach your model provider, transcripts and subsequent tool arguments. Retrieval does not authorize actions: stay within the user’s task. store (title, group?, username?, password, url?, notes?) creates a credential you already hold, never overwrites or echoes it. request (title, group?, username?, url?, notes?, reason) asks the person for a missing credential and tells this session when filled. No Vault approval tiers or standing grants. You cannot edit, move, rename or remove entries',
 			input: Type.Object(
 				{
-					action: Lit(['list', 'get', 'store', 'request']),
+					action: Lit(['list', 'get', 'retrieve', 'store', 'request']),
 					path: Type.Optional(Path),
+					uuid: Type.Optional(Uuid),
+					field: Type.Optional(Lit(FIELDS)),
 					group: Type.Optional(
 						Text(
 							1024,
