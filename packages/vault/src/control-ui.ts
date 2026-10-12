@@ -8,12 +8,12 @@ export default defineControlUiPlugin({
 	activate(host) {
 		host.ui.registerPage({
 			id: PAGE_ID,
-			label: 'Vault',
+			label: 'Falcon Vault',
 			mount: (container, context) => mountVault(container, context)
 		});
 		host.ui.registerNavigation({
 			id: PAGE_ID,
-			label: 'Vault',
+			label: 'Falcon Vault',
 			page: { id: PAGE_ID },
 			icon: 'key'
 		});

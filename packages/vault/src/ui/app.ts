@@ -175,7 +175,7 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 	const header = h(
 		'header',
 		{ class: 'fv-header' },
-		h('h1', { class: 'fv-title' }, 'Vault'),
+		h('h1', { class: 'fv-title' }, 'Falcon Vault'),
 		h(
 			'div',
 			{ class: 'fv-header-actions' },
@@ -273,7 +273,7 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 			h(
 				'div',
 				{ class: 'fv-unavailable', role: 'alert' },
-				h('h2', { class: 'fv-unavailable-title' }, 'Vault unavailable'),
+				h('h2', { class: 'fv-unavailable-title' }, 'Falcon Vault unavailable'),
 				h('p', null, reason),
 				h('button', { class: 'fv-btn', type: 'button', on: { click: () => load() } }, 'Retry')
 			)
@@ -414,7 +414,7 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 			),
 			...(pane ? [pane] : [])
 		);
-		document.title = `${listTitle(c, entries.length).split(' · ')[0]} · Vault`;
+		document.title = `${listTitle(c, entries.length).split(' · ')[0]} · Falcon Vault`;
 	}
 
 	const onKey = (e: KeyboardEvent) => {
