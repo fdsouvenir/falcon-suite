@@ -8,12 +8,12 @@ export default defineControlUiPlugin({
 	activate(host) {
 		host.ui.registerPage({
 			id: PAGE_ID,
-			label: 'Work',
+			label: 'Falcon Work',
 			mount: (container, context) => mountWork(container, context)
 		});
 		host.ui.registerNavigation({
 			id: PAGE_ID,
-			label: 'Work',
+			label: 'Falcon Work',
 			page: { id: PAGE_ID },
 			icon: 'listChecks'
 		});

@@ -20,7 +20,10 @@ moving you toward what you actually care about.
   Raw tool calls stay in OpenClaw's transcript, not in Work.
 - **Warnings** that need nobody to report them: stalled Tasks, overdue follow-ups, unanswered
   questions, Objectives without progress.
-- A native **Work** page in the Control UI that follows your theme, light or dark.
+- A native **Falcon Work** page in the Control UI that follows your theme, light or dark.
+  Its title includes the installed release version: **Falcon Work vpreview.38** for
+  `5.0.0-preview.38`, or **Falcon Work v5.0.0** for a stable release. The sidebar says
+  **Falcon Work** without a version.
 
 Agents get tools for reading Work, planning Projects, tracking Tasks, asking you and recording Findings.
 

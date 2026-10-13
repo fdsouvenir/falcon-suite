@@ -379,7 +379,11 @@ date) as a quiet line under its title.
 theme variables, fonts and full-width page layout, with no palette, fonts or page frame of its
 own, and the host's own components (dialogs, pickers, agent avatars, session summaries) wherever
 they exist. It follows light/dark mode and any theme the human picks. The sidebar icon is
-`listChecks`. Screens are designed in Stitch first, starting from the Control UI's theme.
+`listChecks`, labelled **Falcon Work**. The page title is `Falcon Work v<version>`:
+preview builds show their prerelease label (for example, `vpreview.38`), while stable builds
+show the full version (for example, `v5.0.0`). Release staging supplies the version from the
+published package, never a hard-coded preview number in the UI. Screens are designed in
+Stitch first, starting from the Control UI's theme.
 
 _(Follow-on)_ The same views are available as native widgets the agent can pin to a session
 dashboard — **Needs you**, **Objective progress**, a single **Task** or **Project** — so the view

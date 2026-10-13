@@ -1,6 +1,7 @@
 import type { ControlUiHost, ControlUiViewContext } from 'openclaw/plugin-sdk/control-ui';
 import { createFeatureClient } from 'openclaw/plugin-sdk/feature-contract';
 import { contract } from '../contract.js';
+import { PLUGIN_VERSION } from '../identity.js';
 import { h, who } from './dom.js';
 import { overviewView } from './views/overview.js';
 import { objectivesView, objectiveView } from './views/objectives.js';
@@ -116,7 +117,7 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 			h(
 				'div',
 				{ class: 'fw-header-row' },
-				h('h1', { class: 'fw-title' }, 'Work'),
+				h('h1', { class: 'fw-title' }, `Falcon Work v${PLUGIN_VERSION.replace(/^[^-]+-/, '')}`),
 				h('div', { class: 'fw-toolbar' }, search)
 			),
 			h(

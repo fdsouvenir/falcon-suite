@@ -78,7 +78,7 @@ if (existsSync(path.join(source, 'node_modules')))
 // Identity: one source constant, the npm package, and the manifest.
 writeFileSync(
 	path.join(stage, 'src', 'identity.ts'),
-	`// Staged for the ${channel} channel by scripts/stage.mjs.\nexport const PLUGIN_ID = '${identity.id}';\n`
+	`// Staged for the ${channel} channel by scripts/stage.mjs.\nexport const PLUGIN_ID = '${identity.id}';\nexport const PLUGIN_VERSION = '${version}';\n`
 );
 const pkg = JSON.parse(readFileSync(path.join(stage, 'package.json'), 'utf8'));
 Object.assign(pkg, { name: identity.npm, version });
