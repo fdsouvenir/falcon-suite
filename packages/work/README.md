@@ -2,7 +2,7 @@
 
 **A record of what your agents do, why, and what needs you** — for [OpenClaw](https://openclaw.ai).
 
-Your agents do real work for you. Falcon Work makes them record it, in a structure that gives you
+Your agents do real work for you. Falcon Work records their outcomes, in a structure that gives you
 one place to see everything: what they are working on, what is waiting on you, and whether it is
 moving you toward what you actually care about.
 
@@ -15,14 +15,14 @@ moving you toward what you actually care about.
 - **Tasks** with a definition of done, a Result with evidence, waiting states and dependencies.
 - **Questions, Decisions and Findings** — what your agent needs from you, the choices you approve,
   and what it learned. Answer and decide right in the Work tab.
-- **Recording is enforced, not requested.** What the agent actually does is captured automatically
-  and attached to its Task; if a turn changes things no Task explains, the agent is sent back to
-  record it. Anything left unexplained shows as untracked activity.
+- **Recording happens after the turn.** Outcomes are filed automatically under the session's
+  Task, or shown as unfiled work. Recording never reopens a turn or replaces its chat answer.
+  Raw tool calls stay in OpenClaw's transcript, not in Work.
 - **Warnings** that need nobody to report them: stalled Tasks, overdue follow-ups, unanswered
   questions, Objectives without progress.
 - A native **Work** page in the Control UI that follows your theme, light or dark.
 
-Agents get two tools: `falcon_work_read` and `falcon_work`.
+Agents get tools for reading Work, planning Projects, tracking Tasks, asking you and recording Findings.
 
 ## Install
 
@@ -32,10 +32,10 @@ openclaw plugins install clawhub:@fdsouvenir/falcon-work
 
 Then allow two settings:
 
-- **The agent's brief and the end-of-turn nudge** need conversation access, which OpenClaw requires
+- **The agent's brief and completed-turn recording** need conversation access, which OpenClaw requires
   you to grant to plugins you install yourself:
   `openclaw config set plugins.entries.falcon-work.hooks.allowConversationAccess true`
-  Without it, the tools and activity capture still work, but the agent gets no brief and no nudge.
+  Without it, the tools and activity capture still work, but the agent gets no brief and completed-turn recording is unavailable.
 - **The Work page** is native Control UI: turn on **Settings → Labs → Custom plugin UI**
   (`gateway.controlUi.experimental.customPlugins: true`).
 

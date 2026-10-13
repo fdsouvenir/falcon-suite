@@ -144,24 +144,44 @@ test('registers the tools, the UI operations and the three hooks', async () => {
 		'read',
 		'task'
 	]);
-	for (const h of [
-		'before_prompt_build',
-		'after_tool_call',
-		'before_agent_finalize',
-		'subagent_spawned'
-	])
+	for (const h of ['before_prompt_build', 'after_tool_call', 'agent_end', 'subagent_spawned'])
 		assert.ok(reg.hooks[h], h);
 });
 
-const finalize = async (hook, runId, reply = 'Done.', ctx = {}) => {
-	const r = hook(
-		'before_agent_finalize',
-		{ runId, sessionId: 's', stopHookActive: false, lastAssistantMessage: reply },
+test('recording cannot reopen or replace the delivered answer, even on failure or duplicate delivery', async () => {
+	const runtime = {
+		cfg: { agents: { defaults: { utilityModel: 'openai/gpt-5.6-luna' } } },
+		llm: {
+			complete: async () => {
+				throw new Error('writer unavailable');
+			}
+		}
+	};
+	const { reg, hook, call } = await started(runtime);
+	assert.equal(reg.hooks.before_agent_finalize, undefined, 'Work has no answer-revision hook');
+	const reply = 'The substantive answer must survive recording unchanged.';
+	hook('before_prompt_build', { prompt: 'Fix it' }, { runId: 'answer', trigger: 'user' });
+	hook('after_tool_call', { toolName: 'write', params: { path: 'src/fix.ts' }, runId: 'answer' });
+	const event = {
+		runId: 'answer',
+		success: true,
+		messages: [{ role: 'assistant', content: [{ type: 'text', text: reply }] }]
+	};
+	const before = structuredClone(event);
+	assert.equal(await hook('agent_end', event, { runId: 'answer' }), undefined);
+	await hook('agent_end', event, { runId: 'answer' });
+	assert.deepEqual(event, before, 'the transcript and answer are untouched');
+	const entries = (await call('falcon_work_read', { view: 'timeline' })).entries;
+	assert.equal(entries.length, 1, 'failed writer still leaves one outcome record');
+	assert.ok(reg.logs.some((line) => line.includes('writer unavailable')));
+});
+
+const finalize = async (hook, runId, reply = 'Done.', ctx = {}) =>
+	hook(
+		'agent_end',
+		{ runId, messages: [{ role: 'assistant', content: reply }], success: true },
 		{ runId, ...ctx }
 	);
-	await hook('agent_end', { runId, messages: [], success: true }, { runId, ...ctx });
-	return r;
-};
 
 test("without models, a turn is filed under the session's Task, or waits as unfiled work", async () => {
 	const { call, hook } = await started();
@@ -729,11 +749,7 @@ const turn = async (hook, runId, message, reply, ctx = {}) => {
 		{ runId, trigger: 'user', ...ctx }
 	);
 	await settle();
-	hook(
-		'before_agent_finalize',
-		{ runId, sessionId: 's', stopHookActive: false, lastAssistantMessage: reply },
-		{ runId, ...ctx }
-	);
+	await finalize(hook, runId, reply, ctx);
 	await settle();
 };
 

@@ -44,8 +44,6 @@ type RunState = {
 	request: string | null;
 	/** What the turn was asked, whoever asked it (a subagent's task, a scheduled prompt). */
 	prompt: string | null;
-	/** The agent's final reply, from before_agent_finalize. */
-	reply?: string;
 };
 
 /** Provider small-model defaults OpenClaw uses when no utility model is set (concepts/models). */
@@ -542,28 +540,6 @@ const feature = defineFeaturePlugin({
 				).text;
 		};
 
-		// At the end of every turn: keep the reply for the record keeper; on turns the person started,
-		// the gates catch what the reply leaves waiting on them.
-		api.on('before_agent_finalize', (event, ctx) => {
-			if (event.stopHookActive) return;
-			const state = runState(event.runId);
-			const reply = event.lastAssistantMessage ?? '';
-			const session = ctx?.sessionKey ?? event.sessionKey ?? '';
-			const work = ctx?.agentId ? maybe() : null;
-			if (work && ctx?.agentId && state?.request && reply)
-				void captureTurn(
-					work,
-					ctx.agentId,
-					session,
-					state.request,
-					reply,
-					event.runId ?? work.now(),
-					state.asked
-				);
-			if (session && reply) lastReply.set(session, reply);
-			if (state) state.reply = reply;
-		});
-
 		// After the turn, inside the hook's own awaited scope (model calls need one): the record
 		// keeper files what the turn changed (spec §10, The record keeper).
 		api.on('agent_end', async (event, ctx) => {
@@ -572,7 +548,37 @@ const feature = defineFeaturePlugin({
 			if (!work || !ctx?.agentId || !state || state.done) return;
 			state.done = true;
 			const agentId = ctx.agentId;
+			// Only observe completed transcript text. Work has no finalize hook and cannot request
+			// a revision, continue the agent or replace its delivered answer.
+			const messages = event.messages as { role?: string; content?: unknown }[];
+			const reply =
+				[...messages].reverse().flatMap((message) => {
+					if (message.role !== 'assistant') return [];
+					const content = message.content;
+					const text =
+						typeof content === 'string'
+							? content
+							: Array.isArray(content)
+								? content
+										.filter((part) => part?.type === 'text' && typeof part.text === 'string')
+										.map((part) => part.text)
+										.join('\n')
+								: '';
+					return text ? [text] : [];
+				})[0] ?? '';
+			if (ctx.sessionKey && reply) lastReply.set(ctx.sessionKey, reply);
 			try {
+				if (event.success && state.request && reply)
+					await captureTurn(
+						work,
+						agentId,
+						ctx.sessionKey ?? '',
+						state.request,
+						reply,
+						event.runId ?? ctx.runId ?? work.now(),
+						state.asked
+					);
+
 				const r = await keepRecord(
 					work,
 					{
@@ -580,7 +586,7 @@ const feature = defineFeaturePlugin({
 						session: ctx.sessionKey ?? null,
 						run: event.runId ?? ctx.runId ?? work.now(),
 						request: state.request ?? state.prompt,
-						reply: state.reply ?? '',
+						reply,
 						outcomes: state.outcomes,
 						person: !!state.request,
 						agentRecorded: state.recorded
