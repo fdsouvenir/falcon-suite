@@ -1,6 +1,7 @@
 import type { ControlUiHost, ControlUiViewContext } from 'openclaw/plugin-sdk/control-ui';
 import { createFeatureClient } from 'openclaw/plugin-sdk/feature-contract';
 import { contract } from '../contract.js';
+import { PLUGIN_VERSION } from '../identity.js';
 import type { EntrySummary, GroupNode, Usage } from '../store/ops.js';
 import { h, icon } from './dom.js';
 import { entryView } from './entry.js';
@@ -175,7 +176,7 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 	const header = h(
 		'header',
 		{ class: 'fv-header' },
-		h('h1', { class: 'fv-title' }, 'Falcon Vault'),
+		h('h1', { class: 'fv-title' }, `Falcon Vault v${PLUGIN_VERSION.replace(/^[^-]+-/, '')}`),
 		h(
 			'div',
 			{ class: 'fv-header-actions' },

@@ -10,9 +10,11 @@ they already hold, and ask for missing ones.
 
 ## What you get
 
-- A native **Vault** page in the Control UI that follows your theme, light or dark: groups,
+- A native **Falcon Vault** page in the Control UI that follows your theme, light or dark: groups,
   search across every entry, and an entry pane where you reveal (it hides again after 15
   seconds) or copy a password, edit in place, and see which OpenClaw settings use the entry.
+  The sidebar says **Falcon Vault**; the heading adds this plugin's release version, for example
+  **Falcon Vault vpreview.38** or **Falcon Vault v5.0.0**, following the suite branding standard.
 - **Needs a value** — credentials your agents asked for. Fill one in and the agent's session is
   told it is ready (never the value).
 - **Recycle Bin**, as in KeePassXC: removing an entry is undone by moving it back.

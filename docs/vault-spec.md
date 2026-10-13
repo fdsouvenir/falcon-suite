@@ -175,7 +175,11 @@ An agent cannot edit, move, rename or remove entries, and cannot change a passwo
 Designed in Stitch on OpenClaw's own theme (`.stitch/README.md`, Falcon Vault 5). Like Work, the
 page uses the Control UI's theme variables only, so it follows OpenClaw's light/dark setting.
 
-- **Header:** "Vault", then only **New group** (quiet) and **New entry** (primary). Below it, one
+- **Branding:** the sidebar says **Falcon Vault**, following the suite-wide rule in `README.md`.
+  The page heading is **Falcon Vault v<version>**, using this plugin's release version supplied
+  by staging. Prereleases show the suffix (`vpreview.38`); stable releases show the full version
+  (`v5.0.0`). The version is not part of the sidebar label.
+- **Header:** the branded, versioned heading, then only **New group** (quiet) and **New entry** (primary). Below it, one
   full-width search across every entry.
 - **Group tree:** "Needs a value" pinned at the top when there are Requests; "All entries"; the
   groups; "Recycle Bin" at the bottom as an ordinary group. Each group has a "⋯" menu: Rename group,
@@ -197,7 +201,7 @@ page uses the Control UI's theme variables only, so it follows OpenClaw's light/
 - **Needs a value:** selecting a Request shows the agent's reason, the fields it filled in, and an
   empty Password field with Save and Dismiss request. On Save the entry leaves Needs a value and
   the asking agent's session is told the entry is ready (never the value).
-- **Mobile:** one column. A top bar with the Control UI menu, "Vault" and "+"; search; a group
+- **Mobile:** one column. A top bar with the Control UI menu, the same branded, versioned heading and "+"; search; a group
   button that opens the tree as a bottom sheet, with a "needs a value" pill beside it; the list.
   Tapping an entry opens it full screen with Back; Edit happens in that screen with Save in the top
   bar and "Move to Recycle Bin" at the bottom. Inputs are 44px tall with 16px text so phones don't
