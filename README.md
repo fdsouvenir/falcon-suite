@@ -26,7 +26,7 @@ modules, in both preview and production channels. Sidebar labels do not include 
 
 The heading uses that module's own release version, supplied by release staging rather than
 hardcoded in the UI. Prereleases show the suffix (`5.0.0-preview.38` becomes `vpreview.38`);
-stable releases show the full version (`5.0.0` becomes `v5.0.0`). Work and Vault can be installed
+stable releases show the full version (`1.0.0` becomes `v1.0.0`). Work and Vault can be installed
 at different versions; neither displays another module's version.
 
 ## Develop

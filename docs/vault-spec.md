@@ -210,8 +210,9 @@ page uses the Control UI's theme variables only, so it follows OpenClaw's light/
 
 ## 10. Persistence and packaging
 
-- Package `@fdsouvenir/falcon-vault`, plugin id `falcon-vault`, in `packages/vault`, on the suite's
-  shared 5.x version line with preview and production listings, as for Work.
+- Package `@fdsouvenir/falcon-vault`, plugin id `falcon-vault`, in `packages/vault`. Production starts its independent version line at 1.0.0; the separate
+  preview listing retains its existing 5.x preview history. Release staging sets each listing's
+  identity and version without changing the source development version.
 - A feature contract shared by the backend, the agent tool and the native UI. UI-only operations
   (reveal, copy, write actions) have no `tool` declaration.
 - The database is opened inside the Gateway process and kept loaded between operations. The
