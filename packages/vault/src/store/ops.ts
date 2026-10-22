@@ -16,7 +16,7 @@ import {
 	Rejection,
 	rootOf
 } from './model.js';
-import { groupOf, joinPath, referenceFor, referenceProblem, type Field } from './paths.js';
+import { groupOf, joinPath, referenceFor, type Field } from './paths.js';
 import { usagesOf, type Usage } from './usages.js';
 import { Vault } from './vault.js';
 
@@ -153,7 +153,7 @@ export class VaultOps {
 			return {
 				...this.summary(db, e, path, requests),
 				notes: fieldText(e, 'Notes'),
-				usages: usagesOf(config, pluginId, path),
+				usages: usagesOf(config, pluginId, path, e.uuid.id),
 				duplicates: allEntries(db).filter((x) => x.path === path).length - 1,
 				history: this.audit.history({ path, limit: 40 })
 			};
@@ -167,7 +167,7 @@ export class VaultOps {
 			if (inRecycleBin(db, e)) reject('not_found', `No entry at ${path}`);
 			return {
 				...this.summary(db, e, path, this.requests(db)),
-				usages: usagesOf(config, pluginId, path)
+				usages: usagesOf(config, pluginId, path, e.uuid.id)
 			};
 		});
 	}
@@ -218,7 +218,7 @@ export class VaultOps {
 			checkFields(f);
 			const title = checkName(f.title ?? '', 'Title');
 			if (f.group) for (const n of f.group.split('/')) checkName(n, 'Group name');
-			await this.vault.change((db) => {
+			const reference = await this.vault.change((db) => {
 				if (hasEntryAt(db, path)) reject('exists', `An entry already exists at ${path}`);
 				const group = this.ensureGroup(db, f.group ?? '');
 				const e = db.createEntry(group);
@@ -227,8 +227,9 @@ export class VaultOps {
 				setField(e, 'Password', f.password ?? '');
 				setField(e, 'URL', f.url ?? '');
 				setField(e, 'Notes', f.notes ?? '');
+				return referenceFor(e.uuid.id);
 			});
-			return { path, detail: { fields: setNames(f) } };
+			return { path, reference, detail: { fields: setNames(f) } };
 		});
 	}
 
@@ -246,7 +247,7 @@ export class VaultOps {
 			if (reason.length > 500) reject('invalid_input', 'reason is too long');
 			const title = checkName(f.title ?? '', 'Title');
 			if (f.group) for (const n of f.group.split('/')) checkName(n, 'Group name');
-			await this.vault.change((db) => {
+			const reference = await this.vault.change((db) => {
 				if (hasEntryAt(db, path)) reject('exists', `An entry already exists at ${path}`);
 				const e = db.createEntry(this.ensureGroup(db, f.group ?? ''));
 				setField(e, 'Title', title);
@@ -254,8 +255,9 @@ export class VaultOps {
 				setField(e, 'Password', '');
 				setField(e, 'URL', f.url ?? '');
 				setField(e, 'Notes', f.notes ?? '');
+				return referenceFor(e.uuid.id);
 			});
-			return { path, detail: { reason, session: f.session ?? null } };
+			return { path, reference, detail: { reason, session: f.session ?? null } };
 		});
 	}
 
@@ -289,10 +291,11 @@ export class VaultOps {
 				set('Notes', f.notes);
 				if (group !== groupPathNow) db.move(e, groupAt(db, group));
 				if (fields.length) e.times.update();
-				return { fields, to };
+				return { fields, to, reference: inRecycleBin(db, e) ? null : referenceFor(e.uuid.id) };
 			});
 			return {
 				path: changed.to,
+				reference: changed.reference,
 				detail: {
 					fields: changed.fields,
 					...(changed.to !== at.path ? { to: changed.to } : {})
@@ -383,14 +386,15 @@ export class VaultOps {
 		const r = await this.attempt(actor, 'fill_request', at.path, key, async () => {
 			if (!password) reject('invalid_input', 'Enter the password');
 			checkFields({ password });
-			await this.vault.change((db) => {
+			const reference = await this.vault.change((db) => {
 				const e = entryAt(db, at.path, at.uuid);
 				request = this.requests(db).get(at.path) ?? null;
 				if (!request) reject('not_found', `${at.path} is not waiting for a value`);
 				setField(e, 'Password', password);
 				e.times.update();
+				return referenceFor(e.uuid.id);
 			});
-			return { path: at.path, detail: { requested_by: request!.actor } };
+			return { path: at.path, reference, detail: { requested_by: request!.actor } };
 		});
 		return { result: r, request: r.outcome === 'committed' ? (request as Request | null) : null };
 	}
@@ -508,8 +512,8 @@ export class VaultOps {
 				URL: !!fieldText(e, 'URL'),
 				Notes: !!fieldText(e, 'Notes')
 			},
-			reference: recycled ? null : referenceFor(path),
-			reference_problem: recycled ? 'It is in the Recycle Bin.' : referenceProblem(path),
+			reference: recycled ? null : referenceFor(e.uuid.id),
+			reference_problem: recycled ? 'It is in the Recycle Bin.' : null,
 			recycled,
 			from: recycled ? this.previousGroup(db, e) : null,
 			request: request ? { actor: request.actor, at: request.at, reason: request.reason } : null,
@@ -554,7 +558,11 @@ export class VaultOps {
 		action: string,
 		path: string,
 		key: string | undefined,
-		run: () => Promise<{ path: string; detail?: Record<string, unknown> }>
+		run: () => Promise<{
+			path: string;
+			reference?: string | null;
+			detail?: Record<string, unknown>;
+		}>
 	): Promise<Result> {
 		if (key) {
 			const done = this.audit.replayed(key);
@@ -562,15 +570,16 @@ export class VaultOps {
 				return {
 					outcome: 'committed',
 					path: (done.detail?.to as string) ?? done.path ?? path,
-					reference: referenceFor((done.detail?.to as string) ?? done.path ?? path),
+					reference: (done.detail?.reference as string | null) ?? null,
 					replayed: true
 				};
 		}
 		const at = this.now().toISOString();
 		try {
 			const r = await run();
-			this.log({ at, actor, action, path, outcome: 'ok', detail: r.detail, key });
-			return { outcome: 'committed', path: r.path, reference: referenceFor(r.path) };
+			const reference = r.reference ?? null;
+			this.log({ at, actor, action, path, outcome: 'ok', detail: { ...r.detail, reference }, key });
+			return { outcome: 'committed', path: r.path, reference };
 		} catch (error) {
 			if (error instanceof Rejection) {
 				const outcome: AuditOutcome = error.code === 'not_found' ? 'not_found' : 'rejected';

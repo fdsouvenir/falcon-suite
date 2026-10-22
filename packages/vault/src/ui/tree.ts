@@ -49,7 +49,8 @@ export function newGroupDialog(c: Ctx, parent: string) {
 function renameDialog(c: Ctx, g: GroupNode) {
 	formDialog(c.host, {
 		title: 'Rename group',
-		description: 'Its entries move with it. Config references to them stop working until updated.',
+		description:
+			'Its entries move with it. UUID config references keep working; old path references need updating.',
 		fields: [{ id: 'name', label: 'Name', value: g.name }],
 		submitLabel: 'Rename',
 		submit: async (v) => {

@@ -173,7 +173,7 @@ export function usages(e: EntryDetail, intro = true) {
 			? h(
 					'p',
 					{ class: 'fv-muted fv-small' },
-					'OpenClaw reads this entry for these settings. Renaming or deleting it breaks them.'
+					'OpenClaw reads this entry for these settings. UUID references survive renames and moves; path references do not. Deleting it breaks both.'
 				)
 			: null,
 		h(
@@ -398,7 +398,7 @@ export function entryView(c: Ctx, e: EntryDetail) {
 				? h(
 						'p',
 						{ class: 'fv-warn-text fv-small' },
-						`${e.duplicates + 1} entries share this path. Rename one so each can be referenced.`
+						`${e.duplicates + 1} entries share this path. UUID config references identify each one separately; path references are ambiguous.`
 					)
 				: null,
 			h(

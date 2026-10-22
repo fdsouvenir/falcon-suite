@@ -38,7 +38,7 @@ every entry. Per-person permissions are out of scope.
 | **Group**     | A KeePassXC group. Groups nest.                                                    |
 | **Entry**     | A KeePassXC entry: Title, UserName, Password, URL, Notes.                          |
 | **Path**      | An entry's or group's full location, `Group/Sub/Title`. This is its identity.      |
-| **Reference** | The SecretRef id that resolves an entry's field: `Path` or `Path:Field`.           |
+| **Reference** | The SecretRef id: stable `entry/<uuid>` or legacy `Path`, optionally `:Field`.     |
 | **Usage**     | A place in OpenClaw config whose SecretRef resolves from an entry.                 |
 | **Request**   | An entry an agent has asked for, which has no password yet (§7).                   |
 | **Event**     | One row of audit history: who did what to which path, when, and whether it worked. |
@@ -74,8 +74,9 @@ every entry. Per-person permissions are out of scope.
 - Every entry is the same kind of thing: KeePassXC's standard fields, holding plain values.
   Entries created in the Vault tab, by an agent, or in the KeePassXC desktop app are
   indistinguishable.
-- **An entry's identity is its exact path**, never a title search. A renamed or moved entry is a
-  different path. Nothing is matched by its old name.
+- **Config identity is the existing KeePass UUID.** Agent and UI operations still address the exact
+  current path (plus UUID to distinguish duplicate paths), never a title search. Old path references
+  do not follow a rename or move; UUID config references do.
 - **Entries:** create, edit any field, rename, move to another group, remove.
 - **Groups:** create, remove when empty. Renaming a group is done by creating the new group, moving
   its entries, and removing the old one. The UI offers this as one **Rename group** action, saved
@@ -84,7 +85,7 @@ every entry. Per-person permissions are out of scope.
   matches exactly. A removed entry goes to the database's Recycle Bin, as KeePassXC does, and the
   Recycle Bin is shown as an ordinary group, so a mistaken removal is undone by moving the entry
   back. Verl's database has its Recycle Bin enabled.
-- Renaming, moving or removing an entry that has **Usages** (§5) warns first, naming each Usage.
+- Renaming or moving warns for path-based **Usages** (§5); removing warns for all Usages.
   Vault never rewrites config to follow a moved entry.
 
 ## 5. References and Usages
@@ -102,17 +103,24 @@ every entry. Per-person permissions are out of scope.
 
   Disabling or removing the plugin makes these SecretRefs fail closed.
 
-- Reference grammar is unchanged from 4.4: `Path` returns Password, and `Path:Field` returns
-  `Password`, `UserName`, `URL`, `Notes` or `Title`.
-- OpenClaw's exec id grammar is `^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,255}$`. **It has no spaces.** An
-  entry whose path has a space or other excluded character cannot be referenced. The entry view
-  says so and suggests a rename, rather than offering a Reference that would never resolve.
+- New config references use `entry/<uuid>`, where `uuid` is the existing KeePass UUID encoded
+  as unpadded base64url (22 characters). No mapping, migration, rename or database write is needed.
+  The entry menu's **Copy config reference** copies the complete SecretRef using the current
+  provider alias. These references survive entry and folder renames or moves.
+- Both UUID and legacy `Path` references return Password by default; append `:Field` for
+  `Password`, `UserName`, `URL`, `Notes` or `Title`. Legacy paths keep their existing behavior and
+  OpenClaw exec id restrictions (`^[A-Za-z0-9][A-Za-z0-9._:/#-]{0,255}$`). UUID references work even
+  when the visible path has spaces or other excluded characters. Duplicate paths can be addressed
+  by their distinct UUIDs. Any UUID/path collision is rejected as ambiguous, never silently rebound.
+- Recycled and permanently deleted entries fail closed. Restoring the same entry restores its UUID
+  reference; creating another entry at its former path does not. Rename/move warnings apply only to
+  path-based Usages; deletion warnings apply to both forms.
 - The resolver implements exec-provider protocol v1. It accepts at most 50 ids per request, takes
   the lock, reads only the named fields, and returns `NOT_FOUND` per id without revealing whether
   other entries exist. Its output goes only to OpenClaw's protected resolver pipe.
 - **Usages are never stored.** Each time an entry is shown, Vault reads OpenClaw's live config
   (`api.runtime.config.current()`) for SecretRefs whose provider is Vault's and whose id names that
-  entry, so the list is always current. The entry view lists them by config path, for example
+  entry by UUID or path, so the list is always current. The entry view lists them by config path, for example
   `models.providers.anthropic.apiKey`.
 
 ## 6. Who can see a value
@@ -188,7 +196,8 @@ page uses the Control UI's theme variables only, so it follows OpenClaw's light/
 - **List:** each entry's title, with username · site underneath.
 - **Entry pane:** Username, Password (masked, Reveal/Hide and Copy), URL, Notes. Then, only if
   OpenClaw config uses the entry, **Used by OpenClaw**: each setting by name with its config path,
-  and the sentence "Renaming or deleting it breaks them." Then a short History. There is no
+  and an explanation that UUID references survive moves while path references do not; deleting
+  breaks both. Then a short History. There is no
   separate Reference section; the Reference is copied from the "⋯" menu (Copy config reference).
 - **Edit in place:** Edit turns the pane into a form (Title, Group, fields, Notes) with Cancel and
   Save. "Generate password" is a small text button under the Password field, not a primary

@@ -30,28 +30,12 @@ export function parseReference(id: string): { path: string; field: Field } {
 	return m ? { path: m[1], field: m[2] as Field } : { path: id, field: 'Password' };
 }
 
-/**
- * Why an entry at this path cannot be referenced, or null when it can. Every field selector has
- * to fit the grammar too, so the longest one (`:UserName`) is checked.
- */
-export function referenceProblem(path: string): string | null {
-	if (!path) return 'It has no title.';
-	if (FIELD_SUFFIX.test(path))
-		return 'Its title ends like a field selector (for example ":URL"), so a reference to it would name a field instead.';
-	const bad = [...new Set(path.replace(/[A-Za-z0-9._:/#-]/g, ''))];
-	if (bad.length)
-		return `Its path contains ${bad.map((c) => (c === ' ' ? 'a space' : `"${c}"`)).join(', ')}, which a config reference cannot hold. Rename it (for example with dashes) to reference it.`;
-	if (!EXEC_ID.test(`${path}:UserName`))
-		return /^[A-Za-z0-9]/.test(path)
-			? 'Its path is too long for a config reference.'
-			: 'Its path must start with a letter or digit to be referenced.';
-	if (path.split('/').some((s) => s === '.' || s === '..' || s === ''))
-		return 'Its path has an empty, "." or ".." part, which a config reference cannot hold.';
-	return null;
-}
+/** Stable config id from the existing KeePass UUID (base64url, without padding). */
+export const referenceFor = (uuid: string): string =>
+	`entry/${uuid.replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')}`;
 
-/** The Reference for an entry's Password, or null when it has none (see `referenceProblem`). */
-export const referenceFor = (path: string): string | null => (referenceProblem(path) ? null : path);
+/** UUID-reference shape; other ids retain their legacy path meaning. */
+export const isEntryReference = (path: string): boolean => /^entry\/[A-Za-z0-9_-]{22}$/.test(path);
 
 /** Whether an id is a well-formed Reference: exec grammar, and a known field if one is named. */
 export function validReference(id: string): boolean {

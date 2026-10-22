@@ -1,10 +1,17 @@
-import { INTEGRATION_ID, parseReference, type Field } from './paths.js';
+import {
+	INTEGRATION_ID,
+	isEntryReference,
+	parseReference,
+	referenceFor,
+	validReference,
+	type Field
+} from './paths.js';
 
 /**
  * Usages (spec §5): places in OpenClaw config whose SecretRef resolves from an entry. Never stored;
  * computed from the live config each time an entry is shown. Browser-safe.
  */
-export type Usage = { config_path: string; field: Field; label: string };
+export type Usage = { config_path: string; field: Field; label: string; stable?: boolean };
 
 type Ref = { source: string; provider?: string; id: string };
 const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -67,7 +74,7 @@ export function vaultReferences(
 		seen.add(node);
 		if (Array.isArray(node)) return node.forEach((v, i) => walk(v, [...at, i]));
 		const ref = node as Partial<Ref>;
-		if (ref.source === 'exec' && typeof ref.id === 'string') {
+		if (ref.source === 'exec' && typeof ref.id === 'string' && validReference(ref.id)) {
 			if (aliases.has(ref.provider ?? defaultExec)) {
 				const { path, field } = parseReference(ref.id);
 				out.push({ config_path: configPath(at), path, field, label: labelFor(at) });
@@ -84,7 +91,12 @@ export function vaultReferences(
 }
 
 /** The Usages of the entry at `path`. */
-export const usagesOf = (config: unknown, pluginId: string, path: string): Usage[] =>
+export const usagesOf = (config: unknown, pluginId: string, path: string, uuid?: string): Usage[] =>
 	vaultReferences(config, pluginId)
-		.filter((r) => r.path === path)
-		.map(({ config_path, field, label }) => ({ config_path, field, label }));
+		.filter((r) => r.path === path || (uuid !== undefined && r.path === referenceFor(uuid)))
+		.map(({ config_path, path: target, field, label }) => ({
+			config_path,
+			field,
+			label,
+			...(uuid && target === referenceFor(uuid) && isEntryReference(target) ? { stable: true } : {})
+		}));

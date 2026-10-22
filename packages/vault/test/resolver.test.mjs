@@ -13,8 +13,9 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { configReference } from '../dist/ui/entry.js';
 import { locateStateDir } from '../dist/resolver.js';
-import { externalDatabase, FRED, openOps, tempState } from './helpers.mjs';
+import { externalDatabase, FRED, openOps, tempState, addEntries } from './helpers.mjs';
 
 const SCRIPT = fileURLToPath(new URL('../bin/resolve-secrets.mjs', import.meta.url));
 
@@ -194,4 +195,111 @@ test('the state directory comes from OPENCLAW_STATE_DIR or the install location,
 		locateStateDir({ HOME: '/home/x' }, '/repo/packages/vault/bin/resolve-secrets.mjs'),
 		null
 	);
+});
+
+// Public resolver + operation surfaces: stable identity, legacy compatibility and fail-closed removal.
+test('UUID references survive renames and moves, track usages, and fail closed after removal', async () => {
+	const dir = await vault();
+	const ops = await openOps(dir);
+	const entry = (await ops.list({})).find((e) => e.path === 'Services/Home Assistant/token');
+	const id = `entry/${Buffer.from(entry.uuid, 'base64').toString('base64url')}`;
+	assert.equal(entry.reference, id);
+	assert.deepEqual(JSON.parse(configReference({ overview: { provider_alias: 'vault' } }, entry)), {
+		source: 'exec',
+		provider: 'vault',
+		id
+	});
+	const config = {
+		secrets: {
+			providers: {
+				vault: {
+					source: 'exec',
+					pluginIntegration: { pluginId: 'falcon-vault', integrationId: 'falcon-vault' }
+				}
+			}
+		},
+		tools: {
+			stable: { source: 'exec', provider: 'vault', id },
+			username: { source: 'exec', provider: 'vault', id: `${id}:UserName` },
+			legacy: { source: 'exec', provider: 'vault', id: 'Providers/google-gemini' }
+		}
+	};
+	const resolve = async (ids) => {
+		const result = await run(request(ids), { OPENCLAW_STATE_DIR: dir });
+		assert.equal(result.code, 0, result.stderr);
+		assert.equal(result.stderr, '');
+		return JSON.parse(result.stdout);
+	};
+	assert.equal((await resolve([id])).values[id], 'spaced-SECRET');
+	assert.equal((await ops.entry(entry.path, entry.uuid, config, 'falcon-vault')).usages.length, 2);
+	await ops.update(
+		FRED,
+		{ path: entry.path, uuid: entry.uuid },
+		{ title: 'renamed & token', group: 'Providers', username: 'user' }
+	);
+	await ops.renameGroup(FRED, 'Providers', 'Moved providers');
+	const movedPath = 'Moved providers/renamed & token';
+	const moved = await ops.entry(movedPath, entry.uuid, config, 'falcon-vault');
+	assert.equal(moved.reference, id);
+	assert.deepEqual(
+		moved.usages.map((u) => [u.field, u.stable]),
+		[
+			['Password', true],
+			['UserName', true]
+		]
+	);
+	const result = await resolve([
+		id,
+		`${id}:UserName`,
+		`${id}:Title`,
+		`${id}:Notes`,
+		'Providers/google-gemini'
+	]);
+	assert.equal(result.values[id], 'spaced-SECRET');
+	assert.equal(result.values[`${id}:UserName`], 'user');
+	assert.equal(result.values[`${id}:Title`], 'renamed & token');
+	assert.equal(result.errors[`${id}:Notes`].code, 'NOT_FOUND');
+	assert.equal(result.errors['Providers/google-gemini'].code, 'NOT_FOUND');
+	assert.ok(
+		ops
+			.history({ path: movedPath })
+			.some((ev) => ev.actor === 'resolver' && ev.detail.uuid === entry.uuid)
+	);
+	await ops.recycle(FRED, { path: movedPath });
+	assert.equal((await resolve([id])).errors[id].code, 'NOT_FOUND');
+	assert.equal(
+		(await ops.list({ scope: 'recycle' })).find((e) => e.uuid === entry.uuid).reference,
+		null
+	);
+	await ops.update(FRED, { path: 'Recycle Bin/renamed & token' }, { group: '' });
+	assert.equal((await resolve([id])).values[id], 'spaced-SECRET');
+	await ops.recycle(FRED, { path: 'renamed & token' });
+	await ops.deleteForever(FRED, { path: 'Recycle Bin/renamed & token' });
+	await ops.create(FRED, { title: 'renamed & token', password: 'replacement' });
+	assert.equal(
+		(await resolve([id])).errors[id].code,
+		'NOT_FOUND',
+		'reusing a title never rebinds a UUID'
+	);
+});
+
+test('UUIDs distinguish duplicate paths and reject collisions with legacy paths', async () => {
+	const dir = await vault();
+	const ops = await openOps(dir);
+	const dup = (await ops.list({})).filter((e) => e.path === 'Dup/twice');
+	assert.notEqual(dup[0].reference, dup[1].reference);
+	const ids = dup.map((e) => e.reference);
+	let result = JSON.parse(
+		(await run(request([...ids, 'Dup/twice']), { OPENCLAW_STATE_DIR: dir })).stdout
+	);
+	assert.deepEqual(ids.map((id) => result.values[id]).sort(), ['one', 'two']);
+	assert.equal(result.errors['Dup/twice'].code, 'AMBIGUOUS_DUPLICATE_KEY');
+	await ops.vault.change((db) =>
+		addEntries(db, [['entry', ids[0].slice(6), { Password: 'collision' }]])
+	);
+	result = JSON.parse(
+		(await run(request([ids[0], `${ids[0]}:Title`]), { OPENCLAW_STATE_DIR: dir })).stdout
+	);
+	assert.deepEqual(result.values, {});
+	assert.ok(Object.values(result.errors).every((e) => e.code === 'AMBIGUOUS_DUPLICATE_KEY'));
 });

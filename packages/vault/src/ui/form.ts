@@ -190,7 +190,8 @@ export function entryForm(c: Ctx, e: EntryDetail | null) {
 		};
 		// Renaming or moving an entry that has Usages warns first, naming each one (spec §4).
 		const moves = e && (fields.title !== e.title || fields.group !== e.group);
-		if (moves && e!.usages.length && !confirmed) {
+		const pathUsages = e?.usages.filter((u) => !u.stable) ?? [];
+		if (moves && pathUsages.length && !confirmed) {
 			confirmed = true;
 			warn.hidden = false;
 			warn.replaceChildren(
@@ -203,7 +204,7 @@ export function entryForm(c: Ctx, e: EntryDetail | null) {
 				h(
 					'ul',
 					{ class: 'fv-confirm-list' },
-					e!.usages.map((u) =>
+					pathUsages.map((u) =>
 						h('li', { title: u.config_path }, h('span', { class: 'fv-dot fv-dot-danger' }), u.label)
 					)
 				),

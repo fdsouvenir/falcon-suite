@@ -56,11 +56,18 @@ To resolve config credentials from Vault, add a provider that points at the plug
 } } }
 ```
 
-and reference entries by path, for example
-`{ "source": "exec", "provider": "falcon-vault", "id": "Providers/anthropic" }` for the Password,
-or `"Providers/anthropic:UserName"` for another field (`Password`, `UserName`, `URL`, `Notes`,
-`Title`). Paths cannot contain spaces; the entry pane says when an entry cannot be referenced, and
-its "⋯" menu copies the reference.
+Use an entry's “⋯” menu → **Copy config reference** to copy the complete SecretRef:
+`{ "source": "exec", "provider": "falcon-vault", "id": "entry/<uuid>" }`.
+The UUID is the entry's existing KeePass UUID encoded as base64url without padding (22 characters),
+not a new identifier. It works with any title or folder name, including spaces, and survives
+renaming or moving the entry or its folders. Append `:UserName` (or `:Password`, `:URL`, `:Notes`,
+`:Title`) to select another field; without a suffix it returns Password.
+
+Existing path references such as `Providers/anthropic` and `Providers/anthropic:UserName` still
+work. They retain OpenClaw's naming restrictions and stop working after a rename or move.
+**Used by OpenClaw** recognizes both forms. Recycled or permanently deleted entries do not resolve;
+restoring the same entry restores its UUID reference. In the rare case that a legacy path equals
+another entry's UUID reference, resolution rejects the ambiguity rather than choosing a credential.
 
 OpenClaw runs the resolver only when no directory between the plugin and the script is group- or
 world-writable. If the installer left the plugin folder group-writable (a `002` umask does this),

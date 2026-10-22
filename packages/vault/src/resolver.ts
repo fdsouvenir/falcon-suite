@@ -2,8 +2,14 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { Audit } from './store/audit.js';
 import { fieldText, type KdbxEntry } from './store/kdbx.js';
-import { allEntries, inRecycleBin } from './store/model.js';
-import { AUDIT_FILE, DATA_DIR, parseReference, validReference } from './store/paths.js';
+import { allEntries, entryPath, inRecycleBin } from './store/model.js';
+import {
+	AUDIT_FILE,
+	DATA_DIR,
+	parseReference,
+	referenceFor,
+	validReference
+} from './store/paths.js';
 import { Vault } from './store/vault.js';
 
 /**
@@ -65,27 +71,33 @@ type Response = {
 };
 
 /**
- * Resolve ids from the Vault in `stateDir`, under the lock. Each id is `Path` (its Password) or
- * `Path:Field`. Anything not found, empty, in the Recycle Bin or not well formed is `NOT_FOUND`
+ * Resolve ids from the Vault in `stateDir`, under the lock. Each id is `entry/<uuid>` or legacy
+ * `Path`, optionally with `:Field`; Password is the default. Anything not found, empty, in the Recycle Bin or not well formed is `NOT_FOUND`
  * for that id alone, saying nothing about other entries. Each id is one audit Event.
  */
 export async function resolveIds(stateDir: string, ids: string[]): Promise<Response> {
 	const vault = new Vault(stateDir, 4_000); // inside OpenClaw's default 5 s exec timeout
 	await vault.open({ create: false });
 	const found = await vault.read((db) => {
-		const out = new Map<string, string | 'ambiguous'>();
+		const out = new Map<string, { value: string; path: string; uuid: string } | 'ambiguous'>();
 		const wanted = new Map(ids.filter(validReference).map((id) => [id, parseReference(id)]));
-		const paths = new Set([...wanted.values()].map((w) => w.path));
-		const byPath = new Map<string, KdbxEntry[]>();
-		for (const { entry, path: p } of allEntries(db))
-			if (paths.has(p) && !inRecycleBin(db, entry))
-				byPath.set(p, [...(byPath.get(p) ?? []), entry]);
+		// Match both forms, never silently choose a UUID over a colliding legacy path.
+		const byId = new Map<string, Set<KdbxEntry>>();
+		for (const { entry, path: p } of allEntries(db)) {
+			if (inRecycleBin(db, entry)) continue;
+			for (const key of [p, referenceFor(entry.uuid.id)]) {
+				const matches = byId.get(key) ?? new Set<KdbxEntry>();
+				matches.add(entry);
+				byId.set(key, matches);
+			}
+		}
 		for (const [id, w] of wanted) {
-			const entries = byPath.get(w.path) ?? [];
+			const entries = [...(byId.get(w.path) ?? [])];
 			if (entries.length > 1) out.set(id, 'ambiguous');
 			else if (entries.length === 1) {
 				const value = fieldText(entries[0], w.field);
-				if (value) out.set(id, value);
+				if (value)
+					out.set(id, { value, path: entryPath(db, entries[0]), uuid: entries[0].uuid.id });
 			}
 		}
 		return out;
@@ -103,16 +115,16 @@ export async function resolveIds(stateDir: string, ids: string[]): Promise<Respo
 		const v = found.get(id);
 		if (v === undefined || v === 'ambiguous')
 			errors[id] = { code: v ? 'AMBIGUOUS_DUPLICATE_KEY' : 'NOT_FOUND' };
-		else response.values[id] = v;
+		else response.values[id] = v.value;
 		const { path: p, field } = parseReference(id);
 		try {
 			audit?.record({
 				at,
 				actor: 'resolver',
 				action: 'resolve',
-				path: p,
+				path: v && v !== 'ambiguous' ? v.path : p,
 				outcome: v === undefined ? 'not_found' : v === 'ambiguous' ? 'rejected' : 'ok',
-				detail: { field }
+				detail: { field, ...(v && v !== 'ambiguous' ? { uuid: v.uuid } : {}) }
 			});
 		} catch {
 			/* as above */

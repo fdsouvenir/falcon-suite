@@ -366,11 +366,11 @@ test('audit history is append-only and never holds a value', async () => {
 	);
 });
 
-test('entries whose paths have spaces have no Reference, and say why', async () => {
+test('entries whose paths have spaces have a machine-safe UUID Reference', async () => {
 	const dir = tempState();
 	await externalDatabase(dir, [['Services/Home Assistant', 'token', { Password: 'x' }]]);
 	const ops = await openOps(dir);
 	const [e] = await ops.list({});
-	assert.equal(e.reference, null);
-	assert.match(e.reference_problem, /a space/);
+	assert.equal(e.reference, `entry/${Buffer.from(e.uuid, 'base64').toString('base64url')}`);
+	assert.equal(e.reference_problem, null);
 });

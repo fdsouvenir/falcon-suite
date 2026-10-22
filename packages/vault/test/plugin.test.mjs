@@ -134,7 +134,7 @@ test('metadata and store results never return a Password or Notes value', async 
 	assert.equal(gem.username, 'me@x');
 	assert.equal(gem.url, 'https://ai');
 	assert.deepEqual(gem.set, { Password: true, UserName: true, URL: true, Notes: true });
-	assert.equal(gem.reference, 'Providers/google-gemini');
+	assert.equal(gem.reference, `entry/${Buffer.from(gem.uuid, 'base64').toString('base64url')}`);
 	const get = await call({ action: 'get', path: 'Providers/google-gemini' });
 	assert.deepEqual(
 		get.usages.map((u) => [u.config_path, u.field]),
@@ -152,7 +152,10 @@ test('metadata and store results never return a Password or Notes value', async 
 		username: 'bot'
 	});
 	assert.equal(stored.outcome, 'committed');
-	assert.equal(stored.reference, 'Services/resend');
+	assert.equal(
+		stored.reference,
+		(await call({ action: 'get', path: 'Services/resend' })).reference
+	);
 	const all = JSON.stringify([
 		list,
 		get,
