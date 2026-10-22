@@ -6,6 +6,7 @@ installed and configured on its own.
 - `docs/work-spec.md` — the Work 5 specification.
 - `docs/work-commands.md` — the Work command list.
 - `docs/vault-spec.md` — the Vault 5 specification.
+- `docs/link-spec.md` — the approved Falcon Link requirements and issue sequence.
 - `packages/work/src/store/schema.ts` — the Work data model.
 - `packages/work/seed/` — tooling for an evaluation database: `lib.mjs` (a builder over the draft
   schema) and `report.mjs` (renders the Work tab's content as text). The seed data itself was real
@@ -17,6 +18,8 @@ installed and configured on its own.
 
 - `packages/work` — **Falcon Work** (`@fdsouvenir/falcon-work`, plugin id `falcon-work`).
 - `packages/vault` — **Falcon Vault** (`@fdsouvenir/falcon-vault`, plugin id `falcon-vault`).
+- `packages/link` — **Falcon Link** (`@fdsouvenir/falcon-link`, plugin id `falcon-link`);
+  development foundation, not yet released.
 
 ## Suite branding
 
