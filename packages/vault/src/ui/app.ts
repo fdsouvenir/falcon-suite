@@ -167,10 +167,15 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 		clearTimeout(typing);
 		typing = setTimeout(() => {
 			const p = context.props;
-			ctx().go(
-				{ ...(p.q || search.value ? {} : p), q: search.value.trim() || undefined },
-				{ replace: !!p.q }
-			);
+			// Host navigation can remount the entire page, losing focus and the caret.
+			// Keep typing local; explicit links still navigate through the host.
+			const props = clean({
+				...(p.q || search.value ? {} : p),
+				q: search.value.trim() || undefined
+			});
+			if (paneKey(p) !== paneKey(props)) secrets.clear();
+			context = { ...context, props };
+			void load();
 		}, 200);
 	});
 	const header = h(
@@ -432,8 +437,10 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 	void load();
 	return {
 		update(next: ControlUiViewContext) {
+			clearTimeout(typing);
 			const before = context.props;
 			context = next;
+			search.value = next.props.q ?? '';
 			if (paneKey(before) !== paneKey(next.props)) secrets.clear();
 			void load();
 		},
