@@ -463,14 +463,39 @@ export class LinkService {
 			)
 				throw new Error('Finish or cancel sign-in before disconnecting.');
 			// Only this account's CLI-native encrypted credentials are removed. Never revoke provider-wide consent.
-			if (a.email)
-				await json(
-					executable(this.dir, a.provider),
-					a.provider === 'google'
-						? ['auth', 'remove', a.email, '--force', '--json', '--no-input']
-						: ['auth', 'logout', '--profile', a.id, '--json', '--no-input'],
-					this.env(a)
-				);
+			const tool = executable(this.dir, a.provider);
+			const env = this.env(a);
+			if (a.provider === 'google') {
+				const stored = await json(tool, ['auth', 'list', '--json', '--no-input'], env);
+				if (!Array.isArray(stored.accounts))
+					throw new Error('Local credential inventory could not be verified.');
+				for (const entry of stored.accounts) {
+					if (typeof entry.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry.email))
+						throw new Error('Local account identity is unavailable.');
+					await json(tool, ['auth', 'remove', entry.email, '--force', '--json', '--no-input'], env);
+				}
+			} else {
+				const stored = await json(tool, ['auth', 'status', '--json', '--no-input'], env);
+				if (!Array.isArray(stored.profiles))
+					throw new Error('Local credential inventory could not be verified.');
+				if (stored.profiles.some((p: any) => p.name === a.id))
+					await json(tool, ['auth', 'logout', '--profile', a.id, '--json', '--no-input'], env);
+			}
+
+			const after = await json(
+				tool,
+				a.provider === 'google'
+					? ['auth', 'list', '--json', '--no-input']
+					: ['auth', 'status', '--json', '--no-input'],
+				env
+			);
+			if (
+				a.provider === 'google'
+					? !Array.isArray(after.accounts) || after.accounts.length !== 0
+					: !Array.isArray(after.profiles) || after.profiles.some((p: any) => p.name === a.id)
+			)
+				throw new Error('Local credential removal could not be verified.');
+
 			a.state = 'disconnected';
 			a.granted_scopes = null;
 			a.recorded_scopes = null;

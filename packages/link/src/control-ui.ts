@@ -549,12 +549,12 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			});
 			check.disabled = !canWrite() || !a.email || a.state === 'disconnected';
 			actions.append(check);
-			if (a.state !== 'disconnected' && a.email) {
+			if (a.state !== 'disconnected') {
 				const disconnect = button('Disconnect', () => {
 					closeForm();
 					const confirm = el('section', undefined, 'fl-card');
 					confirm.append(
-						el('h3', `Disconnect ${a.email}?`),
+						el('h3', `Disconnect ${a.email ?? 'this incomplete sign-in'}?`),
 						el(
 							'p',
 							'This removes this account’s local credentials. Provider consent is not revoked, and other accounts are unchanged.'

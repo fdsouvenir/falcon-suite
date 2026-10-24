@@ -25,6 +25,7 @@ if(args.includes('login')){
  const id=args[args.indexOf('--profile')+1];fs.writeFileSync(path.join(home,'m365-profile.json'),JSON.stringify({id}));
  setTimeout(()=>send({profile:id}),500);
 }else if(args.includes('check')){const id=JSON.parse(fs.readFileSync(path.join(home,'m365-profile.json'))).id;if(args[args.indexOf('--account')+1]!==id)process.exit(2);send({profile:id,verified:true,identity:{id:'provider-'+id,mail:'microsoft@example.com'}});}
+else if(args.includes('status')){const file=path.join(home,'m365-profile.json');send({profiles:fs.existsSync(file)?[{name:JSON.parse(fs.readFileSync(file)).id}]:[]});}
 else if(args.includes('logout')){fs.unlinkSync(path.join(home,'m365-profile.json'));send({logout:true});}else process.exit(9);
 `,
 			{ mode: 0o700 }
@@ -61,7 +62,8 @@ test('two same-provider accounts retain distinct identities, purposes, encrypted
  const second=await l.start({...input('verl@example.com'),owner:{kind:'agent',id:'main',name:'Verl'},purpose:{kind:'other',label:'Operations'}},'fred'); assert.equal((await finish(second)).state,'connected');
  const a=l.invocation(first.account_id),b=l.invocation(second.account_id);
  assert.notEqual(a.environment.HOME,b.environment.HOME); assert.deepEqual(a.arguments,['--account','fred@example.com']); assert.deepEqual(b.arguments,['--account','verl@example.com']); assert.equal(b.account.owner.kind,'agent'); assert.equal(b.account.purpose.label,'Operations'); assert.equal(a.granted_scopes,null); assert.deepEqual(a.account.recorded_scopes,['recorded-only']); assert.doesNotMatch(JSON.stringify(a),/fixture-only/);
- await l.disconnect(first.account_id); assert.equal(l.registry.get(first.account_id).state,'disconnected'); assert.equal((await l.check(second.account_id)).state,'connected');
+ const incomplete = l.registry.get(first.account_id); incomplete.email=null; incomplete.state='check_failed'; l.registry.save(incomplete);
+ await l.disconnect(first.account_id); assert.equal(fs.existsSync(path.join(a.environment.HOME,'fixture-account.json')),false); assert.equal(l.registry.get(first.account_id).state,'disconnected'); assert.equal((await l.check(second.account_id)).state,'connected');
  await assert.rejects(()=>l.check(first.account_id),/disconnected/);
 `));
 test('wrong callback state and another operator cannot finish a login; cancellation cannot be completed later', async () =>
@@ -93,7 +95,7 @@ test('Microsoft device code is person-bound, private stderr stays hidden, and su
  assert.equal(next.url,'https://microsoft.com/devicelogin');assert.equal(next.code,'ABCDEF123');assert.doesNotMatch(JSON.stringify(next),/private diagnostic/);
  assert.throws(()=>l.login(login.id,'other'),/not found/);
  for(let i=0;i<60;i++){await new Promise(r=>setTimeout(r,30));next=l.login(login.id,'fred');if(next.state==='connected')break;}
- assert.equal(next.state,'connected');const selected=l.invocation(login.account_id);assert.deepEqual(selected.arguments,['--account',login.account_id]);assert.equal(selected.account.email,'microsoft@example.com');assert.equal(selected.granted_scopes,null);await l.disconnect(login.account_id);assert.equal(l.registry.get(login.account_id).state,'disconnected');
+ assert.equal(next.state,'connected');const selected=l.invocation(login.account_id);assert.deepEqual(selected.arguments,['--account',login.account_id]);assert.equal(selected.account.email,'microsoft@example.com');assert.equal(selected.granted_scopes,null);const incomplete=l.registry.get(login.account_id);incomplete.email=null;incomplete.state='check_failed';l.registry.save(incomplete);await l.disconnect(login.account_id);assert.equal(fs.existsSync(path.join(selected.environment.HOME,'m365-profile.json')),false);assert.equal(l.registry.get(login.account_id).state,'disconnected');
 `));
 test('cancelled Microsoft consent cannot become connected after the child exits', async () =>
 	scenario(`

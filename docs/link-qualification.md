@@ -71,3 +71,9 @@ Gateway transport and hosted human consent remain outside that fixture's evidenc
 
 A corrupted-download regression check confirms failed digest verification retains the active
 CLI pointer, executable bytes and account data untouched.
+
+Final review caught a partial-sign-in cleanup defect: missing registry email caused local token
+removal to be skipped. Existing Google and Microsoft account tests were extended and shown
+failing before the fix. Disconnect now inspects only that stable account's isolated CLI store,
+removes its saved token/profile even without a verified email, and never touches another
+account's store. Failed inventory/removal does not report successful disconnection.
