@@ -33,6 +33,14 @@ const IDENTITIES = {
 			npm: '@fdsouvenir/falcon-work-preview'
 		}
 	},
+	link: {
+		production: { id: 'falcon-link', name: 'Falcon Link', npm: '@fdsouvenir/falcon-link' },
+		preview: {
+			id: 'falcon-link-preview',
+			name: 'Falcon Link Preview',
+			npm: '@fdsouvenir/falcon-link-preview'
+		}
+	},
 	vault: {
 		production: { id: 'falcon-vault', name: 'Falcon Vault', npm: '@fdsouvenir/falcon-vault' },
 		preview: {
@@ -44,7 +52,7 @@ const IDENTITIES = {
 };
 const identity = IDENTITIES[pkgName]?.[channel];
 if (!identity || !/^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(version ?? '')) {
-	console.error('Usage: stage.mjs <work|vault> <preview|production> <semver> [--publish]');
+	console.error('Usage: stage.mjs <work|vault|link> <preview|production> <semver> [--publish]');
 	process.exit(2);
 }
 if (channel === 'production' && version.includes('-')) {

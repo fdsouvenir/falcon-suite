@@ -1,0 +1,11 @@
+.fl-page {
+	display: grid;
+	gap: 1rem;
+}
+.fl-page > button {
+	justify-self: start;
+}
+.fl-integration {
+	padding: 1rem 0;
+	border-bottom: 1px solid var(--border);
+}
