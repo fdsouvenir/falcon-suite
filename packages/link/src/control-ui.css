@@ -1,11 +1,237 @@
+/* Same native host theme, spacing, typography and controls as Work and Vault. */
 .fl-page {
-	display: grid;
-	gap: 1rem;
+	color: var(--text);
+	font-size: var(--control-ui-text-md);
+	padding: var(--space-6) var(--space-7);
 }
-.fl-page > button {
-	justify-self: start;
+.fl-header,
+.fl-section-heading,
+.fl-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+}
+.fl-header h1 {
+	margin: 0;
+	font-size: calc(var(--control-ui-text-lg) * 1.5);
+	font-weight: 600;
+	color: var(--text-strong);
+}
+.fl-page h2 {
+	margin-top: 0;
+	color: var(--text-strong);
+	font-size: var(--control-ui-text-lg);
+}
+.fl-page h3,
+.fl-page h4 {
+	font-size: var(--control-ui-text-md);
+	font-weight: 600;
+	color: var(--text-strong);
+	margin: 0 0 var(--space-3);
+}
+.fl-layout {
+	display: grid;
+	grid-template-columns: 230px minmax(0, 1fr);
+	gap: var(--space-7);
+	margin-top: var(--space-5);
+}
+.fl-nav {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	border-right: 1px solid var(--border);
+	padding-right: var(--space-4);
 }
 .fl-integration {
-	padding: 1rem 0;
+	display: grid;
+	text-align: left;
+	gap: var(--space-2);
+	padding: var(--space-4);
+	border: 1px solid transparent;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	cursor: pointer;
+}
+.fl-integration:hover {
+	background: var(--bg-hover);
+}
+.fl-integration.fl-selected {
+	background: var(--accent-subtle);
+	border-color: var(--border-strong);
+}
+.fl-integration-name {
+	font-weight: 600;
+	color: var(--text-strong);
+}
+.fl-muted {
+	color: var(--muted);
+	font-size: var(--control-ui-text-sm);
+}
+.fl-error {
+	color: var(--danger);
+}
+.fl-notice:empty {
+	display: none;
+}
+.fl-detail {
+	min-width: 0;
+}
+.fl-detail p {
+	overflow-wrap: anywhere;
+}
+.fl-tool {
+	padding-bottom: var(--space-4);
 	border-bottom: 1px solid var(--border);
+	margin-bottom: var(--space-4);
+}
+.fl-tool .fl-btn {
+	margin-right: var(--space-2);
+	margin-bottom: var(--space-2);
+}
+.fl-setup {
+	color: var(--warn);
+}
+.fl-section-heading {
+	margin: var(--space-5) 0 var(--space-4);
+}
+.fl-card,
+.fl-form {
+	padding: var(--space-4);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg-elevated);
+	margin-bottom: var(--space-4);
+}
+.fl-actions {
+	justify-content: flex-start;
+}
+.fl-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 34px;
+	padding: 0 var(--space-3);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-md);
+	background: var(--bg-elevated);
+	color: var(--text);
+	font: inherit;
+	cursor: pointer;
+	text-decoration: none;
+}
+.fl-btn:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+.fl-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.fl-btn-primary {
+	background: var(--accent);
+	color: var(--accent-foreground);
+	border-color: var(--accent);
+}
+.fl-btn-primary:hover:not(:disabled) {
+	background: var(--accent-hover, var(--accent));
+}
+.fl-field {
+	display: grid;
+	gap: var(--space-2);
+	margin-bottom: var(--space-4);
+}
+.fl-page [hidden] {
+	display: none !important;
+}
+.fl-page input:not([type='checkbox']),
+.fl-page select {
+	width: 100%;
+	box-sizing: border-box;
+	min-height: 36px;
+	padding: var(--space-2) var(--space-3);
+	font: inherit;
+	background: var(--bg);
+	color: var(--text);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-sm);
+}
+.fl-page :is(button, input, select, a):focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.fl-form fieldset {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	margin: 0 0 var(--space-4);
+}
+.fl-check {
+	display: flex;
+	gap: var(--space-2);
+	align-items: center;
+	padding: var(--space-2) 0;
+}
+.fl-check input {
+	accent-color: var(--accent);
+}
+.fl-scopes p {
+	white-space: pre-wrap;
+	color: var(--muted);
+	font-size: var(--control-ui-text-sm);
+}
+.fl-device-code {
+	font-size: calc(var(--control-ui-text-lg) * 1.5);
+	font-weight: 600;
+	letter-spacing: 0.1em;
+}
+.fl-back {
+	display: none;
+}
+@media (max-width: 700px) {
+	.fl-page {
+		padding: var(--space-4);
+		overflow-x: clip;
+	}
+	.fl-layout {
+		display: block;
+		position: relative;
+	}
+	.fl-nav {
+		border-right: 0;
+		padding-right: 0;
+	}
+	.fl-detail {
+		display: none;
+	}
+	.fl-show-detail .fl-nav {
+		display: none;
+	}
+	.fl-show-detail .fl-detail {
+		display: block;
+		animation: fl-slide-in 0.18s ease-out;
+	}
+	.fl-back {
+		display: inline-flex;
+		margin-bottom: var(--space-4);
+	}
+	.fl-actions .fl-btn {
+		min-height: 40px;
+	}
+}
+@keyframes fl-slide-in {
+	from {
+		transform: translateX(16px);
+		opacity: 0;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.fl-show-detail .fl-detail {
+		animation: none;
+	}
 }

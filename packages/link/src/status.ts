@@ -1,32 +1,26 @@
 import { execFile } from 'node:child_process';
-
+import { executable, readiness, TOOLS } from './cli.js';
+import type { Provider } from './model.js';
 export type ToolStatus =
 	| { state: 'installed'; version: string }
-	| {
-			state: 'not_installed' | 'check_failed' | 'unrecognized_version' | 'unqualified';
-			version: null;
-	  };
+	| { state: 'not_installed' | 'check_failed' | 'unrecognized_version'; version: null };
 export type IntegrationStatus = {
-	id: 'google' | 'microsoft';
+	id: Provider;
 	name: string;
 	cli: string;
 	tool: ToolStatus;
-	update: { state: 'not_checked' };
-	setup: { state: 'unavailable'; message: string };
-	accounts: { state: 'not_checked' };
+	qualified_version: string;
+	setup: { state: string; message: string };
 };
 export type Overview = { checked_at: string; integrations: IntegrationStatus[] };
-
-/** Read-only, bounded probe of the documented gog executable. Never return raw CLI output. */
-export function googleToolStatus(): Promise<ToolStatus> {
-	return new Promise((resolve) => {
+export function toolStatus(binary: string): Promise<ToolStatus> {
+	return new Promise((resolve) =>
 		execFile(
-			'gog',
+			binary,
 			['--version'],
 			{ timeout: 5000, maxBuffer: 16384, encoding: 'utf8', windowsHide: true },
 			(error, stdout) => {
 				if (error) {
-					// A nonzero exit, permission error or timeout is NOT an absent installation.
 					resolve({
 						state:
 							(error as NodeJS.ErrnoException).code === 'ENOENT' ? 'not_installed' : 'check_failed',
@@ -34,51 +28,31 @@ export function googleToolStatus(): Promise<ToolStatus> {
 					});
 					return;
 				}
-				// gog's VersionString: version followed by optional build commit/date in parentheses.
 				const match = stdout
 					.trim()
-					.match(/^(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)(?: \([^\r\n]*\))?$/);
+					.match(
+						/^(?:m365cli version )?(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)(?: \([^\r\n]*\))?$/
+					);
 				resolve(
 					match
 						? { state: 'installed', version: match[1] }
 						: { state: 'unrecognized_version', version: null }
 				);
 			}
-		);
-	});
+		)
+	);
 }
-
-export async function overview(): Promise<Overview> {
-	const google = await googleToolStatus();
-	return {
-		checked_at: new Date().toISOString(),
-		integrations: [
-			{
-				id: 'google',
-				name: 'Google',
-				cli: 'gogcli',
-				tool: google,
-				update: { state: 'not_checked' },
-				setup: {
-					state: 'unavailable',
-					message:
-						'Google connection setup is incomplete. Operator provisioning is not available in this development build.'
-				},
-				accounts: { state: 'not_checked' }
-			},
-			{
-				id: 'microsoft',
-				name: 'Microsoft',
-				cli: 'm365cli',
-				tool: { state: 'unqualified', version: null },
-				update: { state: 'not_checked' },
-				setup: {
-					state: 'unavailable',
-					message:
-						'Microsoft connection setup is incomplete. Its CLI contract and operator provisioning are not yet qualified.'
-				},
-				accounts: { state: 'not_checked' }
-			}
-		]
-	};
+export const googleToolStatus = () => toolStatus('gog');
+export async function overview(dir = ''): Promise<Overview> {
+	const integrations = await Promise.all(
+		(['google', 'microsoft'] as Provider[]).map(async (id) => ({
+			id,
+			name: id === 'google' ? 'Google' : 'Microsoft',
+			cli: TOOLS[id].binary,
+			tool: await toolStatus(executable(dir, id)),
+			qualified_version: TOOLS[id].version,
+			setup: readiness(dir, id)
+		}))
+	);
+	return { checked_at: new Date().toISOString(), integrations };
 }

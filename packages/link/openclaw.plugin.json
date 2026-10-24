@@ -12,13 +12,14 @@
     "onStartup": true
   },
   "controlUi": {
-    "entry": "dist/control-ui/9d816f12a3a28d4c98f8a770e119d750f7b161b9fff78dffec19bd44cab54a5c/index.js",
+    "entry": "dist/control-ui/96519936abac0bafe5a41165462b585b15cb704b36af65275f826e0940b87859/index.js",
     "styles": [
-      "dist/control-ui/9d816f12a3a28d4c98f8a770e119d750f7b161b9fff78dffec19bd44cab54a5c/index.css"
+      "dist/control-ui/96519936abac0bafe5a41165462b585b15cb704b36af65275f826e0940b87859/index.css"
     ]
   },
   "contracts": {
     "tools": [
+      "falcon_link_accounts",
       "falcon_link_status"
     ]
   }
