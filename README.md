@@ -19,7 +19,7 @@ installed and configured on its own.
 - `packages/work` — **Falcon Work** (`@fdsouvenir/falcon-work`, plugin id `falcon-work`).
 - `packages/vault` — **Falcon Vault** (`@fdsouvenir/falcon-vault`, plugin id `falcon-vault`).
 - `packages/link` — **Falcon Link** (`@fdsouvenir/falcon-link`, plugin id `falcon-link`);
-  development foundation, not yet released.
+  Google/Microsoft connections, account ownership and purpose; preview delivery in progress.
 
 ## Suite branding
 

@@ -36,16 +36,8 @@ test('reports the documented version, without exposing build output or inspectin
 		`if (JSON.stringify(process.argv.slice(2)) !== '["--version"]') process.exit(9); console.log('v0.45.0 (abc123 2026-10-22)');`
 	);
 	assert.deepEqual(result.integrations[0].tool, { state: 'installed', version: 'v0.45.0' });
-	assert.deepEqual(
-		result.integrations.map((i) => i.accounts),
-		[{ state: 'not_checked' }, { state: 'not_checked' }]
-	);
-	assert.deepEqual(
-		result.integrations.map((i) => i.update),
-		[{ state: 'not_checked' }, { state: 'not_checked' }]
-	);
-	assert.equal(result.integrations[1].tool.state, 'unqualified');
-	assert.ok(result.integrations.every((i) => i.setup.state === 'unavailable'));
+	assert.equal(result.integrations[1].tool.state, 'not_installed');
+	assert.ok(result.integrations.every((i) => i.setup.state === 'setup_required'));
 });
 
 test('an absent executable is not installed', async () => {

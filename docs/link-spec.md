@@ -1,6 +1,6 @@
 # Falcon Link — specification
 
-Status: approved by Fred on 2026-10-22. Implementation started; not released.
+Status: approved by Fred on 2026-10-22; refined on 2026-10-24. Preview implementation in progress.
 
 ## Purpose
 
@@ -54,6 +54,29 @@ Adding an account must preserve existing accounts. Every operation identifies it
 explicitly; do not silently switch the CLI's global default. Tokens remain in the CLI's
 supported protected storage, isolated within the Office/runtime boundary.
 
+## Approved UI and account identity refinements (2026-10-24)
+
+Use the existing Falcon Suite design system and OpenClaw's native page, host theme, UI
+extension points and chain-link navigation icon. Desktop uses an integration sidebar.
+Mobile starts with an integration list, then slides into setup/status details with a back action.
+
+Each account has two independent user-selected metadata fields:
+
+- **Owner:** an existing OpenClaw human profile or registered agent, selected from the native
+  roster. Agent ownership is not a purpose.
+- **Purpose:** Work, Personal, or Other. Other requires a short custom text label (40 characters).
+
+Account facts come from verified provider login, user-selected metadata and CLI/provider
+readbacks. Never infer ownership or purpose from the email address. Provider scopes describe
+connection capabilities, not permission for an agent to act. Link adds no competing behavioral
+instructions and writes no account inventory into AGENTS.md. Standing operating instructions
+continue to govern drafting/sending and all other service operations.
+
+The registry is the source of truth, with stable account IDs and explicit per-account CLI
+selection. A factual prompt hook provides only appropriately scoped account facts; a live tool
+supplies current details. Automatic context is not execution access control. Complete provider
+grant readback remains unknown where unavailable; requested permissions must not be called verified grants.
+
 ## Operator provisioning — approved direction
 
 Provide an operator-only provisioning mechanism, separate from the ordinary connection page.
@@ -98,6 +121,6 @@ Parent: [Google and Microsoft onboarding #7](https://github.com/fdsouvenir/falco
 | [#13](https://github.com/fdsouvenir/falcon-suite/issues/13) | Qualified install and recoverable updates         | #9            |
 | [#14](https://github.com/fdsouvenir/falcon-suite/issues/14) | Hosted Office and package acceptance              | #11, #12, #13 |
 
-The initial foundation only probes `gog --version`. Microsoft status remains unqualified;
-updates, provisioning and accounts are not implemented. Follow-up issues stay open until
-their own acceptance criteria are met. No production installation is used as a test target.
+The preview extends the initial read-only foundation. See `docs/link-qualification.md` for
+qualified contracts and unverified hosted acceptance. Follow-up issues stay open until their
+own acceptance criteria are met. No production installation is used as a test target.
