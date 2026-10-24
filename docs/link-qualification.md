@@ -58,8 +58,8 @@ Gateway's authenticated transport or hosted Office acceptance.
 
 ## Local validation result
 
-Workspace build, all three plugin validations, formatting, and **101 local tests** passed
-(11 Link, 38 Vault, 52 Work). A fresh worktree inherited umask 0002, so Vault's pre-existing
+Workspace build, all three plugin validations, formatting, and **102 local tests** passed
+(12 Link, 38 Vault, 52 Work). A fresh worktree inherited umask 0002, so Vault's pre-existing
 resolver permission check initially failed on a group-writable checkout file. Restoring its
 local executable permissions to 0755 resolved that environment-only failure; no Vault source
 change or test weakening was made.
@@ -68,3 +68,6 @@ The real-browser fixture checks passed for desktop (1280px) and mobile (390px), 
 owner choices, Other purpose labels, no default permission selection, form preservation after
 refresh, the chain-link navigation contribution, and zero browser console errors. Authenticated
 Gateway transport and hosted human consent remain outside that fixture's evidence.
+
+A corrupted-download regression check confirms failed digest verification retains the active
+CLI pointer, executable bytes and account data untouched.
