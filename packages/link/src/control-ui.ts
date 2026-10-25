@@ -155,10 +155,14 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				'users.list',
 				{}
 			),
-			host.request<{ agents: { id: string; name?: string; identity?: { name?: string } }[] }>(
-				'agents.list',
-				{}
-			)
+			host.request<{
+				agents: {
+					id: string;
+					kind?: 'agent' | 'system';
+					name?: string;
+					identity?: { name?: string };
+				}[];
+			}>('agents.list', {})
 		]);
 		if (disposed) return;
 		owners = [];
@@ -170,11 +174,13 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			);
 		if (agents.status === 'fulfilled')
 			owners.push(
-				...agents.value.agents.map((a) => ({
-					kind: 'agent' as const,
-					id: a.id,
-					name: a.identity?.name || a.name || a.id
-				}))
+				...agents.value.agents
+					.filter((a) => a.kind !== 'system')
+					.map((a) => ({
+						kind: 'agent' as const,
+						id: a.id,
+						name: a.identity?.name || a.name || a.id
+					}))
 			);
 		if (humans.status === 'rejected' || agents.status === 'rejected')
 			message(
