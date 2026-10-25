@@ -12,9 +12,31 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 	);
 	const { document, window } = parseHTML('<html><body><main></main></body></html>');
 	window.matchMedia = () => ({ matches: false });
+	// linkedom exposes select.value as getter-only; browsers also support setting it.
+	const valueDescriptor = Object.getOwnPropertyDescriptor(
+		window.HTMLSelectElement.prototype,
+		'value'
+	);
+	Object.defineProperty(window.HTMLSelectElement.prototype, 'value', {
+		...valueDescriptor,
+		set(value) {
+			for (const option of this.options) option.selected = option.value === value;
+		}
+	});
 	const previous = { document: globalThis.document, window: globalThis.window };
 	Object.assign(globalThis, { document, window });
 	let view;
+	const failedAccount = {
+		id: 'acct_failed',
+		provider: 'google',
+		owner: { kind: 'human', id: 'fred', name: 'Fred' },
+		purpose: { kind: 'personal' },
+		email: null,
+		provider_id: null,
+		state: 'failed',
+		requested: ['gmail-read'],
+		granted_scopes: null
+	};
 	const host = {
 		pluginId: manifest.id,
 		signal: new AbortController().signal,
@@ -33,7 +55,7 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 				ok: true,
 				result:
 					payload.actionId === 'accounts'
-						? { accounts: [] }
+						? { accounts: [failedAccount] }
 						: {
 								permissions: PERMISSIONS,
 								baseline_scopes: BASE_SCOPES,
@@ -67,6 +89,13 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 			[...picker.querySelectorAll('option')].map((o) => o.value),
 			['', 'human:fred', 'agent:alpha', 'agent:legacy']
 		);
+		[...document.querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
+		[...document.querySelectorAll('button')]
+			.find((b) => b.textContent === 'Reconnect / permissions')
+			.click();
+		const email = document.querySelector('input[type=email]');
+		assert.equal(email.readOnly, false, 'an unverified empty address must remain editable');
+		assert.match(document.body.textContent, /Sign-in did not complete/);
 	} finally {
 		view?.dispose();
 		Object.assign(globalThis, previous);

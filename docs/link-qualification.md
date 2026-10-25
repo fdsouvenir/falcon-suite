@@ -77,3 +77,27 @@ removal to be skipped. Existing Google and Microsoft account tests were extended
 failing before the fix. Disconnect now inspects only that stable account's isolated CLI store,
 removes its saved token/profile even without a verified email, and never touches another
 account's store. Failed inventory/removal does not report successful disconnection.
+
+## 2026-10-25 sign-in feedback follow-up
+
+Alpha (current bldg006 Office office-4) reports both provider setups ready. A read-only
+Google credential inventory for the failed account returned no saved account/token.
+A separate temporary CLI probe accepted the configured desktop client and produced
+the selected Gmail-read authorization URL; no user consent or code exchange was attempted.
+The original failure stage is unavailable: preview.1 discarded the persistent failure
+reason. These checks do not establish successful hosted Google login.
+
+The follow-up fixes an empty-address reconnect lock, persists bounded stage-specific
+errors (never raw CLI stderr, OAuth codes or tokens), and supplies private-session Link
+lookup-tool discovery even when the agent owns no connected accounts. Human account
+identities remain live-lookup only; no AGENTS.md edits or behavioral grants are added.
+
+All XDG data/state/cache and gog data/cache roots are now explicitly account-local.
+The original adapter isolated config/state but could inherit Office-wide data/cache
+paths. Alpha’s actual Gateway environment confirms a shared XDG data root; the
+reproduced runtime environment also returned zero saved Google accounts. A synthetic
+real-gog probe of the corrected layout placed its keyring under the temporary account
+data directory and its remote OAuth state under the temporary account config directory. Existing shared stores are neither copied nor deleted: affected preview accounts
+may need a fresh sign-in into their isolated store. Alpha has only the failed account
+and no saved Google token in its original CLI inventory. No installed plugin code was
+patched and no user login was replayed during this investigation.

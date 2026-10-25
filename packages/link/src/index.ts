@@ -44,8 +44,7 @@ export default defineFeaturePlugin({
 			}
 		});
 		// Factual account data only. No system instructions, authority grants, or workspace writes.
-		// The SDK does not expose a verified human profile in prompt-hook context. Human accounts
-		// are therefore discovered through the live lookup tool, not injected into arbitrary chats.
+		// Human identities remain live-lookup only: prompt context has no verified human profile.
 		api.on('before_prompt_build', (_event, ctx) => {
 			try {
 				if (
@@ -60,9 +59,21 @@ export default defineFeaturePlugin({
 					.filter(
 						(a) => a.owner.kind === 'agent' && a.owner.id === ctx.agentId && a.state === 'connected'
 					);
-				if (!accounts.length) return;
 				return {
-					prependContext: `Falcon Link — account facts\n${JSON.stringify(accounts.map((a) => ({ account_id: a.id, provider: a.provider, email: a.email, owner: a.owner, purpose: a.purpose, requested_permissions: a.requested, verified_granted_scopes: a.granted_scopes, identity_checked_at: a.checked_at })))}`
+					prependContext: `Falcon Link — connection facts\n${JSON.stringify({
+						status_tool: contract.operations.status.tool.name,
+						account_lookup_tool: contract.operations.accounts.tool.name,
+						agent_owned_accounts: accounts.map((a) => ({
+							account_id: a.id,
+							provider: a.provider,
+							email: a.email,
+							owner: a.owner,
+							purpose: a.purpose,
+							requested_permissions: a.requested,
+							verified_granted_scopes: a.granted_scopes,
+							identity_checked_at: a.checked_at
+						}))
+					})}`
 				};
 			} catch {
 				return;

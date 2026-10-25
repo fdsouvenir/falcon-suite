@@ -250,7 +250,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		email.maxLength = 254;
 		email.value = account?.email ?? '';
 		email.required = provider === 'google';
-		email.readOnly = !!account && provider === 'google';
+		email.readOnly = !!account?.email && provider === 'google';
 		const audience = select([
 			{ value: 'consumer', label: 'Personal Microsoft account' },
 			{ value: 'enterprise', label: 'Work or school account' }
@@ -617,6 +617,15 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				),
 				el('p', a.state.replaceAll('_', ' '), 'fl-state')
 			);
+			if (a.connection_error) card.append(el('p', a.connection_error.message, 'fl-error'));
+			else if (a.state === 'failed')
+				card.append(
+					el(
+						'p',
+						'Sign-in did not complete. Reconnect to try again; no verified connection is available.',
+						'fl-error'
+					)
+				);
 			card.append(
 				el(
 					'p',

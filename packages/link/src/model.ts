@@ -14,6 +14,7 @@ export type Account = {
 	state: 'pending' | 'connected' | 'check_failed' | 'disconnected' | 'failed';
 	checked_at: string | null;
 	created_at: string;
+	connection_error?: { code: string; message: string };
 };
 export type Permission = { id: string; label: string; scopes: string[] };
 const graph = (id: string, label: string, ...scopes: string[]): Permission => ({
