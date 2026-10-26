@@ -47,13 +47,16 @@ export function accountBrief(accounts: Account[], unavailable: Provider[] = []):
 		if (rows.length) {
 			lines.push("Email | Owner's profile | Purpose | Scopes");
 			for (const a of rows) {
-				const attention = ['failed', 'check_failed'].includes(a.state)
-					? ' — reconnect required'
-					: a.state === 'pending'
-						? ' — sign-in pending'
-						: a.state === 'discovered'
-							? ' — not checked'
-							: '';
+				const attention =
+					a.state === 'check_failed'
+						? ' — connection check failed'
+						: a.state === 'failed'
+							? ' — reconnect required'
+							: a.state === 'pending'
+								? ' — sign-in pending'
+								: a.state === 'discovered'
+									? ' — not checked'
+									: '';
 				lines.push(
 					[
 						a.email ?? 'unknown',

@@ -634,7 +634,26 @@ export class LinkService {
 					'--account',
 					this.selection(a)
 				],
-				environment: {},
+				environment: Object.fromEntries(
+					[
+						'HOME',
+						'XDG_CONFIG_HOME',
+						'XDG_DATA_HOME',
+						'XDG_STATE_HOME',
+						'XDG_CACHE_HOME',
+						...(a.provider === 'google'
+							? [
+									'GOG_CONFIG_DIR',
+									'GOG_DATA_DIR',
+									'GOG_STATE_DIR',
+									'GOG_CACHE_DIR',
+									'GOG_KEYRING_BACKEND'
+								]
+							: ['M365CLI_KEYRING_BACKEND'])
+					]
+						.filter((key) => process.env[key] !== undefined)
+						.map((key) => [key, process.env[key]])
+				),
 				credential_environment: {},
 				requested_scopes: [],
 				granted_scopes: a.granted_scopes

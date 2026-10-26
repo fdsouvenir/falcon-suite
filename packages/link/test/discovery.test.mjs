@@ -60,7 +60,7 @@ test('private brief includes human accounts with compact scopes and failures; pu
 		assert.match(result?.prependContext ?? '', /Falcon Link integrations and configured accounts/);
 		assert.match(
 			result.prependContext,
-			/fred@example.com \| Fred \| personal \| Gmail: read \(recorded\) — reconnect required/
+			/fred@example.com \| Fred \| personal \| Gmail: read \(recorded\) — connection check failed/
 		);
 		assert.doesNotMatch(
 			result.prependContext,
@@ -113,7 +113,7 @@ const accounts=service.accounts();assert.equal(accounts.length,2);
 const google=accounts.find(a=>a.provider==='google'),microsoft=accounts.find(a=>a.provider==='microsoft');
 assert.equal(google.owner,null);assert.equal(google.purpose,null);assert.equal(google.state,'discovered');
 assert.equal(microsoft.recorded_scopes,null);assert.equal(google.granted_scopes,null);
-const invocation=service.invocation(google.id);assert.deepEqual(invocation.arguments,['--client','work','--account','fred@example.com']);assert.deepEqual(invocation.environment,{});assert.deepEqual(invocation.credential_environment,{});
+const invocation=service.invocation(google.id);assert.deepEqual(invocation.arguments,['--client','work','--account','fred@example.com']);assert.equal(invocation.environment.HOME,process.env.HOME);assert.deepEqual(invocation.credential_environment,{});
 assert.deepEqual(service.invocation(microsoft.id).arguments,['--account','work']);
 await assert.rejects(()=>service.disconnect(google.id),/original CLI/);
 service.metadata(google.id,{kind:'human',id:'fred',name:'Fred'},{kind:'personal'});

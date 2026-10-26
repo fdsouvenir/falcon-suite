@@ -26,7 +26,7 @@ export async function existingAccounts(dir: string, provider: Provider): Promise
 		)
 			continue;
 		const selection = provider === 'google' ? email : entry.name;
-		const client = provider === 'google' ? entry.client : undefined;
+		const client = provider === 'google' ? (entry.client ?? 'default') : undefined;
 		if (
 			typeof selection !== 'string' ||
 			!selection ||
