@@ -74,6 +74,8 @@ test('verified installation publishes a normal PATH binary without replacing unr
    fs.writeFileSync(selected,'#!/bin/sh\\necho unrelated\\n',{mode:0o755});
    let refused=false;try{await install(dir,'google')}catch{refused=true}
    if(!refused || !fs.readFileSync(selected,'utf8').includes('unrelated'))throw Error('Overwrote unrelated CLI');
+   fs.unlinkSync(selected);
+   if(executable(dir,'google').startsWith(dir+path.sep))throw Error('Uninstall fell back to private cache');
   `;
 		execFileSync(process.execPath, ['--input-type=module', '-e', script], {
 			env: { ...process.env, HOME: home, PATH: bin + path.delimiter + process.env.PATH },
