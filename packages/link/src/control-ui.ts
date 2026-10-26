@@ -60,7 +60,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	const title = el('h1', 'Falcon Link');
 	title.append(el('span', ` v${version}`, 'fl-version'));
 	const heading = el('div');
-	heading.append(title, el('p', 'Google and Microsoft accounts', 'fl-page-description'));
+	heading.append(
+		title,
+		el('p', "Control your Agents' access to third party accounts.", 'fl-page-description')
+	);
 	header.append(heading);
 	const notification = el('p', undefined, 'fl-notice');
 	notification.setAttribute('role', 'status');
