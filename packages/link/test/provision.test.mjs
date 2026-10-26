@@ -39,6 +39,7 @@ const fs=require('fs');const p=process.env.OPENCLAW_CONFIG_PATH,c=JSON.parse(fs.
 			assert.equal(c.env.vars.M365CLI_KEYRING_PASSWORD, key);
 			assert.equal(c.env.vars.FALCON_LINK_KEYRING_PASSWORD, key);
 			assert.equal(c.env.vars.UNRELATED, 'keep');
+			assert.equal(c.plugins.entries['falcon-link'].hooks.allowConversationAccess, true);
 		}
 		const conflict = JSON.parse(await readFile(config, 'utf8'));
 		conflict.env.vars.GOG_KEYRING_PASSWORD = 'different-existing-key';

@@ -33,6 +33,9 @@ The provisioning script preserves the Office keyring password (or generates one 
 Office) and supplies `FALCON_LINK_KEYRING_PASSWORD`, `GOG_KEYRING_PASSWORD`, and
 `M365CLI_KEYRING_PASSWORD` through native OpenClaw `env.vars` configuration. Restart the
 Gateway after provisioning so normal agent commands inherit the CLI password variables.
+The operator script also sets `plugins.entries.<plugin-id>.hooks.allowConversationAccess=true`
+through native configuration, enabling the private-session account/usage brief. No public or
+group-session account brief is enabled.
 Conflicting existing passwords are rejected without replacement. Losing the original key
 when accounts already exist is not repaired by silently generating another key. Do not put this password in a chat, public package, or
 customer page. Both CLIs use their own encrypted file keyring inside each account directory.

@@ -105,12 +105,18 @@ try {
 				'Existing accounts require their original keyring password; no new password generated.'
 			);
 	}
+	const pluginId = path.basename(dir);
+	if (!['falcon-link', 'falcon-link-preview'].includes(pluginId))
+		throw new Error('Provision the named Falcon Link plugin state directory.');
 	const password = keys[0] ?? randomBytes(32).toString('base64url');
 	mkdirSync(dir, { recursive: true, mode: 0o700 });
 	const batch = path.join(dir, `.environment-${randomUUID()}.json`);
 	writeFileSync(
 		batch,
-		JSON.stringify(names.map((name) => ({ path: 'env.vars.' + name, value: password }))),
+		JSON.stringify([
+			...names.map((name) => ({ path: 'env.vars.' + name, value: password })),
+			{ path: `plugins.entries.${pluginId}.hooks.allowConversationAccess`, value: true }
+		]),
 		{ mode: 0o600 }
 	);
 	try {
@@ -131,7 +137,7 @@ try {
 	writeFileSync(tmp, JSON.stringify(next), { mode: 0o600 });
 	renameSync(tmp, target);
 	console.log(
-		'Operator configuration merged. The existing Office keyring password is supplied to Link and both CLI environments. Restart the Gateway and verify through the agent command tool.'
+		'Operator configuration merged. The Office keyring password is supplied to Link and both CLI environments; the private account/usage hook is enabled. Restart the Gateway and verify through the agent command tool.'
 	);
 } catch (e) {
 	console.error(e instanceof SyntaxError ? 'Invalid configuration JSON.' : e.message);
