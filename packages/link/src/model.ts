@@ -4,14 +4,15 @@ export type Purpose = { kind: 'work' | 'personal' | 'other'; label?: string };
 export type Account = {
 	id: string;
 	provider: Provider;
-	owner: Owner;
-	purpose: Purpose;
+	owner: Owner | null;
+	purpose: Purpose | null;
 	email: string | null;
 	provider_id: string | null;
 	requested: string[];
 	recorded_scopes?: string[] | null;
 	granted_scopes: string[] | null;
-	state: 'pending' | 'connected' | 'check_failed' | 'disconnected' | 'failed';
+	external?: { selection: string; client?: string };
+	state: 'discovered' | 'pending' | 'connected' | 'check_failed' | 'disconnected' | 'failed';
 	checked_at: string | null;
 	created_at: string;
 	connection_error?: { code: string; message: string };

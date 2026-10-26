@@ -243,7 +243,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					: 'Connect account'
 		);
 		form.append(heading);
-		const meta = metadataFields(account?.owner, account?.purpose);
+		const meta = metadataFields(account?.owner ?? undefined, account?.purpose ?? undefined);
 		form.append(...meta.nodes);
 		const email = el('input');
 		email.type = 'email';
@@ -613,7 +613,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				el('h4', a.email ?? 'Incomplete sign-in'),
 				el(
 					'p',
-					`${a.owner.name} · ${a.owner.kind === 'agent' ? 'Agent' : 'Human'} · ${a.purpose.kind === 'other' ? a.purpose.label : a.purpose.kind === 'work' ? 'Work' : 'Personal'}`
+					`${a.owner?.name ?? 'Owner unassigned'} · ${a.purpose ? (a.purpose.kind === 'other' ? a.purpose.label : a.purpose.kind) : 'Purpose unassigned'}`
 				),
 				el('p', a.state.replaceAll('_', ' '), 'fl-state')
 			);
@@ -644,7 +644,11 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			actions.append(edit);
 			const reconnect = button('Reconnect / permissions', () => accountForm(a));
 			reconnect.disabled = !canWrite() || integration.setup.state !== 'ready';
-			actions.append(reconnect);
+			if (!a.external) actions.append(reconnect);
+			else
+				card.append(
+					el('p', 'Discovered in the existing CLI. Credentials remain managed there.', 'fl-muted')
+				);
 			const check = button('Check connection', async () => {
 				await act(
 					check,
@@ -657,7 +661,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			});
 			check.disabled = !canWrite() || !a.email || a.state === 'disconnected';
 			actions.append(check);
-			if (a.state !== 'disconnected') {
+			if (a.state !== 'disconnected' && !a.external) {
 				const disconnect = button('Disconnect', () => {
 					closeForm();
 					const confirm = el('section', undefined, 'fl-card');

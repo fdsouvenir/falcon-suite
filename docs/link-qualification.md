@@ -116,3 +116,21 @@ refresh token with the provisioned client returned HTTP 400 / invalid_grant, con
 with usable client configuration but not proof of a successful human login. No user
 authorization code or token was replayed. The original failed completion cannot be
 retrospectively classified from preview.1’s discarded stderr.
+
+## Compact brief and existing account discovery — 2026-10-25
+
+Private hooks now include human and agent accounts in a four-column table grouped by
+CLI, without internal registry metadata or operating instructions. The human-account
+regression failed against the previous agent-only hook before the fix. The existing
+process-boundary discovery case exercises both real CLI JSON schemas, explicit Google
+client and Microsoft profile selection, unassigned metadata, recorded versus unknown
+scopes, metadata persistence across restart, and refusal to remove native credentials.
+Discovered inventory is not proof of successful refresh, consent or service access.
+Existing Microsoft application-only profiles are excluded from human-account discovery.
+No installed Falcon plugin is used as a test target or upgraded by this release.
+
+A read-only run of the new discovery adapter against this host's installed gog found
+three saved Google accounts (19, 12 and 33 recorded scopes). It did not import them into
+the installed plugin, change credentials, perform refresh or assign owner/purpose.
+Microsoft discovery was exercised with its published schema in an isolated CLI fixture;
+this host has no m365cli executable. Live customer sign-in remains unverified.

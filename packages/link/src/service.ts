@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ChildProcess } from 'node:child_process';
 import { Registry } from './store.js';
+import { existingAccounts } from './discover.js';
 import {
 	type Account,
 	type Owner,
@@ -64,7 +65,62 @@ export class LinkService {
 	accounts() {
 		return this.registry.list();
 	}
+	discoveryUnavailable: Provider[] = [];
+	private discoveryAt = 0;
+	private discovery?: Promise<void>;
+	async discover() {
+		if (this.discovery) return this.discovery;
+		if (Date.now() - this.discoveryAt < 60000) return;
+		this.discovery = (async () => {
+			this.discoveryUnavailable = [];
+			await Promise.all(
+				(['google', 'microsoft'] as Provider[]).map(async (provider) => {
+					try {
+						const found = await existingAccounts(this.dir, provider);
+						for (const account of found) {
+							const prior = this.accounts().find((a) => a.id === account.id);
+							this.registry.save(
+								prior
+									? {
+											...prior,
+											recorded_scopes: account.recorded_scopes,
+											state: prior.state === 'disconnected' ? 'discovered' : prior.state
+										}
+									: account
+							);
+						}
+						for (const prior of this.accounts().filter(
+							(a) => a.provider === provider && a.external
+						))
+							if (!found.some((a) => a.id === prior.id))
+								this.registry.save({
+									...prior,
+									state: 'disconnected',
+									recorded_scopes: null,
+									granted_scopes: null
+								});
+					} catch {
+						this.discoveryUnavailable.push(provider);
+					}
+				})
+			);
+			this.discoveryAt = Date.now();
+		})();
+		try {
+			await this.discovery;
+		} finally {
+			this.discovery = undefined;
+		}
+	}
+	private selection(a: Account) {
+		return a.external?.selection ?? (a.provider === 'google' ? a.email! : a.id);
+	}
+	private tool(a: Account) {
+		return executable(this.dir, a.provider);
+	}
 	private env(a: Account) {
+		if (a.external)
+			return { ...process.env, ...(a.external.client ? { GOG_CLIENT: a.external.client } : {}) };
 		return accountEnvironment(this.dir, a.id);
 	}
 	private async locked<T>(id: string, fn: () => Promise<T>): Promise<T> {
@@ -140,6 +196,8 @@ export class LinkService {
 					this.logins.delete(id);
 		}
 		const prior = input.account_id ? this.registry.get(input.account_id) : null;
+		if (prior?.external)
+			throw new Error('Existing CLI accounts are managed in their original CLI.');
 		if (prior && this.locks.has(prior.id))
 			throw new Error('An account operation is already running.');
 		if (prior && prior.provider !== input.provider)
@@ -178,7 +236,7 @@ export class LinkService {
 			actor
 		};
 		this.logins.set(l.id, l);
-		const tool = executable(this.dir, a.provider);
+		const tool = this.tool(a);
 		const env = this.env(a);
 		let failure = {
 			code: 'cli_version',
@@ -442,12 +500,14 @@ export class LinkService {
 			try {
 				if (a.provider === 'google') {
 					const out = await json(
-						executable(this.dir, a.provider),
+						this.tool(a),
 						['auth', 'list', '--check', '--json', '--no-input'],
 						this.env(a)
 					);
 					const entry = out.accounts?.find(
-						(e: any) => e.email?.toLowerCase() === a.email?.toLowerCase()
+						(e: any) =>
+							e.email?.toLowerCase() === a.email?.toLowerCase() &&
+							(!a.external || (e.client ?? 'default') === (a.external.client ?? 'default'))
 					);
 					if (!entry || entry.valid !== true || !entry.subject)
 						throw new Error('Identity not verified.');
@@ -461,11 +521,11 @@ export class LinkService {
 					// gog reports scopes from stored token metadata; do not promote them to verified grants.
 				} else {
 					const out = await json(
-						executable(this.dir, a.provider),
-						['--account', a.id, 'auth', 'check', '--json', '--no-input'],
+						this.tool(a),
+						['--account', this.selection(a), 'auth', 'check', '--json', '--no-input'],
 						this.env(a)
 					);
-					if (out.verified !== true || out.profile !== a.id || !out.identity?.id)
+					if (out.verified !== true || out.profile !== this.selection(a) || !out.identity?.id)
 						throw new Error('Identity not verified.');
 					if (a.provider_id && a.provider_id !== out.identity.id)
 						throw new Error('Account identity changed.');
@@ -502,6 +562,7 @@ export class LinkService {
 	async disconnect(id: string) {
 		return this.locked(id, async () => {
 			const a = this.registry.get(id);
+			if (a.external) throw new Error('Existing CLI accounts are managed in their original CLI.');
 			if (a.state === 'disconnected') return a;
 			if (
 				[...this.logins.values()].some(
@@ -511,7 +572,7 @@ export class LinkService {
 			)
 				throw new Error('Finish or cancel sign-in before disconnecting.');
 			// Only this account's CLI-native encrypted credentials are removed. Never revoke provider-wide consent.
-			const tool = executable(this.dir, a.provider);
+			const tool = this.tool(a);
 			const env = this.env(a);
 			if (a.provider === 'google') {
 				const stored = await json(tool, ['auth', 'list', '--json', '--no-input'], env);
@@ -562,7 +623,22 @@ export class LinkService {
 	}
 	invocation(id: string) {
 		const a = this.registry.get(id);
-		if (a.state !== 'connected' || !a.email) throw new Error('Account is not connected.');
+		if (!['connected', 'discovered'].includes(a.state) || !a.email)
+			throw new Error('Account is not connected.');
+		if (a.external)
+			return {
+				account: a,
+				executable: this.tool(a),
+				arguments: [
+					...(a.external.client ? ['--client', a.external.client] : []),
+					'--account',
+					this.selection(a)
+				],
+				environment: {},
+				credential_environment: {},
+				requested_scopes: [],
+				granted_scopes: a.granted_scopes
+			};
 		const env = this.env(a);
 		const names = [
 			'HOME',
@@ -579,7 +655,7 @@ export class LinkService {
 		];
 		return {
 			account: a,
-			executable: executable(this.dir, a.provider),
+			executable: this.tool(a),
 			arguments: ['--account', a.provider === 'google' ? a.email : a.id],
 			environment: Object.fromEntries(
 				names
