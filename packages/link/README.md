@@ -13,8 +13,9 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
   device-code sign-in, multiple isolated accounts, stable IDs and explicit CLI selection.
 - Reconnect/change permissions, local disconnect and read-only live identity checks.
 - Linux x64/arm64 CLI installation and updates from pinned GitHub releases, verified using
-  GitHub's SHA-256 asset digests. Installation never replaces the host's tools or credentials.
-  Atomic activation occurs only after executable-version verification. Previous versions remain.
+  GitHub's SHA-256 asset digests. Commands are ordinary executables in `~/.local/bin` on
+  the Office PATH, usable directly by the agent. Unrelated existing tools and credentials
+  are preserved; verified previous download copies remain available for rollback.
 - Google `gog` 0.47.0 (`openclaw/gogcli`); Microsoft `m365cli` 1.0.0
   (`fdsouvenir/m365cli`), **not** the unrelated PnP CLI. Newer upstream releases are reported
   but cannot be installed until qualified in Link.
@@ -28,8 +29,12 @@ Windows/macOS installation and broker flows are not supported by this preview.
 The normal page contains no application IDs, secrets or setup forms. A fresh install loads
 and reports “connection setup is incomplete; contact your administrator.”
 
-The Gateway service must receive a nonempty `FALCON_LINK_KEYRING_PASSWORD` through its normal
-protected environment provisioning. Do not put this password in a chat, public package, or
+The provisioning script preserves the Office keyring password (or generates one for a fresh
+Office) and supplies `FALCON_LINK_KEYRING_PASSWORD`, `GOG_KEYRING_PASSWORD`, and
+`M365CLI_KEYRING_PASSWORD` through native OpenClaw `env.vars` configuration. Restart the
+Gateway after provisioning so normal agent commands inherit the CLI password variables.
+Conflicting existing passwords are rejected without replacement. Losing the original key
+when accounts already exist is not repaired by silently generating another key. Do not put this password in a chat, public package, or
 customer page. Both CLIs use their own encrypted file keyring inside each account directory.
 Losing this password requires reconnecting the affected accounts.
 
@@ -61,7 +66,7 @@ check OAuth state. Redirect URLs and device codes are ephemeral, person-bound, a
 or persisted in the account registry. Microsoft sign-in remains in a bounded CLI process;
 only the recognized Microsoft verification URL/code is surfaced, never raw stderr.
 
-## Account facts, not operating instructions
+## Account facts and CLI usage
 
 `falcon_link_accounts` lists owner, purpose, verified account identity, requested permissions,
 CLI-recorded scopes (where available), connection state and last identity check. With an
@@ -76,8 +81,10 @@ No account records or instructions are written into AGENTS.md.
 
 A compact `before_prompt_build` brief lists all human and agent accounts in private
 main/dashboard sessions, grouped by gogcli and m365cli: email, owner's profile display
-name, purpose and readable scopes. Failed connections are flagged. There are no internal
-IDs, tool pointers or operating instructions in this brief. Public/group routes receive
+name, purpose and readable scopes. Failed connections are flagged. The brief also points to `falcon_link_accounts` for account selection and storage environment.
+Use the returned configuration paths and account arguments with the ordinary PATH command,
+keeping the inherited keyring variables. No password values or authority grants appear in
+the brief, and no internal account IDs are included in its table. Public/group routes receive
 no account brief and cannot enumerate accounts through the inventory tool.
 
 Link also reads existing CLI inventories using non-interactive `gog auth list` and
@@ -106,10 +113,12 @@ Sign-in cancellation, expiry, CLI errors, identity mismatch and revoked refresh 
 non-connected states. Restarting ends pending sign-ins; existing connected accounts remain.
 An uncertain exchange is not automatically retried; inspect/check that account or reconnect.
 
-CLI release directories are immutable and the `tools/<provider>/current.json` pointer is switched
-atomically only after digest and version checks. Existing host binaries and older managed
-versions remain untouched. For operator rollback, stop new sign-ins and restore the previous
-qualified version pointer; never change account directories or keyring passwords as rollback.
+CLI download directories are immutable rollback copies. Installation atomically publishes the
+verified binary to `~/.local/bin/gog` or `~/.local/bin/m365cli`, after digest and version checks.
+An existing file may only be updated when its bytes match the prior installation receipt;
+other tools and symlinks are preserved. Legacy private preview binaries are a fallback until
+installation migrates them to PATH. For rollback, restore the previous qualified executable
+in `~/.local/bin`; never change account directories or keyring passwords as rollback.
 
 ## Develop
 

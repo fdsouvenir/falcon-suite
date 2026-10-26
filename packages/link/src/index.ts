@@ -44,7 +44,7 @@ export default defineFeaturePlugin({
 				link = undefined;
 			}
 		});
-		// Factual account data only. No system instructions, authority grants, or workspace writes.
+		// Account facts and CLI usage guidance, without credential values or authority grants.
 		// Private Office inventory includes both human and agent accounts.
 		api.on('before_prompt_build', async (_event, ctx) => {
 			try {

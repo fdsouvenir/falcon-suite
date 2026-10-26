@@ -62,10 +62,9 @@ test('private brief includes human accounts with compact scopes and failures; pu
 			result.prependContext,
 			/fred@example.com \| Fred \| personal \| Gmail: read \(recorded\) — connection check failed/
 		);
-		assert.doesNotMatch(
-			result.prependContext,
-			/acct_fixture|falcon_link_accounts|agent_owned_accounts/
-		);
+		assert.doesNotMatch(result.prependContext, /acct_fixture|agent_owned_accounts/);
+		assert.match(result.prependContext, /falcon_link_accounts/);
+		assert.match(result.prependContext, /inherited.*keyring/i);
 		assert.equal(
 			result.prependSystemContext,
 			undefined,

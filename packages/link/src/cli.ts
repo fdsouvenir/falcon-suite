@@ -1,6 +1,7 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, accessSync, constants } from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
 import type { CallbackConfig } from './callback.js';
 import type { Provider } from './model.js';
 export const TOOLS = {
@@ -47,6 +48,13 @@ export function readiness(dir: string, provider: Provider) {
 }
 export function executable(dir: string, provider: Provider): string {
 	const tool = TOOLS[provider];
+	const normal = path.join(homedir(), '.local', 'bin', tool.binary);
+	if ((process.env.PATH ?? '').split(path.delimiter).includes(path.dirname(normal))) {
+		try {
+			accessSync(normal, constants.X_OK);
+			return normal;
+		} catch {}
+	}
 	let version: string = tool.version;
 	try {
 		const current = JSON.parse(
@@ -55,7 +63,17 @@ export function executable(dir: string, provider: Provider): string {
 		if (/^\d+\.\d+\.\d+$/.test(current.version)) version = current.version;
 	} catch {}
 	const managed = path.join(dir, 'tools', provider, version, tool.binary);
-	return existsSync(managed) ? managed : tool.binary;
+	if (existsSync(managed)) return managed;
+	// Prefer normal CLI installations. Private preview paths are legacy fallback only.
+	for (const folder of (process.env.PATH ?? '').split(path.delimiter)) {
+		if (!path.isAbsolute(folder)) continue;
+		const candidate = path.join(folder, tool.binary);
+		try {
+			accessSync(candidate, constants.X_OK);
+			return candidate;
+		} catch {}
+	}
+	return tool.binary;
 }
 export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 	if (!/^acct_[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid account identifier.');

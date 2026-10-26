@@ -40,7 +40,10 @@ function scopes(a: Account) {
 	return readable + (a.granted_scopes === null ? ' (recorded)' : '');
 }
 export function accountBrief(accounts: Account[], unavailable: Provider[] = []): string {
-	const lines = ['Falcon Link integrations and configured accounts'];
+	const lines = [
+		'Falcon Link integrations and configured accounts',
+		'Use falcon_link_accounts to list accounts, then pass account_id to obtain the CLI account arguments and isolated storage environment. Run gog or m365cli from the normal PATH with that environment and account selection. The keyring passwords are inherited from Office provisioning; do not print them or request them in chat. Do not replace the inherited keyring variables. Connection capabilities do not authorize sending or other unrequested actions.'
+	];
 	for (const provider of ['google', 'microsoft'] as const) {
 		lines.push('', provider === 'google' ? 'gogcli' : 'm365cli');
 		const rows = accounts.filter((a) => a.provider === provider && a.state !== 'disconnected');

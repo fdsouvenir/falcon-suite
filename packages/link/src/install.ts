@@ -1,6 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtemp, writeFile, mkdir, rename, chmod, readFile, rm } from 'node:fs/promises';
+import {
+	mkdtemp,
+	writeFile,
+	mkdir,
+	rename,
+	chmod,
+	readFile,
+	rm,
+	copyFile,
+	lstat
+} from 'node:fs/promises';
 import path from 'node:path';
+import { homedir } from 'node:os';
 import { TOOLS, run } from './cli.js';
 import type { Provider } from './model.js';
 
@@ -88,6 +99,53 @@ export async function install(dir: string, provider: Provider) {
 		await mkdir(base, { recursive: true, mode: 0o700 });
 		const destination = path.join(base, t.version);
 		const activate = async () => {
+			// The installed command is an ordinary user-local executable on the Office PATH.
+			// Versioned download copies remain only for rollback, never required by the agent.
+			const bin = path.join(homedir(), '.local', 'bin');
+			if (!(process.env.PATH ?? '').split(path.delimiter).includes(bin))
+				throw new Error('Add ~/.local/bin to the Office command PATH before installation.');
+			await mkdir(bin, { recursive: true, mode: 0o755 });
+			const command = path.join(bin, t.binary);
+			const receiptPath = path.join(base, 'path-install.json');
+			const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+			const nextDigest = digest(await readFile(path.join(destination, t.binary)));
+			try {
+				const stat = await lstat(command);
+				if (!stat.isFile())
+					throw new Error(
+						'Existing CLI is not a regular file; preserve it and ask your administrator.'
+					);
+				const currentDigest = digest(await readFile(command));
+				if (currentDigest !== nextDigest) {
+					let previousReceipt;
+					try {
+						previousReceipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+					} catch {}
+					if (previousReceipt?.binary_sha256 !== currentDigest)
+						throw new Error(
+							'Existing CLI was installed or changed outside Link; it has been preserved.'
+						);
+					await copyFile(command, path.join(base, `previous-${randomUUID()}`));
+				}
+			} catch (e) {
+				if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+			}
+			const pending = path.join(bin, `.${t.binary}-${randomUUID()}`);
+			try {
+				await copyFile(path.join(destination, t.binary), pending);
+				await chmod(pending, 0o755);
+				await rename(pending, command);
+			} finally {
+				await rm(pending, { force: true });
+			}
+			const pendingReceipt = path.join(base, `.path-install-${randomUUID()}`);
+			await writeFile(
+				pendingReceipt,
+				JSON.stringify({ path: command, version: t.version, binary_sha256: nextDigest }),
+				{ mode: 0o600 }
+			);
+			await rename(pendingReceipt, receiptPath);
+
 			let previous: string | null = null;
 			try {
 				previous = JSON.parse(await readFile(path.join(base, 'current.json'), 'utf8')).version;

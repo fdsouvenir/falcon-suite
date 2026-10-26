@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Operator-only, local provisioning. No UI operation accepts application configuration.
 import { readFileSync, writeFileSync, mkdirSync, renameSync, statSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 const [dir, source] = process.argv.slice(2);
 if (!dir || !source || !path.isAbsolute(dir) || !path.isAbsolute(source)) {
@@ -78,12 +79,59 @@ try {
 				'Callback configuration must identify an HTTPS service, pinned version, Office and private token file.'
 			);
 	}
+	// Native Gateway config supplies the same persisted secret to Link and normal agent exec.
+	// Never rotate an existing key or overwrite conflicting provider-specific passwords.
+	const configPath =
+		process.env.OPENCLAW_CONFIG_PATH || path.join(path.dirname(dir), 'openclaw.json');
+	const config = JSON.parse(readFileSync(configPath, 'utf8'));
+	const vars = { ...config.env, ...config.env?.vars };
+	const names = [
+		'FALCON_LINK_KEYRING_PASSWORD',
+		'GOG_KEYRING_PASSWORD',
+		'M365CLI_KEYRING_PASSWORD'
+	];
+	const keys = names.map((k) => vars[k]).filter((v) => typeof v === 'string' && v.length);
+	if (new Set(keys).size > 1)
+		throw new Error('Conflicting existing keyring passwords; no password changed.');
+	if (!keys.length) {
+		let accounts;
+		try {
+			accounts = JSON.parse(readFileSync(path.join(dir, 'accounts.json'), 'utf8'));
+		} catch (e) {
+			if (e.code !== 'ENOENT') throw e;
+		}
+		if (accounts?.accounts?.length || accounts?.length)
+			throw new Error(
+				'Existing accounts require their original keyring password; no new password generated.'
+			);
+	}
+	const password = keys[0] ?? randomBytes(32).toString('base64url');
 	mkdirSync(dir, { recursive: true, mode: 0o700 });
+	const batch = path.join(dir, `.environment-${randomUUID()}.json`);
+	writeFileSync(
+		batch,
+		JSON.stringify(names.map((name) => ({ path: 'env.vars.' + name, value: password }))),
+		{ mode: 0o600 }
+	);
+	try {
+		execFileSync('openclaw', ['config', 'set', '--batch-file', batch], {
+			stdio: ['ignore', 'pipe', 'pipe'],
+			timeout: 45000
+		});
+	} catch {
+		throw new Error(
+			'Office environment provisioning failed; private CLI diagnostics were not exposed.'
+		);
+	} finally {
+		const { unlinkSync } = await import('node:fs');
+		unlinkSync(batch);
+	}
+
 	const tmp = path.join(dir, `.provision-${randomUUID()}`);
 	writeFileSync(tmp, JSON.stringify(next), { mode: 0o600 });
 	renameSync(tmp, target);
 	console.log(
-		'Operator configuration merged. Readiness also requires FALCON_LINK_KEYRING_PASSWORD in the Gateway environment.'
+		'Operator configuration merged. The existing Office keyring password is supplied to Link and both CLI environments. Restart the Gateway and verify through the agent command tool.'
 	);
 } catch (e) {
 	console.error(e instanceof SyntaxError ? 'Invalid configuration JSON.' : e.message);
