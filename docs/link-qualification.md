@@ -101,3 +101,18 @@ data directory and its remote OAuth state under the temporary account config dir
 may need a fresh sign-in into their isolated store. Alpha has only the failed account
 and no saved Google token in its original CLI inventory. No installed plugin code was
 patched and no user login was replayed during this investigation.
+
+Fred subsequently confirmed consent completed and the redirect URL was submitted.
+The released gog completion command performs exchange, identity lookup and token
+storage before returning; the adapter now distinguishes those qualified stderr stage
+markers using fixed public messages, discarding raw diagnostics. Unknown failures remain
+unspecified completion failures, never assumed exchange failures. Process-boundary
+regressions cover exchange, identity, storage and unknown output, with a private marker
+verified absent from persisted account data.
+
+Alpha’s unauthenticated token and userinfo endpoints returned HTTP 404 and 401 respectively,
+confirming endpoint reachability, not account access. A deliberately invalid synthetic
+refresh token with the provisioned client returned HTTP 400 / invalid_grant, consistent
+with usable client configuration but not proof of a successful human login. No user
+authorization code or token was replayed. The original failed completion cannot be
+retrospectively classified from preview.1’s discarded stderr.

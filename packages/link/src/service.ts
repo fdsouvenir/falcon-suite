@@ -17,6 +17,7 @@ import {
 	provision,
 	readiness,
 	deviceLogin,
+	GoogleCompletionError,
 	TOOLS
 } from './cli.js';
 import { install } from './install.js';
@@ -367,9 +368,9 @@ export class LinkService {
 			throw new Error('Redirect URL or sign-in state does not match.');
 		l.state = 'verifying';
 		let failure = {
-			code: 'google_exchange_failed',
+			code: 'google_completion_failed',
 			message:
-				'Google authorization could not be exchanged for a saved connection. Reconnect and complete a new sign-in.'
+				'Google sign-in could not complete authorization, identity confirmation or credential storage. Reconnect to start a new sign-in.'
 		};
 		try {
 			const a = this.registry.get(l.account_id);
@@ -403,7 +404,8 @@ export class LinkService {
 			l.code = null;
 			l.message =
 				'Account identity and token refresh verified. Scopes are recorded from the CLI token store, not independently read back from Google.';
-		} catch {
+		} catch (e) {
+			if (e instanceof GoogleCompletionError) failure = { code: e.code, message: e.message };
 			this.fail(l, failure.message, failure.code);
 		}
 		return this.publicLogin(l);
