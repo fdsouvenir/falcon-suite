@@ -126,3 +126,14 @@ npm run format:check
 Native UI requires OpenClaw's Custom plugin UI lab. Validation uses repository-local build
 state, never an installed production plugin. See `docs/link-spec.md` and `docs/link-qualification.md`
 for acceptance limits and release evidence.
+
+## Hosted sign-in callbacks
+
+An operator can provision a self-hosted, version-pinned **Link Callback Worker** to
+complete Google and Microsoft sign-in automatically without copying a localhost
+URL or entering a device code. See [the Worker deployment guide](../../workers/link-callback/README.md).
+With no callback service configured, the existing manual/device-code flows remain.
+Each Office retains its CLI account stores, tokens and refresh operations. The
+callback service receives only encrypted-at-rest, short-lived authorization-code
+handoffs, not account tokens. Deployments supply their own hostname and provider
+registration configuration; the public package contains neither.

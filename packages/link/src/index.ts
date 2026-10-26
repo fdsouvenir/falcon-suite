@@ -86,7 +86,7 @@ export default defineFeaturePlugin({
 				return ready().start(input, person(context));
 			},
 			login(input, context) {
-				return ready().login(input.id, person(context));
+				return ready().poll(input.id, person(context));
 			},
 			finish(input, context) {
 				return ready().finish(input.id, input.redirect, person(context));

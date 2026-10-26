@@ -99,6 +99,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		url: string | null;
 		code: string | null;
 		expires_at: string;
+		hosted?: boolean;
 	} | null = null;
 	let formDisposer: (() => void) | undefined;
 	const message = (s: string, error = false) => {
@@ -391,7 +392,12 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			card.append(a);
 		}
 		if (activeLogin.code) card.append(el('p', activeLogin.code, 'fl-device-code'));
-		if (activeLogin.url && selected === 'google' && activeLogin.state === 'awaiting_consent') {
+		if (
+			activeLogin.url &&
+			!activeLogin.hosted &&
+			selected === 'google' &&
+			activeLogin.state === 'awaiting_consent'
+		) {
 			const form = el('form');
 			const input = el('input');
 			input.type = 'url';

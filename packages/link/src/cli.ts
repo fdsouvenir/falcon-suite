@@ -1,6 +1,7 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
+import type { CallbackConfig } from './callback.js';
 import type { Provider } from './model.js';
 export const TOOLS = {
 	google: { binary: 'gog', repo: 'openclaw/gogcli', version: '0.47.0', archive: 'gogcli' },
@@ -10,6 +11,8 @@ export type Provision = {
 	google_credentials_file?: string;
 	microsoft_client_id?: string;
 	microsoft_tenant?: string;
+	microsoft_client_secret_file?: string;
+	callback?: CallbackConfig;
 };
 export function provision(dir: string): Provision {
 	try {
@@ -24,7 +27,8 @@ export function readiness(dir: string, provider: Provider) {
 	let ready = !!process.env.FALCON_LINK_KEYRING_PASSWORD && process.platform === 'linux';
 	if (provider === 'google') {
 		try {
-			const c = JSON.parse(readFileSync(p.google_credentials_file ?? '', 'utf8')).installed;
+			const raw = JSON.parse(readFileSync(p.google_credentials_file ?? '', 'utf8'));
+			const c = p.callback ? raw.web : raw.installed;
 			ready = ready && !!c?.client_id && !!c?.client_secret;
 		} catch {
 			ready = false;
