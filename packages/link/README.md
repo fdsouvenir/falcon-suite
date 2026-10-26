@@ -16,7 +16,7 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
   GitHub's SHA-256 asset digests. Commands are ordinary executables in `~/.local/bin` on
   the Office PATH, usable directly by the agent. Unrelated existing tools and credentials
   are preserved; verified previous download copies remain available for rollback.
-- Google `gog` 0.47.0 (`openclaw/gogcli`); Microsoft `m365cli` 1.0.0
+- Google `gog` 0.47.0 (`openclaw/gogcli`); Microsoft `m365cli` 2.0.0
   (`fdsouvenir/m365cli`), **not** the unrelated PnP CLI. Newer upstream releases are reported
   but cannot be installed until qualified in Link.
 
@@ -74,8 +74,11 @@ only the recognized Microsoft verification URL/code is surfaced, never raw stder
 `falcon_link_accounts` lists owner, purpose, verified account identity, requested permissions,
 CLI-recorded scopes (where available), connection state and last identity check. With an
 `account_id`, it returns the explicit executable/account arguments and isolated configuration
-environment. Passwords/tokens are never returned: the environment mapping references the
-operator-provided password variable by name. The agent's existing CLI skill executes service
+environment. Passwords/tokens are never returned: `inherited_environment` names the provider
+keyring variable supplied by Office provisioning. Invocation settings use only
+`GOG_*` or `M365CLI_*` selectors, never protected `HOME` or global `XDG_*` overrides.
+Microsoft 2.0.0 selects the existing store with `M365CLI_CONFIG_DIR`; no credentials
+are moved, copied, or re-encrypted. The agent's existing CLI skill executes service
 operations; Link does not add a second mail/calendar API implementation.
 
 Connection permissions do **not** grant an agent permission to send mail or override standing

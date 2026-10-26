@@ -795,11 +795,6 @@ export class LinkService {
 				],
 				environment: Object.fromEntries(
 					[
-						'HOME',
-						'XDG_CONFIG_HOME',
-						'XDG_DATA_HOME',
-						'XDG_STATE_HOME',
-						'XDG_CACHE_HOME',
 						...(a.provider === 'google'
 							? [
 									'GOG_CONFIG_DIR',
@@ -808,29 +803,28 @@ export class LinkService {
 									'GOG_CACHE_DIR',
 									'GOG_KEYRING_BACKEND'
 								]
-							: ['M365CLI_KEYRING_BACKEND'])
+							: ['M365CLI_CONFIG_DIR', 'M365CLI_KEYRING_BACKEND'])
 					]
 						.filter((key) => process.env[key] !== undefined)
 						.map((key) => [key, process.env[key]])
 				),
-				credential_environment: {},
+				inherited_environment: [],
 				requested_scopes: [],
 				granted_scopes: a.granted_scopes
 			};
 		const env = this.env(a);
-		const names = [
-			'HOME',
-			'XDG_CONFIG_HOME',
-			'XDG_DATA_HOME',
-			'XDG_STATE_HOME',
-			'XDG_CACHE_HOME',
-			'GOG_CONFIG_DIR',
-			'GOG_DATA_DIR',
-			'GOG_STATE_DIR',
-			'GOG_CACHE_DIR',
-			'GOG_KEYRING_BACKEND',
-			'M365CLI_KEYRING_BACKEND'
-		];
+		// Normal exec protects HOME/XDG launch context. Select the existing store through
+		// each CLI's own supported settings, without changing the process home.
+		const names =
+			a.provider === 'google'
+				? [
+						'GOG_CONFIG_DIR',
+						'GOG_DATA_DIR',
+						'GOG_STATE_DIR',
+						'GOG_CACHE_DIR',
+						'GOG_KEYRING_BACKEND'
+					]
+				: ['M365CLI_CONFIG_DIR', 'M365CLI_KEYRING_BACKEND'];
 		return {
 			account: a,
 			executable: this.tool(a),
@@ -840,10 +834,9 @@ export class LinkService {
 					.filter((k) => a.provider === 'google' || !k.startsWith('GOG_'))
 					.map((k) => [k, env[k]])
 			),
-			credential_environment: {
-				[a.provider === 'google' ? 'GOG_KEYRING_PASSWORD' : 'M365CLI_KEYRING_PASSWORD']:
-					'FALCON_LINK_KEYRING_PASSWORD'
-			},
+			inherited_environment: [
+				a.provider === 'google' ? 'GOG_KEYRING_PASSWORD' : 'M365CLI_KEYRING_PASSWORD'
+			],
 			requested_scopes: requestedScopes(a.provider, a.requested),
 			granted_scopes: a.granted_scopes
 		};

@@ -6,7 +6,7 @@ import type { CallbackConfig } from './callback.js';
 import type { Provider } from './model.js';
 export const TOOLS = {
 	google: { binary: 'gog', repo: 'openclaw/gogcli', version: '0.47.0', archive: 'gogcli' },
-	microsoft: { binary: 'm365cli', repo: 'fdsouvenir/m365cli', version: '1.0.0', archive: 'm365cli' }
+	microsoft: { binary: 'm365cli', repo: 'fdsouvenir/m365cli', version: '2.0.0', archive: 'm365cli' }
 } as const;
 export type Provision = {
 	google_credentials_file?: string;
@@ -96,6 +96,7 @@ export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 		GOG_CACHE_DIR: path.join(home, 'gog-cache'),
 		GOG_KEYRING_BACKEND: 'file',
 		GOG_KEYRING_PASSWORD: process.env.FALCON_LINK_KEYRING_PASSWORD,
+		M365CLI_CONFIG_DIR: path.join(home, '.config', 'm365cli'),
 		M365CLI_KEYRING_BACKEND: 'file',
 		M365CLI_KEYRING_PASSWORD: process.env.FALCON_LINK_KEYRING_PASSWORD,
 		M365CLI_CLIENT_ID: provision(dir).microsoft_client_id

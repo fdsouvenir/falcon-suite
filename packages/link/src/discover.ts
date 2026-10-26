@@ -48,6 +48,9 @@ export async function existingAccounts(dir: string, provider: Provider): Promise
 			process.env.XDG_CONFIG_HOME,
 			provider === 'google' ? process.env.GOG_CONFIG_DIR : undefined,
 			provider === 'google' ? process.env.GOG_DATA_DIR : undefined,
+			...(provider === 'microsoft' && process.env.M365CLI_CONFIG_DIR
+				? [process.env.M365CLI_CONFIG_DIR]
+				: []),
 			selection,
 			client
 		]);
