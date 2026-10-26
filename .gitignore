@@ -11,3 +11,8 @@ packages/work/seed/sessions.json
 .stitch/screens/
 .stage/
 .openclaw-build/
+# Private callback deployment configuration and local runtime state
+workers/*/wrangler.private.jsonc
+workers/*/.dev.vars*
+workers/*/.wrangler/
+workers/*/worker-configuration.d.ts

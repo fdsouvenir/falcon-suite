@@ -1,0 +1,19 @@
+{
+	"name": "@fdsouvenir/link-callback-worker",
+	"version": "0.1.0",
+	"description": "Link Callback Worker: Office-bound OAuth callback handoff for Falcon Link",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"types": "wrangler types",
+		"build": "npm run types && tsc --noEmit && wrangler deploy --dry-run --outdir dist",
+		"validate": "tsc --noEmit",
+		"test": "node --test test/*.test.mjs",
+		"deploy": "wrangler deploy"
+	},
+	"devDependencies": {
+		"wrangler": "4.153.0",
+		"typescript": "7.0.2",
+		"miniflare": "5.20261023.0-beta"
+	}
+}
