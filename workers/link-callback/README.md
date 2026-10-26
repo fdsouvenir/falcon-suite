@@ -53,8 +53,12 @@ Merge those fields, do not replace the whole config with this snippet. The priva
 config must not be committed. Generate a random 32-byte base64url token for each
 Office. Store the token in that Office's private file and its lowercase hex SHA-256
 digest in a private JSON map, for example `{"office-id":"<sha256-digest>"}`.
-Upload the map with `wrangler secret put OFFICE_KEYS_JSON` using stdin (not a
-command-line secret argument). Adding an Office merges into the existing map;
+For a new Worker, create a private secrets JSON file containing
+`{"OFFICE_KEYS_JSON":"<JSON-encoded map>"}` and pass it with
+`wrangler deploy --secrets-file /private/worker-secrets.json`. Required secrets
+cannot be installed before a new Worker exists. For later updates, use
+`wrangler secret put OFFICE_KEYS_JSON` with stdin (not a command-line secret
+argument). Adding an Office merges into the existing map;
 never silently discard other Office entries.
 
 Run `npm run types --workspace workers/link-callback`, the build and tests. Deploy
