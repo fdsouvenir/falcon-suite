@@ -57,8 +57,11 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	const version = PLUGIN_VERSION.includes('-')
 		? PLUGIN_VERSION.split('-').slice(1).join('-')
 		: PLUGIN_VERSION;
-	const title = el('h1', `Falcon Link v${version}`);
-	header.append(title);
+	const title = el('h1', 'Falcon Link');
+	title.append(el('span', ` v${version}`, 'fl-version'));
+	const heading = el('div');
+	heading.append(title, el('p', 'Google and Microsoft accounts', 'fl-page-description'));
+	header.append(heading);
 	const notification = el('p', undefined, 'fl-notice');
 	notification.setAttribute('role', 'status');
 	const layout = el('div', undefined, 'fl-layout');
@@ -152,10 +155,14 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				'users.list',
 				{}
 			),
-			host.request<{ agents: { id: string; name?: string; identity?: { name?: string } }[] }>(
-				'agents.list',
-				{}
-			)
+			host.request<{
+				agents: {
+					id: string;
+					kind?: 'agent' | 'system';
+					name?: string;
+					identity?: { name?: string };
+				}[];
+			}>('agents.list', {})
 		]);
 		if (disposed) return;
 		owners = [];
@@ -167,11 +174,13 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			);
 		if (agents.status === 'fulfilled')
 			owners.push(
-				...agents.value.agents.map((a) => ({
-					kind: 'agent' as const,
-					id: a.id,
-					name: a.identity?.name || a.name || a.id
-				}))
+				...agents.value.agents
+					.filter((a) => a.kind !== 'system')
+					.map((a) => ({
+						kind: 'agent' as const,
+						id: a.id,
+						name: a.identity?.name || a.name || a.id
+					}))
 			);
 		if (humans.status === 'rejected' || agents.status === 'rejected')
 			message(
@@ -234,14 +243,14 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					: 'Connect account'
 		);
 		form.append(heading);
-		const meta = metadataFields(account?.owner, account?.purpose);
+		const meta = metadataFields(account?.owner ?? undefined, account?.purpose ?? undefined);
 		form.append(...meta.nodes);
 		const email = el('input');
 		email.type = 'email';
 		email.maxLength = 254;
 		email.value = account?.email ?? '';
 		email.required = provider === 'google';
-		email.readOnly = !!account && provider === 'google';
+		email.readOnly = !!account?.email && provider === 'google';
 		const audience = select([
 			{ value: 'consumer', label: 'Personal Microsoft account' },
 			{ value: 'enterprise', label: 'Work or school account' }
@@ -432,21 +441,27 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			? (document.activeElement as HTMLElement)
 			: null;
 		layout.classList.toggle('fl-show-detail', selected !== null);
-		nav.replaceChildren();
+		nav.replaceChildren(el('h2', 'Integrations', 'fl-nav-label'));
 		for (const id of ['google', 'microsoft'] as Provider[]) {
 			const integration = status?.integrations.find((i) => i.id === id);
 			const b = button('', () => navigate(id));
 			b.className = `fl-integration${selected === id ? ' fl-selected' : ''}`;
 			b.setAttribute('aria-current', selected === id ? 'page' : 'false');
 			const count = accounts.filter((a) => a.provider === id && a.state === 'connected').length;
-			b.append(
+			const mark = el('span', id === 'google' ? 'G' : 'M', 'fl-provider-mark');
+			mark.setAttribute('aria-hidden', 'true');
+			const label = el('span', undefined, 'fl-nav-copy');
+			label.append(
 				el('span', id === 'google' ? 'Google' : 'Microsoft', 'fl-integration-name'),
 				el(
 					'span',
-					integration ? `${count} connected · ${toolLabel(integration.tool)}` : 'Checking…',
+					integration ? (count ? `${count} connected` : 'Not connected') : 'Checking…',
 					'fl-muted'
 				)
 			);
+			const dot = el('span', undefined, `fl-dot${count ? ' fl-dot-ok' : ''}`);
+			dot.setAttribute('aria-hidden', 'true');
+			b.append(mark, label, dot);
 			nav.append(b);
 		}
 		// Keep the active form node mounted across status refreshes so input and focus survive.
@@ -458,11 +473,74 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const integration = status.integrations.find((i) => i.id === selected)!;
 		const back = button('← Integrations', () => navigate(null));
 		back.classList.add('fl-back');
-		detail.append(back, el('h2', integration.name));
-		const tool = el('section', undefined, 'fl-tool');
-		tool.append(
-			el('h3', 'Tool status'),
-			el('p', `${integration.cli} · ${toolLabel(integration.tool)}`)
+		const providerHeader = el('header', undefined, 'fl-provider-header');
+		const identity = el('div', undefined, 'fl-provider-identity');
+		const mark = el(
+			'span',
+			integration.id === 'google' ? 'G' : 'M',
+			'fl-provider-mark fl-provider-mark-large'
+		);
+		mark.setAttribute('aria-hidden', 'true');
+		const providerCopy = el('div');
+		providerCopy.append(
+			el('h2', integration.name),
+			el('p', `${integration.cli} · ${toolLabel(integration.tool)}`, 'fl-muted')
+		);
+		identity.append(mark, providerCopy);
+		const ready = integration.setup.state === 'ready' && integration.tool.state === 'installed';
+		const badge = el(
+			'span',
+			ready
+				? 'Ready to connect'
+				: integration.setup.state !== 'ready'
+					? 'Setup required'
+					: 'Tool required',
+			`fl-badge${ready ? ' fl-badge-ok' : ''}`
+		);
+		providerHeader.append(identity, badge);
+		detail.append(back, providerHeader);
+		const tool = el('details', undefined, 'fl-tool');
+		tool.open = !ready;
+		const summary = el('summary');
+		summary.append(
+			el('span', 'Connection setup'),
+			el('span', ready ? 'Ready' : 'Needs attention', 'fl-muted')
+		);
+		tool.append(summary);
+		const setupRow = el('div', undefined, 'fl-setup-row');
+		const setupCopy = el('div');
+		setupCopy.append(
+			el(
+				'h4',
+				integration.setup.state === 'ready'
+					? 'Application configured'
+					: 'Application setup required'
+			),
+			el(
+				'p',
+				integration.setup.state === 'ready'
+					? 'Your administrator has configured this connection.'
+					: integration.setup.message,
+				'fl-muted'
+			)
+		);
+		setupRow.append(
+			el('span', integration.setup.state === 'ready' ? '✓' : '1', 'fl-step'),
+			setupCopy
+		);
+		tool.append(setupRow);
+		const cliRow = el('div', undefined, 'fl-setup-row');
+		const cliCopy = el('div');
+		cliCopy.append(
+			el(
+				'h4',
+				integration.tool.state === 'installed' ? 'CLI installed' : 'Install the connection tool'
+			),
+			el('p', `${integration.cli} · ${toolLabel(integration.tool)}`, 'fl-muted')
+		);
+		cliRow.append(
+			el('span', integration.tool.state === 'installed' ? '✓' : '2', 'fl-step'),
+			cliCopy
 		);
 		const installButton = button(
 			integration.tool.state === 'not_installed'
@@ -490,34 +568,64 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 						: `Latest release: ${u.latest_version}. Qualified version: ${u.qualified_version}.${u.qualification_pending ? ' Newer release requires qualification before installation.' : ''}`;
 			});
 		});
-		tool.append(updates, installButton, checkUpdates);
-		detail.append(
-			tool,
-			el(
-				'p',
-				integration.setup.message,
-				integration.setup.state === 'ready' ? 'fl-muted' : 'fl-setup'
-			)
-		);
-		const accountHeading = el('div', undefined, 'fl-section-heading');
-		accountHeading.append(el('h3', 'Connected accounts'));
-		const add = button('Connect account', () => accountForm(), true);
-		add.disabled =
-			!canWrite() || integration.setup.state !== 'ready' || integration.tool.state !== 'installed';
-		accountHeading.append(add);
-		detail.append(accountHeading);
+		const toolActions = el('div', undefined, 'fl-actions');
+		toolActions.append(installButton, checkUpdates);
+		cliCopy.append(updates);
+		cliRow.append(toolActions);
+		tool.append(cliRow);
 		const list = accounts.filter((a) => a.provider === selected);
-		if (!list.length) detail.append(el('p', 'No accounts connected.', 'fl-muted'));
+		const accountHeading = el('div', undefined, 'fl-section-heading');
+		const accountTitle = el('div');
+		accountTitle.append(
+			el('h3', 'Accounts'),
+			el('p', 'Keep each account’s owner and purpose clear.', 'fl-muted')
+		);
+		accountHeading.append(accountTitle);
+		if (list.length && ready) {
+			const add = button('Connect account', () => accountForm(), true);
+			add.disabled = !canWrite();
+			accountHeading.append(add);
+		}
+		detail.append(accountHeading);
+		if (!list.length) {
+			const empty = el('section', undefined, 'fl-empty');
+			empty.append(
+				el('span', integration.id === 'google' ? 'G' : 'M', 'fl-empty-mark'),
+				el('h3', `No ${integration.name} accounts connected`),
+				el(
+					'p',
+					ready
+						? 'Choose an owner, label the account, then select the permissions you want to connect.'
+						: 'Complete the connection setup below to add your first account.',
+					'fl-muted'
+				)
+			);
+			if (ready) {
+				const add = button('Connect account', () => accountForm(), true);
+				add.disabled = !canWrite();
+				empty.append(add);
+			}
+			detail.append(empty);
+		}
 		for (const a of list) {
 			const card = el('section', undefined, 'fl-card');
 			card.append(
 				el('h4', a.email ?? 'Incomplete sign-in'),
 				el(
 					'p',
-					`${a.owner.name} · ${a.owner.kind === 'agent' ? 'Agent' : 'Human'} · ${a.purpose.kind === 'other' ? a.purpose.label : a.purpose.kind === 'work' ? 'Work' : 'Personal'}`
+					`${a.owner?.name ?? 'Owner unassigned'} · ${a.purpose ? (a.purpose.kind === 'other' ? a.purpose.label : a.purpose.kind) : 'Purpose unassigned'}`
 				),
 				el('p', a.state.replaceAll('_', ' '), 'fl-state')
 			);
+			if (a.connection_error) card.append(el('p', a.connection_error.message, 'fl-error'));
+			else if (a.state === 'failed')
+				card.append(
+					el(
+						'p',
+						'Sign-in did not complete. Reconnect to try again; no verified connection is available.',
+						'fl-error'
+					)
+				);
 			card.append(
 				el(
 					'p',
@@ -536,7 +644,11 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			actions.append(edit);
 			const reconnect = button('Reconnect / permissions', () => accountForm(a));
 			reconnect.disabled = !canWrite() || integration.setup.state !== 'ready';
-			actions.append(reconnect);
+			if (!a.external) actions.append(reconnect);
+			else
+				card.append(
+					el('p', 'Discovered in the existing CLI. Credentials remain managed there.', 'fl-muted')
+				);
 			const check = button('Check connection', async () => {
 				await act(
 					check,
@@ -549,7 +661,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			});
 			check.disabled = !canWrite() || !a.email || a.state === 'disconnected';
 			actions.append(check);
-			if (a.state !== 'disconnected') {
+			if (a.state !== 'disconnected' && !a.external) {
 				const disconnect = button('Disconnect', () => {
 					closeForm();
 					const confirm = el('section', undefined, 'fl-card');
@@ -585,7 +697,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			const login = loginCard();
 			if (login) detail.append(login);
 		}
-		detail.append(formHost);
+		detail.append(formHost, tool);
 		if (focused) focused.focus({ preventScroll: true });
 	}
 	void loadOwners().then(() => {

@@ -4,6 +4,7 @@ import {
 } from 'openclaw/plugin-sdk/feature-plugin';
 import { getPluginRuntimeGatewayRequestScope } from 'openclaw/plugin-sdk/plugin-runtime';
 import path from 'node:path';
+import { accountBrief } from './brief.js';
 import { contract } from './contract.js';
 import { overview } from './status.js';
 import { LinkService } from './service.js';
@@ -44,9 +45,8 @@ export default defineFeaturePlugin({
 			}
 		});
 		// Factual account data only. No system instructions, authority grants, or workspace writes.
-		// The SDK does not expose a verified human profile in prompt-hook context. Human accounts
-		// are therefore discovered through the live lookup tool, not injected into arbitrary chats.
-		api.on('before_prompt_build', (_event, ctx) => {
+		// Private Office inventory includes both human and agent accounts.
+		api.on('before_prompt_build', async (_event, ctx) => {
 			try {
 				if (
 					!link ||
@@ -55,15 +55,8 @@ export default defineFeaturePlugin({
 					!/^agent:[^:]+:(?:main$|dashboard:)/.test(ctx.sessionKey)
 				)
 					return;
-				const accounts = link
-					.accounts()
-					.filter(
-						(a) => a.owner.kind === 'agent' && a.owner.id === ctx.agentId && a.state === 'connected'
-					);
-				if (!accounts.length) return;
-				return {
-					prependContext: `Falcon Link — account facts\n${JSON.stringify(accounts.map((a) => ({ account_id: a.id, provider: a.provider, email: a.email, owner: a.owner, purpose: a.purpose, requested_permissions: a.requested, verified_granted_scopes: a.granted_scopes, identity_checked_at: a.checked_at })))}`
-				};
+				await link.discover();
+				return { prependContext: accountBrief(link.accounts(), link.discoveryUnavailable) };
 			} catch {
 				return;
 			}
@@ -77,7 +70,7 @@ export default defineFeaturePlugin({
 					baseline_scopes: BASE_SCOPES
 				};
 			},
-			accounts(input, context) {
+			async accounts(input, context) {
 				const l = ready();
 				// Account facts are Office-local inventory, not an agent access-control list. On public
 				// channel routes, do not automatically enumerate other people's account identities.
@@ -86,6 +79,7 @@ export default defineFeaturePlugin({
 					!/^agent:[^:]+:(?:main$|dashboard:)/.test(context.tool.sessionKey ?? '')
 				)
 					throw new Error('Account inventory is available in private Office sessions only.');
+				await l.discover();
 				return input.account_id ? l.invocation(input.account_id) : { accounts: l.accounts() };
 			},
 			start(input, context) {

@@ -77,3 +77,60 @@ removal to be skipped. Existing Google and Microsoft account tests were extended
 failing before the fix. Disconnect now inspects only that stable account's isolated CLI store,
 removes its saved token/profile even without a verified email, and never touches another
 account's store. Failed inventory/removal does not report successful disconnection.
+
+## 2026-10-25 sign-in feedback follow-up
+
+Alpha (current bldg006 Office office-4) reports both provider setups ready. A read-only
+Google credential inventory for the failed account returned no saved account/token.
+A separate temporary CLI probe accepted the configured desktop client and produced
+the selected Gmail-read authorization URL; no user consent or code exchange was attempted.
+The original failure stage is unavailable: preview.1 discarded the persistent failure
+reason. These checks do not establish successful hosted Google login.
+
+The follow-up fixes an empty-address reconnect lock, persists bounded stage-specific
+errors (never raw CLI stderr, OAuth codes or tokens), and supplies private-session Link
+lookup-tool discovery even when the agent owns no connected accounts. Human account
+identities remain live-lookup only; no AGENTS.md edits or behavioral grants are added.
+
+All XDG data/state/cache and gog data/cache roots are now explicitly account-local.
+The original adapter isolated config/state but could inherit Office-wide data/cache
+paths. Alpha’s actual Gateway environment confirms a shared XDG data root; the
+reproduced runtime environment also returned zero saved Google accounts. A synthetic
+real-gog probe of the corrected layout placed its keyring under the temporary account
+data directory and its remote OAuth state under the temporary account config directory. Existing shared stores are neither copied nor deleted: affected preview accounts
+may need a fresh sign-in into their isolated store. Alpha has only the failed account
+and no saved Google token in its original CLI inventory. No installed plugin code was
+patched and no user login was replayed during this investigation.
+
+Fred subsequently confirmed consent completed and the redirect URL was submitted.
+The released gog completion command performs exchange, identity lookup and token
+storage before returning; the adapter now distinguishes those qualified stderr stage
+markers using fixed public messages, discarding raw diagnostics. Unknown failures remain
+unspecified completion failures, never assumed exchange failures. Process-boundary
+regressions cover exchange, identity, storage and unknown output, with a private marker
+verified absent from persisted account data.
+
+Alpha’s unauthenticated token and userinfo endpoints returned HTTP 404 and 401 respectively,
+confirming endpoint reachability, not account access. A deliberately invalid synthetic
+refresh token with the provisioned client returned HTTP 400 / invalid_grant, consistent
+with usable client configuration but not proof of a successful human login. No user
+authorization code or token was replayed. The original failed completion cannot be
+retrospectively classified from preview.1’s discarded stderr.
+
+## Compact brief and existing account discovery — 2026-10-25
+
+Private hooks now include human and agent accounts in a four-column table grouped by
+CLI, without internal registry metadata or operating instructions. The human-account
+regression failed against the previous agent-only hook before the fix. The existing
+process-boundary discovery case exercises both real CLI JSON schemas, explicit Google
+client and Microsoft profile selection, unassigned metadata, recorded versus unknown
+scopes, metadata persistence across restart, and refusal to remove native credentials.
+Discovered inventory is not proof of successful refresh, consent or service access.
+Existing Microsoft application-only profiles are excluded from human-account discovery.
+No installed Falcon plugin is used as a test target or upgraded by this release.
+
+A read-only run of the new discovery adapter against this host's installed gog found
+three saved Google accounts (19, 12 and 33 recorded scopes). It did not import them into
+the installed plugin, change credentials, perform refresh or assign owner/purpose.
+Microsoft discovery was exercised with its published schema in an isolated CLI fixture;
+this host has no m365cli executable. Live customer sign-in remains unverified.

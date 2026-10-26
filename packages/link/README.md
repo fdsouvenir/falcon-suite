@@ -74,11 +74,22 @@ Connection permissions do **not** grant an agent permission to send mail or over
 instructions. Owner and purpose are user-selected metadata, not an access-control grant.
 No account records or instructions are written into AGENTS.md.
 
-A factual `before_prompt_build` brief includes only the acting agent's connected accounts in
-private main/dashboard sessions. Human accounts are discovered through live lookup; the SDK
-provides no verified human profile to this prompt hook. Inventory tools reject non-private
-session routes. This limits automatic disclosure; it is **not** a security boundary against
-agents with shell/filesystem access in the same Office. OpenClaw governs runtime access.
+A compact `before_prompt_build` brief lists all human and agent accounts in private
+main/dashboard sessions, grouped by gogcli and m365cli: email, owner's profile display
+name, purpose and readable scopes. Failed connections are flagged. There are no internal
+IDs, tool pointers or operating instructions in this brief. Public/group routes receive
+no account brief and cannot enumerate accounts through the inventory tool.
+
+Link also reads existing CLI inventories using non-interactive `gog auth list` and
+`m365cli auth status`, cached for one minute. Discovered accounts retain native storage
+and explicit client/profile selection. Owner and purpose remain unassigned until edited
+in Link; discovery is not a live authentication check. Google stored scopes are labeled
+recorded, not independently verified grants; Microsoft scopes remain unknown when the
+inventory does not expose them. Discovery failures are shown as unavailable, not empty.
+Reconnect and disconnect for discovered accounts remain in their original CLI; Link does
+not migrate or remove their credentials. Link-created accounts retain isolated stores.
+This is not an access-control boundary against agents with shell/filesystem access in the
+same Office. OpenClaw governs runtime access.
 
 Requested scopes and CLI-recorded scopes are distinct from independently verified provider
 grants. Neither adapter currently exposes complete independent provider grant readback, so

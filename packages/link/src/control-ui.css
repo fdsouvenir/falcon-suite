@@ -1,8 +1,10 @@
-/* Same native host theme, spacing, typography and controls as Work and Vault. */
+/* Native OpenClaw theme. Account-first layout with compact connection maintenance. */
 .fl-page {
 	color: var(--text);
 	font-size: var(--control-ui-text-md);
 	padding: var(--space-6) var(--space-7);
+	font-family: var(--font-body);
+	line-height: 1.5;
 }
 .fl-header,
 .fl-section-heading,
@@ -33,9 +35,10 @@
 }
 .fl-layout {
 	display: grid;
-	grid-template-columns: 230px minmax(0, 1fr);
+	grid-template-columns: 216px minmax(0, 1fr);
 	gap: var(--space-7);
-	margin-top: var(--space-5);
+	margin-top: var(--space-6);
+	align-items: start;
 }
 .fl-nav {
 	display: flex;
@@ -43,25 +46,28 @@
 	gap: var(--space-2);
 	border-right: 1px solid var(--border);
 	padding-right: var(--space-4);
+	min-height: 360px;
 }
 .fl-integration {
-	display: grid;
+	display: flex;
 	text-align: left;
-	gap: var(--space-2);
-	padding: var(--space-4);
+	gap: var(--space-3);
+	padding: var(--space-3);
 	border: 1px solid transparent;
 	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--text);
 	font: inherit;
 	cursor: pointer;
+	align-items: center;
 }
 .fl-integration:hover {
 	background: var(--bg-hover);
 }
 .fl-integration.fl-selected {
-	background: var(--accent-subtle);
-	border-color: var(--border-strong);
+	background: var(--bg-elevated);
+	border-color: var(--border);
+	box-shadow: inset 2px 0 var(--accent);
 }
 .fl-integration-name {
 	font-weight: 600;
@@ -87,16 +93,23 @@
 	padding-bottom: var(--space-4);
 	border-bottom: 1px solid var(--border);
 	margin-bottom: var(--space-4);
+	padding: 0;
+	margin: var(--space-5) 0 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg-elevated);
 }
 .fl-tool .fl-btn {
 	margin-right: var(--space-2);
 	margin-bottom: var(--space-2);
+	margin: 0;
+	white-space: nowrap;
 }
 .fl-setup {
 	color: var(--warn);
 }
 .fl-section-heading {
-	margin: var(--space-5) 0 var(--space-4);
+	margin: 0 0 var(--space-4);
 }
 .fl-card,
 .fl-form {
@@ -189,6 +202,200 @@
 .fl-back {
 	display: none;
 }
+.fl-header {
+	padding-bottom: var(--space-5);
+	border-bottom: 1px solid var(--border);
+}
+.fl-version {
+	display: inline-block;
+	margin-left: var(--space-2);
+	color: var(--muted);
+	font-size: var(--control-ui-text-sm);
+	font-weight: 400;
+	vertical-align: middle;
+}
+.fl-page-description {
+	margin: var(--space-2) 0 0;
+	color: var(--muted);
+}
+.fl-nav .fl-nav-label {
+	font-size: var(--control-ui-text-sm);
+	color: var(--muted);
+	font-weight: 500;
+	margin: 0 0 var(--space-2) var(--space-3);
+}
+.fl-nav-copy {
+	display: grid;
+	gap: var(--space-1);
+	flex: 1;
+	min-width: 0;
+}
+.fl-provider-mark {
+	display: inline-grid;
+	place-items: center;
+	flex: none;
+	width: 32px;
+	height: 32px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--bg-hover);
+	color: var(--text-strong);
+	font-size: var(--control-ui-text-lg);
+	font-weight: 600;
+}
+.fl-provider-mark-large {
+	width: 44px;
+	height: 44px;
+	font-size: 22px;
+}
+.fl-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--muted);
+	flex: none;
+}
+.fl-dot-ok {
+	background: var(--ok);
+}
+.fl-provider-header,
+.fl-provider-identity {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+}
+.fl-provider-header {
+	justify-content: space-between;
+	flex-wrap: wrap;
+	margin-bottom: var(--space-6);
+}
+.fl-provider-header h2 {
+	font-size: 22px;
+	font-weight: 600;
+	margin: 0;
+}
+.fl-provider-header p {
+	margin: var(--space-1) 0 0;
+}
+.fl-badge {
+	display: inline-flex;
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--border);
+	border-radius: 99px;
+	background: var(--bg-hover);
+	color: var(--muted);
+	font-size: var(--control-ui-text-sm);
+	white-space: nowrap;
+}
+.fl-badge-ok {
+	color: var(--ok);
+}
+.fl-section-heading h3 {
+	font-size: var(--control-ui-text-lg);
+	margin: 0;
+}
+.fl-section-heading p {
+	margin: var(--space-1) 0 0;
+}
+.fl-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	min-height: 240px;
+	box-sizing: border-box;
+	padding: var(--space-6);
+	background: var(--bg-elevated);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	margin-bottom: var(--space-5);
+}
+.fl-empty-mark {
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	margin-bottom: var(--space-4);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg-hover);
+	color: var(--muted);
+	font-size: 22px;
+	font-weight: 500;
+}
+.fl-empty h3 {
+	font-size: var(--control-ui-text-lg);
+	margin: 0;
+}
+.fl-empty p {
+	max-width: 46ch;
+	margin: var(--space-2) 0 0;
+}
+.fl-empty .fl-btn {
+	margin-top: var(--space-5);
+}
+.fl-tool summary {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	padding: var(--space-4);
+	cursor: pointer;
+	font-weight: 500;
+}
+.fl-tool summary::before {
+	content: '›';
+	color: var(--muted);
+	font-size: var(--control-ui-text-lg);
+	line-height: 1;
+}
+.fl-tool[open] summary::before {
+	transform: rotate(90deg);
+}
+.fl-tool summary > .fl-muted {
+	margin-left: auto;
+	font-weight: 400;
+}
+.fl-setup-row {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-3);
+	padding: var(--space-4);
+	border-top: 1px solid var(--border);
+}
+.fl-step {
+	display: inline-grid;
+	place-items: center;
+	flex: none;
+	width: 24px;
+	height: 24px;
+	background: var(--bg-hover);
+	color: var(--muted);
+	border-radius: 50%;
+	font-size: var(--control-ui-text-sm);
+}
+.fl-setup-row > div:first-of-type {
+	flex: 1;
+	min-width: 0;
+}
+.fl-setup-row h4 {
+	margin: 0;
+	font-weight: 500;
+}
+.fl-setup-row p {
+	margin: var(--space-1) 0 0;
+}
+.fl-card h4 {
+	font-size: var(--control-ui-text-lg);
+}
+.fl-state {
+	display: inline-block;
+	color: var(--muted);
+	font-size: var(--control-ui-text-sm);
+	padding: var(--space-1) var(--space-2);
+	border-radius: var(--radius-sm);
+	background: var(--bg-hover);
+}
 @media (max-width: 700px) {
 	.fl-page {
 		padding: var(--space-4);
@@ -233,5 +440,42 @@
 @media (prefers-reduced-motion: reduce) {
 	.fl-show-detail .fl-detail {
 		animation: none;
+	}
+}
+@media (max-width: 700px) {
+	.fl-nav {
+		min-height: 0;
+	}
+	.fl-layout {
+		display: block;
+		margin-top: var(--space-4);
+	}
+	.fl-provider-header {
+		gap: var(--space-3);
+		margin-bottom: var(--space-5);
+	}
+	.fl-provider-header h2 {
+		font-size: var(--control-ui-text-lg);
+	}
+	.fl-provider-header .fl-badge {
+		margin-left: 56px;
+	}
+	.fl-empty {
+		min-height: 220px;
+		padding: var(--space-5) var(--space-4);
+	}
+	.fl-setup-row {
+		flex-wrap: wrap;
+	}
+	.fl-setup-row .fl-actions {
+		width: 100%;
+		padding-left: 36px;
+		box-sizing: border-box;
+	}
+	.fl-header h1 {
+		font-size: 22px;
+	}
+	.fl-version {
+		font-size: var(--control-ui-text-sm);
 	}
 }

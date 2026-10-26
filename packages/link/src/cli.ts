@@ -63,8 +63,13 @@ export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 		...process.env,
 		HOME: home,
 		XDG_CONFIG_HOME: path.join(home, '.config'),
+		XDG_DATA_HOME: path.join(home, '.local', 'share'),
+		XDG_STATE_HOME: path.join(home, '.local', 'state'),
+		XDG_CACHE_HOME: path.join(home, '.cache'),
 		GOG_CONFIG_DIR: path.join(home, 'gog'),
+		GOG_DATA_DIR: path.join(home, 'gog-data'),
 		GOG_STATE_DIR: path.join(home, 'gog-state'),
+		GOG_CACHE_DIR: path.join(home, 'gog-cache'),
 		GOG_KEYRING_BACKEND: 'file',
 		GOG_KEYRING_PASSWORD: process.env.FALCON_LINK_KEYRING_PASSWORD,
 		M365CLI_KEYRING_BACKEND: 'file',
@@ -76,8 +81,6 @@ export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 		'GOG_ACCOUNT',
 		'GOG_CLIENT',
 		'GOG_HOME',
-		'GOG_DATA_DIR',
-		'GOG_CACHE_DIR',
 		'GOOGLE_APPLICATION_CREDENTIALS',
 		'M365CLI_ACCOUNT',
 		'M365CLI_PROFILE',
@@ -85,6 +88,44 @@ export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 	])
 		delete (env as NodeJS.ProcessEnv)[key];
 	return env;
+}
+
+// Only qualified gog stage markers become public facts. Never retain raw stderr,
+// which can contain addresses, codes, tokens or provider diagnostic payloads.
+export class GoogleCompletionError extends Error {
+	constructor(
+		readonly code: string,
+		message: string
+	) {
+		super(message);
+	}
+}
+function googleCompletionError(stderr: string): GoogleCompletionError | undefined {
+	const stages = [
+		[
+			'OAuth completed, but saving the refresh token failed:',
+			'google_token_storage_failed',
+			'Google authorization completed, but the encrypted account store could not save the connection. Contact your administrator before reconnecting.'
+		],
+		[
+			'fetch authorized email:',
+			'google_identity_failed',
+			'Google authorization completed, but the account identity could not be confirmed. Reconnect to try again.'
+		],
+		[
+			'authorized as ',
+			'google_account_mismatch',
+			'Google returned a different account address. Reconnect with the intended account.'
+		],
+		[
+			'exchange code:',
+			'google_exchange_failed',
+			'Google could not exchange the authorization code. Reconnect and complete a new sign-in.'
+		]
+	] as const;
+	for (const [marker, code, message] of stages)
+		if (stderr.includes(marker)) return new GoogleCompletionError(code, message);
+	return undefined;
 }
 export function run(
 	binary: string,
@@ -97,12 +138,15 @@ export function run(
 			binary,
 			args,
 			{ env, timeout, maxBuffer: 262144, encoding: 'utf8', windowsHide: true },
-			(err, out) =>
+			(err, out, stderr) =>
 				err
 					? reject(
-							new Error(
-								'CLI operation failed. Check configuration, consent, and connection, then try again.'
-							)
+							(args[0] === 'auth' && args[1] === 'add' && args[args.indexOf('--step') + 1] === '2'
+								? googleCompletionError(stderr)
+								: undefined) ??
+								new Error(
+									'CLI operation failed. Check configuration, consent, and connection, then try again.'
+								)
 						)
 					: resolve(out)
 		)
@@ -116,7 +160,8 @@ export async function json(
 ): Promise<any> {
 	try {
 		return JSON.parse(await run(binary, args, env, timeout));
-	} catch {
+	} catch (e) {
+		if (e instanceof GoogleCompletionError) throw e;
 		throw new Error(
 			'CLI response could not be verified. Check configuration, consent, and connection, then try again.'
 		);

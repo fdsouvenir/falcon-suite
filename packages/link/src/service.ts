@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ChildProcess } from 'node:child_process';
 import { Registry } from './store.js';
+import { existingAccounts } from './discover.js';
 import {
 	type Account,
 	type Owner,
@@ -17,6 +18,7 @@ import {
 	provision,
 	readiness,
 	deviceLogin,
+	GoogleCompletionError,
 	TOOLS
 } from './cli.js';
 import { install } from './install.js';
@@ -53,13 +55,72 @@ export class LinkService {
 		for (const a of this.registry.list())
 			if (a.state === 'pending') {
 				a.state = 'failed';
+				a.connection_error = {
+					code: 'signin_interrupted',
+					message: 'Sign-in was interrupted by a restart. Reconnect to start again.'
+				};
 				this.registry.save(a);
 			}
 	}
 	accounts() {
 		return this.registry.list();
 	}
+	discoveryUnavailable: Provider[] = [];
+	private discoveryAt = 0;
+	private discovery?: Promise<void>;
+	async discover() {
+		if (this.discovery) return this.discovery;
+		if (Date.now() - this.discoveryAt < 60000) return;
+		this.discovery = (async () => {
+			this.discoveryUnavailable = [];
+			await Promise.all(
+				(['google', 'microsoft'] as Provider[]).map(async (provider) => {
+					try {
+						const found = await existingAccounts(this.dir, provider);
+						for (const account of found) {
+							const prior = this.accounts().find((a) => a.id === account.id);
+							this.registry.save(
+								prior
+									? {
+											...prior,
+											recorded_scopes: account.recorded_scopes,
+											state: prior.state === 'disconnected' ? 'discovered' : prior.state
+										}
+									: account
+							);
+						}
+						for (const prior of this.accounts().filter(
+							(a) => a.provider === provider && a.external
+						))
+							if (!found.some((a) => a.id === prior.id))
+								this.registry.save({
+									...prior,
+									state: 'disconnected',
+									recorded_scopes: null,
+									granted_scopes: null
+								});
+					} catch {
+						this.discoveryUnavailable.push(provider);
+					}
+				})
+			);
+			this.discoveryAt = Date.now();
+		})();
+		try {
+			await this.discovery;
+		} finally {
+			this.discovery = undefined;
+		}
+	}
+	private selection(a: Account) {
+		return a.external?.selection ?? (a.provider === 'google' ? a.email! : a.id);
+	}
+	private tool(a: Account) {
+		return executable(this.dir, a.provider);
+	}
 	private env(a: Account) {
+		if (a.external)
+			return { ...process.env, ...(a.external.client ? { GOG_CLIENT: a.external.client } : {}) };
 		return accountEnvironment(this.dir, a.id);
 	}
 	private async locked<T>(id: string, fn: () => Promise<T>): Promise<T> {
@@ -89,6 +150,7 @@ export class LinkService {
 			l.message = 'Sign-in expired. Start again.';
 			const a = this.registry.get(l.account_id);
 			a.state = 'failed';
+			a.connection_error = { code: 'signin_expired', message: l.message };
 			this.registry.save(a);
 		}
 		return this.publicLogin(l);
@@ -134,6 +196,8 @@ export class LinkService {
 					this.logins.delete(id);
 		}
 		const prior = input.account_id ? this.registry.get(input.account_id) : null;
+		if (prior?.external)
+			throw new Error('Existing CLI accounts are managed in their original CLI.');
 		if (prior && this.locks.has(prior.id))
 			throw new Error('An account operation is already running.');
 		if (prior && prior.provider !== input.provider)
@@ -172,8 +236,13 @@ export class LinkService {
 			actor
 		};
 		this.logins.set(l.id, l);
-		const tool = executable(this.dir, a.provider);
+		const tool = this.tool(a);
 		const env = this.env(a);
+		let failure = {
+			code: 'cli_version',
+			message:
+				'The required CLI version could not be verified. Check connection setup before trying again.'
+		};
 		try {
 			const version = await toolStatus(tool);
 			if (
@@ -183,6 +252,11 @@ export class LinkService {
 				throw new Error('Install the qualified CLI version before connecting.');
 			if (l.state !== 'starting') return this.publicLogin(l);
 			if (a.provider === 'google') {
+				failure = {
+					code: 'google_client_setup',
+					message:
+						'Google client configuration could not be loaded into the account store. Contact your administrator.'
+				};
 				await json(
 					tool,
 					[
@@ -227,6 +301,11 @@ export class LinkService {
 					if (extra.length) args.push('--extra-scopes', extra.join(','));
 				} else args.push('--readonly');
 				l.args = args;
+				failure = {
+					code: 'google_authorization_start',
+					message:
+						'Google sign-in could not create an authorization URL. Check connection setup and try again.'
+				};
 				const result = await json(tool, [...args, '--step', '1'], env);
 				if (l.state !== 'starting') return this.publicLogin(l);
 				const url = new URL(result.auth_url);
@@ -238,6 +317,11 @@ export class LinkService {
 					throw new Error('Provider authorization URL could not be verified.');
 				const actual = new Set((url.searchParams.get('scope') ?? '').split(' '));
 				const wanted = new Set(requestedScopes('google', a.requested));
+				failure = {
+					code: 'google_permission_mismatch',
+					message:
+						'The Google permission request did not match your selection. No sign-in link was offered.'
+				};
 				if (actual.size !== wanted.size || [...actual].some((s) => !wanted.has(s)))
 					throw new Error('Provider permission request differs from the selection.');
 				l.url = url.href;
@@ -245,6 +329,10 @@ export class LinkService {
 				l.message =
 					'Sign in with Google. After consent, paste the full redirect URL below; a localhost error in your browser is expected for this remote flow.';
 			} else {
+				failure = {
+					code: 'microsoft_authorization_start',
+					message: 'Microsoft sign-in could not start. Check connection setup and try again.'
+				};
 				const args = [
 					'auth',
 					'login',
@@ -306,21 +394,19 @@ export class LinkService {
 					}
 				);
 			}
-		} catch (e) {
-			this.fail(
-				l,
-				'Sign-in could not start. Install the qualified CLI version and check operator configuration, then try again.'
-			);
+		} catch {
+			this.fail(l, failure.message, failure.code);
 		}
 		return this.publicLogin(l);
 	}
-	private fail(l: Login, message: string) {
+	private fail(l: Login, message: string, code = 'signin_failed') {
 		l.state = 'failed';
 		l.url = null;
 		l.code = null;
 		l.message = message;
 		const a = this.registry.get(l.account_id);
 		a.state = 'failed';
+		a.connection_error = { code, message };
 		this.registry.save(a);
 	}
 	async finish(id: string, redirect: string, actor: string) {
@@ -339,6 +425,11 @@ export class LinkService {
 		)
 			throw new Error('Redirect URL or sign-in state does not match.');
 		l.state = 'verifying';
+		let failure = {
+			code: 'google_completion_failed',
+			message:
+				'Google sign-in could not complete authorization, identity confirmation or credential storage. Reconnect to start a new sign-in.'
+		};
 		try {
 			const a = this.registry.get(l.account_id);
 			const result = await json(
@@ -347,6 +438,11 @@ export class LinkService {
 				this.env(a),
 				60000
 			);
+			failure = {
+				code: 'google_account_mismatch',
+				message:
+					'Google did not confirm the intended account address. Reconnect using that account.'
+			};
 			if (
 				result.stored !== true ||
 				typeof result.email !== 'string' ||
@@ -355,17 +451,20 @@ export class LinkService {
 				throw new Error('Provider returned a different account.');
 			a.email = result.email;
 			this.registry.save(a);
+			failure = {
+				code: 'google_identity_check',
+				message:
+					'Google credentials were saved, but the live identity and refresh check failed. Check the connection or reconnect.'
+			};
 			await this.check(a.id, true);
 			l.state = 'connected';
 			l.url = null;
 			l.code = null;
 			l.message =
 				'Account identity and token refresh verified. Scopes are recorded from the CLI token store, not independently read back from Google.';
-		} catch {
-			this.fail(
-				l,
-				'Sign-in could not be verified, or a different Google account was selected. Start again with the intended account.'
-			);
+		} catch (e) {
+			if (e instanceof GoogleCompletionError) failure = { code: e.code, message: e.message };
+			this.fail(l, failure.message, failure.code);
 		}
 		return this.publicLogin(l);
 	}
@@ -381,6 +480,7 @@ export class LinkService {
 			l.message = 'Sign-in cancelled. No provider revocation was performed.';
 			const a = this.registry.get(l.account_id);
 			a.state = 'failed';
+			a.connection_error = { code: 'signin_cancelled', message: l.message };
 			this.registry.save(a);
 		}
 		return this.publicLogin(l);
@@ -400,12 +500,14 @@ export class LinkService {
 			try {
 				if (a.provider === 'google') {
 					const out = await json(
-						executable(this.dir, a.provider),
+						this.tool(a),
 						['auth', 'list', '--check', '--json', '--no-input'],
 						this.env(a)
 					);
 					const entry = out.accounts?.find(
-						(e: any) => e.email?.toLowerCase() === a.email?.toLowerCase()
+						(e: any) =>
+							e.email?.toLowerCase() === a.email?.toLowerCase() &&
+							(!a.external || (e.client ?? 'default') === (a.external.client ?? 'default'))
 					);
 					if (!entry || entry.valid !== true || !entry.subject)
 						throw new Error('Identity not verified.');
@@ -419,11 +521,11 @@ export class LinkService {
 					// gog reports scopes from stored token metadata; do not promote them to verified grants.
 				} else {
 					const out = await json(
-						executable(this.dir, a.provider),
-						['--account', a.id, 'auth', 'check', '--json', '--no-input'],
+						this.tool(a),
+						['--account', this.selection(a), 'auth', 'check', '--json', '--no-input'],
 						this.env(a)
 					);
-					if (out.verified !== true || out.profile !== a.id || !out.identity?.id)
+					if (out.verified !== true || out.profile !== this.selection(a) || !out.identity?.id)
 						throw new Error('Identity not verified.');
 					if (a.provider_id && a.provider_id !== out.identity.id)
 						throw new Error('Account identity changed.');
@@ -436,6 +538,7 @@ export class LinkService {
 				a.owner = this.registry.get(id).owner;
 				a.purpose = this.registry.get(id).purpose;
 				a.state = 'connected';
+				delete a.connection_error;
 				a.checked_at = new Date().toISOString();
 				this.registry.save(a);
 				return a;
@@ -443,6 +546,11 @@ export class LinkService {
 				a.owner = this.registry.get(id).owner;
 				a.purpose = this.registry.get(id).purpose;
 				a.state = 'check_failed';
+				a.connection_error = {
+					code: 'identity_check_failed',
+					message:
+						'The live identity and refresh check failed. Reconnect if consent has expired or been revoked.'
+				};
 				a.checked_at = new Date().toISOString();
 				this.registry.save(a);
 				throw new Error(
@@ -454,6 +562,7 @@ export class LinkService {
 	async disconnect(id: string) {
 		return this.locked(id, async () => {
 			const a = this.registry.get(id);
+			if (a.external) throw new Error('Existing CLI accounts are managed in their original CLI.');
 			if (a.state === 'disconnected') return a;
 			if (
 				[...this.logins.values()].some(
@@ -463,7 +572,7 @@ export class LinkService {
 			)
 				throw new Error('Finish or cancel sign-in before disconnecting.');
 			// Only this account's CLI-native encrypted credentials are removed. Never revoke provider-wide consent.
-			const tool = executable(this.dir, a.provider);
+			const tool = this.tool(a);
 			const env = this.env(a);
 			if (a.provider === 'google') {
 				const stored = await json(tool, ['auth', 'list', '--json', '--no-input'], env);
@@ -497,6 +606,7 @@ export class LinkService {
 				throw new Error('Local credential removal could not be verified.');
 
 			a.state = 'disconnected';
+			delete a.connection_error;
 			a.granted_scopes = null;
 			a.recorded_scopes = null;
 			this.registry.save(a);
@@ -513,19 +623,58 @@ export class LinkService {
 	}
 	invocation(id: string) {
 		const a = this.registry.get(id);
-		if (a.state !== 'connected' || !a.email) throw new Error('Account is not connected.');
+		if (!['connected', 'discovered'].includes(a.state) || !a.email)
+			throw new Error('Account is not connected.');
+		if (a.external)
+			return {
+				account: a,
+				executable: this.tool(a),
+				arguments: [
+					...(a.external.client ? ['--client', a.external.client] : []),
+					'--account',
+					this.selection(a)
+				],
+				environment: Object.fromEntries(
+					[
+						'HOME',
+						'XDG_CONFIG_HOME',
+						'XDG_DATA_HOME',
+						'XDG_STATE_HOME',
+						'XDG_CACHE_HOME',
+						...(a.provider === 'google'
+							? [
+									'GOG_CONFIG_DIR',
+									'GOG_DATA_DIR',
+									'GOG_STATE_DIR',
+									'GOG_CACHE_DIR',
+									'GOG_KEYRING_BACKEND'
+								]
+							: ['M365CLI_KEYRING_BACKEND'])
+					]
+						.filter((key) => process.env[key] !== undefined)
+						.map((key) => [key, process.env[key]])
+				),
+				credential_environment: {},
+				requested_scopes: [],
+				granted_scopes: a.granted_scopes
+			};
 		const env = this.env(a);
 		const names = [
 			'HOME',
 			'XDG_CONFIG_HOME',
+			'XDG_DATA_HOME',
+			'XDG_STATE_HOME',
+			'XDG_CACHE_HOME',
 			'GOG_CONFIG_DIR',
+			'GOG_DATA_DIR',
 			'GOG_STATE_DIR',
+			'GOG_CACHE_DIR',
 			'GOG_KEYRING_BACKEND',
 			'M365CLI_KEYRING_BACKEND'
 		];
 		return {
 			account: a,
-			executable: executable(this.dir, a.provider),
+			executable: this.tool(a),
 			arguments: ['--account', a.provider === 'google' ? a.email : a.id],
 			environment: Object.fromEntries(
 				names
