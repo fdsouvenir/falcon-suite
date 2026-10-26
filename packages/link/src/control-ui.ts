@@ -101,6 +101,23 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		expires_at: string;
 		hosted?: boolean;
 	} | null = null;
+	// Reserve the tab during the submit gesture; async provider setup can outlive popup permission.
+	let signInTab: Window | null = null;
+	let signInOpened = false;
+	function closePendingTab() {
+		signInTab?.close();
+		signInTab = null;
+	}
+	function followSignIn() {
+		if (!activeLogin) return;
+		if (activeLogin.url && signInTab) {
+			if (!signInTab.closed && new URL(activeLogin.url).protocol === 'https:') {
+				signInTab.location.replace(activeLogin.url);
+				signInOpened = true;
+			}
+			signInTab = null;
+		} else if (!['starting', 'awaiting_consent'].includes(activeLogin.state)) closePendingTab();
+	}
 	let formDisposer: (() => void) | undefined;
 	const message = (s: string, error = false) => {
 		notification.textContent = s;
@@ -334,16 +351,35 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					return;
 				}
 				if (!chosen.size) throw new Error('Select at least one connection permission.');
-				const l = await client.invoke('start', {
-					provider,
-					...values,
-					permissions: [...chosen],
-					...(account ? { account_id: account.id } : {}),
-					...(provider === 'google'
-						? { email: email.value.trim() }
-						: { audience: audience.value as 'consumer' | 'enterprise' })
-				});
-				activeLogin = l as typeof activeLogin;
+				closePendingTab();
+				signInOpened = false;
+				signInTab = window.open('about:blank', '_blank');
+				if (signInTab) {
+					signInTab.opener = null;
+					signInTab.document.title = 'Opening sign-in · Falcon Link';
+					signInTab.document.body.textContent =
+						'Opening secure sign-in… Your provider will appear here shortly. Keep your Office tab open.';
+				}
+				try {
+					const l = await client.invoke('start', {
+						provider,
+						...values,
+						permissions: [...chosen],
+						...(account ? { account_id: account.id } : {}),
+						...(provider === 'google'
+							? { email: email.value.trim() }
+							: { audience: audience.value as 'consumer' | 'enterprise' })
+					});
+					if (disposed) {
+						closePendingTab();
+						return;
+					}
+					activeLogin = l as typeof activeLogin;
+					followSignIn();
+				} catch (error) {
+					closePendingTab();
+					throw error;
+				}
 				closeForm();
 				render();
 				scheduleLogin();
@@ -368,6 +404,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				const next = l as typeof activeLogin;
 				const changed = JSON.stringify(next) !== JSON.stringify(activeLogin);
 				activeLogin = next;
+				followSignIn();
 				if (changed) render();
 				if (activeLogin?.state === 'connected') await load();
 				scheduleLogin();
@@ -385,7 +422,17 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const card = el('section', undefined, 'fl-card');
 		card.append(el('h3', 'Account sign-in'), el('p', activeLogin.message));
 		if (activeLogin.url) {
-			const a = el('a', 'Open provider sign-in', 'fl-btn');
+			card.append(
+				el(
+					'p',
+					signInOpened
+						? activeLogin.hosted
+							? 'Sign-in opened in a new tab. Once you finish there, your agent will complete the connection automatically.'
+							: 'Sign-in opened in a new tab. Finish with your provider, then return here to complete the connection.'
+						: 'Your browser may have blocked the sign-in tab. Open sign-in below to continue.'
+				)
+			);
+			const a = el('a', signInOpened ? 'Reopen sign-in' : 'Open sign-in', 'fl-btn');
 			a.href = activeLogin.url;
 			a.target = '_blank';
 			a.rel = 'noopener noreferrer';
@@ -431,6 +478,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					activeLogin = (await client.invoke('cancel', {
 						id: activeLogin!.id
 					})) as typeof activeLogin;
+					closePendingTab();
 					render();
 				});
 			});
@@ -775,6 +823,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		},
 		dispose() {
 			disposed = true;
+			closePendingTab();
 			clearTimeout(poll);
 			formDisposer?.();
 			root.remove();

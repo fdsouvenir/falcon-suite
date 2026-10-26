@@ -46,11 +46,55 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		recorded_scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
 		checked_at: '2026-10-26T18:38:13Z'
 	};
+	let opened = false;
+	const navigated = [];
+	window.open = () => {
+		opened = true;
+		return {
+			opener: window,
+			closed: false,
+			document: parseHTML('<html><head></head><body></body></html>').document,
+			location: { replace: (url) => navigated.push(url) },
+			close() {
+				this.closed = true;
+			}
+		};
+	};
 	const host = {
 		pluginId: manifest.id,
 		signal: new AbortController().signal,
 		connection: { connected: true, canRead: true, canWrite: true },
 		request: async (method, payload) => {
+			if (payload?.actionId === 'start') {
+				assert.equal(
+					opened,
+					true,
+					'the sign-in tab opens during the original user gesture, before the async request'
+				);
+				return {
+					ok: true,
+					result: {
+						id: 'login',
+						provider: 'google',
+						state: 'starting',
+						url: null,
+						message: 'Starting sign-in…',
+						hosted: true
+					}
+				};
+			}
+			if (payload?.actionId === 'login')
+				return {
+					ok: true,
+					result: {
+						id: 'login',
+						provider: 'google',
+						state: 'awaiting_consent',
+						url: 'https://accounts.google.com/test-consent',
+						message: 'Waiting for sign-in',
+						hosted: true
+					}
+				};
 			if (method === 'users.list') return { profiles: [{ id: 'fred', displayName: 'Fred' }] };
 			if (method === 'agents.list')
 				return {
@@ -144,6 +188,23 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		const email = document.querySelector('input[type=email]');
 		assert.equal(email.readOnly, false, 'an unverified empty address must remain editable');
 		assert.match(document.body.textContent, /Sign-in did not complete/);
+		const form = document.querySelector('.fl-form');
+		form.reportValidity = () => true;
+		email.value = 'fred@example.com';
+		Object.defineProperty(document.querySelector('select[aria-label="Owner"]'), 'value', {
+			value: 'human:fred',
+			configurable: true
+		});
+		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
+		await setImmediate();
+		assert.equal(opened, true, document.body.textContent);
+		await new Promise((resolve) => setTimeout(resolve, 2200));
+		assert.deepEqual(
+			navigated,
+			['https://accounts.google.com/test-consent'],
+			'the reserved tab follows the URL when it becomes available'
+		);
+		assert.match(document.body.textContent, /Reopen sign-in/);
 	} finally {
 		view?.dispose();
 		Object.assign(globalThis, previous);

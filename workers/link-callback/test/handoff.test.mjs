@@ -70,7 +70,7 @@ async function decrypt(s, envelope) {
 test('health identifies the versioned public protocol', async () => {
 	const r = await call('/health');
 	assert.equal(r.headers.get('Cache-Control'), 'no-store');
-	assert.deepEqual(await r.json(), { name: 'Link Callback Worker', version: '0.1.0', protocol: 1 });
+	assert.deepEqual(await r.json(), { name: 'Link Callback Worker', version: '0.1.1', protocol: 1 });
 });
 test('unregistered Offices cannot create handoffs, including prototype property names', async () => {
 	for (const office of ['alpha', 'toString', '__proto__'])
@@ -100,7 +100,19 @@ test('Google and Microsoft callbacks are encrypted to their originating Office; 
 		const r = await call(`/oauth2/callback/${provider}?state=${s.state}&code=test-code`);
 		assert.equal(r.status, 200);
 		assert.equal(r.headers.get('Referrer-Policy'), 'no-referrer');
-		assert.doesNotMatch(await r.text(), /test-code/);
+		assert.match(r.headers.get('Content-Type'), /text\/html/);
+		const page = await r.text();
+		assert.match(page, /Sign-in received/);
+		assert.match(page, /close this tab and return to your agent/);
+		assert.match(page, /<svg/);
+		const style = page.match(/<style>([\s\S]*?)<\/style>/)[1];
+		assert.ok(
+			r.headers
+				.get('Content-Security-Policy')
+				.includes("style-src 'sha256-" + createHash('sha256').update(style).digest('base64') + "'")
+		);
+		assert.doesNotMatch(page, /<script|https?:\/\//);
+		assert.doesNotMatch(page, /test-code/);
 		assert.equal(
 			(await call(`/oauth2/callback/${provider}?state=${s.state}&code=second-code`)).status,
 			400
@@ -138,9 +150,12 @@ test('cancelled sessions cannot accept late callbacks and missing/invalid states
 });
 test('provider denial is delivered once without reflecting provider diagnostics', async () => {
 	const s = await start('microsoft');
-	await call(
+	const response = await call(
 		`/oauth2/callback/microsoft?state=${s.state}&error=access_denied&error_description=private-diagnostic`
 	);
+	const page = await response.text();
+	assert.match(page, /Sign-in wasn’t completed/);
+	assert.doesNotMatch(page, /Sign-in received|private-diagnostic/);
 	const result = await decrypt(s, await (await consume(s)).json());
 	assert.equal(result.error, 'consent_not_completed');
 	assert.doesNotMatch(JSON.stringify(result), /private-diagnostic/);

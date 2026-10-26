@@ -1,7 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
+import { callbackPage } from './page.js';
 
 // Kept in step with package.json; /health and deployment metadata identify the artifact.
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 const TTL = 10 * 60 * 1000;
 const headers = {
 	'Cache-Control': 'no-store',
@@ -212,14 +213,9 @@ export default {
 					code,
 					url.searchParams.has('error')
 				);
-				return new Response(
-					accepted
-						? 'Sign-in received. Return to your Office to finish connecting. You can close this tab.'
-						: 'This sign-in is unavailable or expired. Return to your Office and start again.',
-					{
-						status: accepted ? 200 : 400,
-						headers: { ...headers, 'Content-Type': 'text/plain; charset=utf-8' }
-					}
+				return callbackPage(
+					!accepted ? 'expired' : url.searchParams.has('error') ? 'cancelled' : 'received',
+					headers
 				);
 			}
 			const session = url.pathname.match(/^\/v1\/sessions\/([a-f0-9]{64})$/);
