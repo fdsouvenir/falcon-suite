@@ -22,7 +22,7 @@ const accessLabels: Record<string, string> = {
 	documents: 'Manage documents',
 	'Mail.Read': 'Read email',
 	'Mail.Send': 'Send email',
-	'Mail.ReadWrite': 'Read email and manage drafts',
+	'Mail.ReadWrite': 'Read, create, modify and delete email (including drafts)',
 	'Calendars.Read': 'View calendars and events',
 	'Calendars.ReadWrite': 'Manage calendars and events',
 	'Contacts.Read': 'View contacts',

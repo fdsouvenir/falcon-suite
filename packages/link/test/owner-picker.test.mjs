@@ -210,3 +210,18 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		Object.assign(globalThis, previous);
 	}
 });
+
+test('Microsoft mail-write discloses existing-email deletion, not just draft access', async () => {
+	const { accessSummary } = await import('../dist/access-summary.js');
+	const permission = PERMISSIONS.microsoft.find((p) => p.id === 'mail-write');
+	assert.match(permission.label, /read.*(?:modify|edit).*delete/i);
+	assert.deepEqual(permission.scopes, ['Mail.ReadWrite']);
+	const summary = accessSummary({
+		provider: 'microsoft',
+		state: 'connected',
+		requested: ['mail-write'],
+		granted_scopes: ['Mail.ReadWrite']
+	});
+	assert.match(summary.items.join(' '), /read.*(?:modify|edit).*delete/i);
+	assert.doesNotMatch(summary.items.join(' '), /send/i);
+});
