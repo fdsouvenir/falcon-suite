@@ -123,8 +123,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	const detail = el('div', undefined, 'fl-detail');
 	const formHost = el('div', undefined, 'fl-form-host');
 	layout.append(nav, detail);
-	const footer = el('footer', `Falcon Link ${PLUGIN_VERSION}`, 'fl-footer');
-	root.append(header, notification, layout, footer);
+	root.append(header, notification, layout);
 	container.append(root);
 	let selected: Provider | null =
 		(context.props.integration as Provider) ||
@@ -704,7 +703,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 						: 'Unknown'
 			],
 			['Latest version', i.latest_version ?? 'Unknown'],
-			['Last checked', i.checked_at ? new Date(i.checked_at).toLocaleString() : 'Not checked']
+			['Last checked', i.checked_at ? new Date(i.checked_at).toLocaleString() : 'Not checked'],
+			['Falcon Link version', PLUGIN_VERSION]
 		]) {
 			list.append(el('dt', term), el('dd', value));
 		}

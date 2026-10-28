@@ -147,10 +147,13 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 	try {
 		plugin.activate(host);
 		await setImmediate();
+		const version = [...document.querySelectorAll('.fl-tool dt')].find(
+			(dt) => dt.textContent === 'Falcon Link version'
+		);
 		assert.equal(
-			document.querySelector('.fl-footer')?.textContent,
-			`Falcon Link ${PLUGIN_VERSION}`,
-			'the footer shows the full version'
+			version?.nextElementSibling.textContent,
+			PLUGIN_VERSION,
+			'Technical details show the full version'
 		);
 		assert.doesNotMatch(document.body.textContent, /\bv(?:dev|preview)\./);
 		const account = [...document.querySelectorAll('.fl-account')].find((card) =>

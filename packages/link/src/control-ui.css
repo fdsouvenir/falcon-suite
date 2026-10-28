@@ -433,13 +433,6 @@
 .fl-login .fl-btn {
 	margin-right: var(--space-2);
 }
-.fl-footer {
-	margin-top: var(--space-7);
-	padding-top: var(--space-4);
-	border-top: 1px solid var(--border);
-	color: var(--muted);
-	font-size: var(--control-ui-text-sm);
-}
 .fl-card h4 {
 	font-size: var(--control-ui-text-lg);
 }
