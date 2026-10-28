@@ -169,7 +169,9 @@ consent or code exchange was attempted.
 - `m365cli auth workloads --json` parses into 7 rows (Email with a separate Send email choice,
   Calendar, Contacts, Tasks, OneDrive files, Groups, Excel workbooks) from 18 workloads; the
   5 compatibility bundles remain valid saved selections.
-- Google: for every row level (38) plus mixed-level and preview.8 selections (4),
+- Google: for every row level (39) plus mixed-level and preview.8 selections (4),
   `gog auth add … --remote --step 1 --json --no-input` with a throwaway `GOG_HOME` and a
   dummy client produced an authorization URL whose scopes exactly match Link's selection.
+- Link's read-only scope set for each of the 15 services with a Read level equals the scopes
+  gog 0.47.1 itself requests for that service with `--readonly`.
 - gog's global `--readonly` only affects the command it is passed to; Link does not use it.

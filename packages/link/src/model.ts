@@ -99,9 +99,7 @@ const MICROSOFT_EQUIVALENTS: Record<string, string[]> = {
 export function offeredSelection(provider: Provider, catalog: Catalog, selected: string[]) {
 	const ids =
 		provider === 'google'
-			? normalizeGoogle(selected).map((id) =>
-					['gmail:read-send', 'gmail:read-compose'].includes(id) ? 'gmail:compose' : id
-				)
+			? normalizeGoogle(selected).map((id) => (id === 'gmail:read-compose' ? 'gmail:compose' : id))
 			: selected.flatMap((id) => MICROSOFT_EQUIVALENTS[id] ?? [id]);
 	return [...new Set(ids)].filter((id) => levelOf(catalog, id));
 }

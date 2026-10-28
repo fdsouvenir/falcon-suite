@@ -19,8 +19,9 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 The permission form has one row per service, each with a single choice. Rows come from the
 CLIs themselves, so they follow the installed version:
 
-- **Google** — Email uses gog's Gmail modes: Read; Send only; Read, write drafts and send;
-  Full access (read, send, organize and delete to trash, and change mail settings). Calendar,
+- **Google** — Email uses gog's Gmail modes: Read; Send only; Read and send; Read, write
+  drafts and send; Full access (read, send, organize and delete to trash, and change mail
+  settings, including forwarding and delegation). Calendar,
   Contacts, Drive and every other user service from `gog auth services --json` offer Read or
   Read and change where gog has a read-only variant, otherwise On. One `gog auth add` command
   requests every row's level. People is gog's OpenID profile scope and is not a choice.

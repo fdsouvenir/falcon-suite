@@ -661,7 +661,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			add(
 				i.installable
 					? `Install ${i.cli} to connect ${i.name} accounts.`
-					: `Install ${i.cli} on this computer to connect ${i.name} accounts. Link installs it automatically on Linux.`,
+					: `Install ${i.cli} on this computer to connect ${i.name} accounts. Link can install it for you only on Linux.`,
 				i.installable ? install('Install') : undefined
 			);
 		else if (i.below_minimum)

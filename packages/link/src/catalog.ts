@@ -84,8 +84,10 @@ const GMAIL: Record<string, { mode: string; compose?: true; scopes: string[] }> 
 const GOOGLE_DESCRIPTIONS: Record<string, string> = {
 	'gmail:readonly': 'Read email.',
 	'gmail:send': 'Send email.',
+	'gmail:read-send': 'Read and send email.',
 	'gmail:compose': 'Read email, write drafts and send email.',
-	'gmail:full': 'Read, send, organize and delete (to trash) email, and change mail settings.',
+	'gmail:full':
+		'Read, send, organize and delete (to trash) email, and change mail settings, including forwarding and delegation.',
 	'calendar:read': 'View calendars and events.',
 	'calendar:write': 'View and change calendars and events.',
 	'contacts:read': 'View contacts, other contacts and the directory.',
@@ -130,6 +132,7 @@ export function googleCatalog(services: unknown): Catalog {
 					? [
 							level('readonly', 'Read', GMAIL.readonly.scopes),
 							level('send', 'Send only', GMAIL.send.scopes),
+							level('read-send', 'Read and send', GMAIL['read-send'].scopes),
 							level('compose', 'Read, write drafts and send', GMAIL.compose.scopes),
 							level('full', 'Full access', scopes)
 						]
@@ -151,7 +154,6 @@ export function googleCatalog(services: unknown): Catalog {
 	return {
 		rows,
 		saved: {
-			'gmail:read-send': { label: 'Email: Read and send', scopes: GMAIL['read-send'].scopes },
 			'gmail:read-compose': {
 				label: 'Email: Read and write drafts',
 				scopes: GMAIL['read-compose'].scopes
@@ -200,7 +202,7 @@ const MICROSOFT_LABELS: Record<string, string> = {
 	groups: 'Groups'
 };
 const MICROSOFT_DESCRIPTIONS: Record<string, string> = {
-	'mail-write': 'Read, organize and delete (to Deleted Items) email, and write drafts.'
+	'mail-write': 'Read, organize, write drafts and delete email, including permanent deletion.'
 };
 type Workload = {
 	id: string;
