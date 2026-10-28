@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { setImmediate } from 'node:timers/promises';
 import { parseHTML } from 'linkedom';
 import { BASE_SCOPES } from '../dist/model.js';
+import { PLUGIN_VERSION } from '../dist/identity.js';
 import { googleCatalog, microsoftCatalog } from '../dist/catalog.js';
 import { services, workloads } from './catalogs.mjs';
 const catalogs = { google: googleCatalog(services), microsoft: microsoftCatalog(workloads) };
@@ -98,6 +99,7 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 						hosted: true
 					}
 				};
+			if (payload?.actionId === 'viewer') return { ok: true, result: { profile_id: 'fred' } };
 			if (method === 'users.list') return { profiles: [{ id: 'fred', displayName: 'Fred' }] };
 			if (method === 'agents.list')
 				return {
@@ -145,6 +147,12 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 	try {
 		plugin.activate(host);
 		await setImmediate();
+		assert.equal(
+			document.querySelector('.fl-footer')?.textContent,
+			`Falcon Link ${PLUGIN_VERSION}`,
+			'the footer shows the full version'
+		);
+		assert.doesNotMatch(document.body.textContent, /\bv(?:dev|preview)\./);
 		const account = [...document.querySelectorAll('.fl-account')].find((card) =>
 			card.textContent.includes('work@example.com')
 		);
@@ -174,23 +182,26 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 			'known empty grants never fall back to sign-in choices'
 		);
 		const connect = [...document.querySelectorAll('button')].find(
-			(b) => b.textContent === 'Connect account'
+			(b) => b.textContent === 'Add account'
 		);
 		assert.ok(connect, document.body.textContent);
 		connect.click();
 		const picker = document.querySelector('select[aria-label="Owner"]');
 		assert.ok(picker);
 		assert.deepEqual(
-			[...picker.querySelectorAll('option')].map((o) => o.value),
-			['', 'human:fred', 'agent:alpha', 'agent:legacy']
+			[...picker.querySelectorAll('option')].map((o) => [o.value, o.textContent]),
+			[
+				['', 'Choose an owner'],
+				['human:fred', 'Fred (you)'],
+				['agent:alpha', 'Alpha'],
+				['agent:legacy', 'openclaw']
+			]
 		);
 		[...document.querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
-		[...document.querySelectorAll('button')]
-			.find((b) => b.textContent === 'Finish sign-in')
-			.click();
+		[...document.querySelectorAll('button')].find((b) => b.textContent === 'Try again').click();
 		const email = document.querySelector('input[type=email]');
 		assert.equal(email.readOnly, false, 'an unverified empty address must remain editable');
-		assert.match(document.body.textContent, /Sign-in did not complete/);
+		assert.match(document.body.textContent, /Needs attention/);
 		const form = document.querySelector('.fl-form');
 		form.reportValidity = () => true;
 		email.value = 'fred@example.com';

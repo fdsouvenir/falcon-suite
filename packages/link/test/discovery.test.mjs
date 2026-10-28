@@ -151,7 +151,7 @@ const restarted=new LinkService(process.env.HOME+'/link');await restarted.discov
 assert.equal(restarted.accounts().find(a=>a.id===google.id).owner.name,'Fred');
 const brief=accountBrief(restarted.accounts());assert.match(brief,/fred@example.com \\| Fred \\| personal \\| Gmail: send \\(recorded\\)/);assert.match(brief,/fred@business.example \\| unassigned \\| unassigned \\| unknown — not checked/);
 const login=await restarted.start({account_id:google.id,provider:'google',owner:{kind:'human',id:'fred',name:'Fred'},purpose:{kind:'personal'},permissions:['gmail:readonly'],email:'fred@example.com'},'fred');
-assert.equal(login.state,'awaiting_consent');restarted.cancel(login.id,'fred');
+assert.equal(login.state,'awaiting_consent');restarted.cancel(login.id,'fred');assert.equal(restarted.accounts().find(a=>a.id===google.id).state,'connected','cancelling a reconnect changes nothing');
 await restarted.disconnect(google.id);assert.equal(restarted.accounts().find(a=>a.id===google.id).state,'disconnected');
 const calls=fs.readFileSync(process.env.HOME+'/gog.log','utf8').trim().split('\\n').map(l=>JSON.parse(l));
 assert.ok(!calls.some(c=>c.args.includes('set')),'the CLI store keeps its own OAuth client');

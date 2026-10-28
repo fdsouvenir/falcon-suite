@@ -18,6 +18,7 @@
     "dist",
     "openclaw.plugin.json",
     "README.md",
+    "assets",
     "scripts",
     "scripts/provision.mjs"
   ],

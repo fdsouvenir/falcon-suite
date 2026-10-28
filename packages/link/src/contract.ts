@@ -46,14 +46,19 @@ export const contract = defineFeatureContract({
 				provider,
 				owner,
 				purpose,
-				permissions: Type.Array(Type.String({ maxLength: 32 }), {
+				permissions: Type.Array(Type.String({ maxLength: 64 }), {
 					minItems: 1,
-					maxItems: 12,
+					maxItems: 64,
 					uniqueItems: true
 				}),
-				email: Type.Optional(Type.String({ maxLength: 254 })),
-				audience: Type.Optional(Type.Union([Type.Literal('consumer'), Type.Literal('enterprise')]))
+				email: Type.Optional(Type.String({ maxLength: 254 }))
 			}),
+			output: Type.Unknown()
+		},
+		viewer: {
+			kind: 'query',
+			description: 'Read the signed-in profile ID of the person using the Link page.',
+			input: obj({}),
 			output: Type.Unknown()
 		},
 		login: {

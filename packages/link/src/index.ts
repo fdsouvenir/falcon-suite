@@ -79,6 +79,9 @@ export default defineFeaturePlugin({
 				await l.discover();
 				return input.account_id ? l.invocation(input.account_id) : { accounts: l.accounts() };
 			},
+			viewer(_input, context) {
+				return { profile_id: person(context) };
+			},
 			start(input, context) {
 				return ready().start(input, person(context));
 			},

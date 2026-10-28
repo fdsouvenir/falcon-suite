@@ -2,7 +2,7 @@ import { defineControlUiPlugin, type ControlUiViewContext } from 'openclaw/plugi
 import { createFeatureClient } from 'openclaw/plugin-sdk/feature-contract';
 import { contract } from './contract.js';
 import { PLUGIN_ID, PLUGIN_VERSION } from './identity.js';
-import type { Overview, ToolStatus } from './status.js';
+import type { IntegrationStatus, Overview } from './status.js';
 import {
 	type Account,
 	type Catalog,
@@ -14,26 +14,31 @@ import {
 } from './model.js';
 import './control-ui.css';
 import { accessSummary } from './access-summary.js';
+// Official provider artwork, unmodified (see assets/brand/README.md).
+import googleSignIn from '../assets/brand/google-signin-light-square.svg' with { type: 'text' };
+import microsoftSignIn from '../assets/brand/microsoft-signin-light.svg' with { type: 'text' };
+import microsoftLogo from '../assets/brand/microsoft-logo.svg' with { type: 'text' };
 
+const svg = (source: string) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
+const NAMES: Record<Provider, string> = { google: 'Google', microsoft: 'Microsoft' };
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) {
 	const n = document.createElement(tag);
 	if (text !== undefined) n.textContent = text;
 	if (cls) n.className = cls;
 	return n;
 }
-const toolLabel = (t: ToolStatus) =>
-	t.state === 'installed'
-		? `Installed · ${t.version}`
-		: {
-				not_installed: 'Not installed',
-				check_failed: 'Version check failed — status unknown',
-				unrecognized_version: 'Version not recognized'
-			}[t.state];
 function button(text: string, action: () => void | Promise<void>, primary = false) {
 	const b = el('button', text, `fl-btn${primary ? ' fl-btn-primary' : ''}`);
 	b.type = 'button';
 	b.addEventListener('click', () => void action());
 	return b;
+}
+function link(text: string, href: string) {
+	const a = el('a', text);
+	a.href = href;
+	a.target = '_blank';
+	a.rel = 'noopener noreferrer';
+	return a;
 }
 function field(label: string, control: HTMLElement) {
 	control.setAttribute('aria-label', label);
@@ -51,20 +56,63 @@ function select(options: { value: string; label: string }[], value?: string) {
 	if (value) s.value = value;
 	return s;
 }
+function mark(provider: Provider, large = false) {
+	const cls = `fl-provider-mark${large ? ' fl-provider-mark-large' : ''}`;
+	const node = el('span', provider === 'google' ? 'G' : undefined, cls);
+	if (provider === 'microsoft') {
+		const logo = el('img');
+		logo.src = svg(microsoftLogo);
+		logo.alt = '';
+		node.append(logo);
+	}
+	node.setAttribute('aria-hidden', 'true');
+	return node;
+}
+// The provider's sign-in artwork is the action that starts sign-in.
+function signInButton(provider: Provider) {
+	const text = `Sign in with ${NAMES[provider]}`;
+	const b = el('button', undefined, 'fl-signin');
+	b.type = 'submit';
+	b.setAttribute('aria-label', text);
+	const art = el('img');
+	art.src = svg(provider === 'google' ? googleSignIn : microsoftSignIn);
+	art.alt = '';
+	b.append(art);
+	return b;
+}
+type Login = {
+	provider: Provider;
+	id: string;
+	account_id: string;
+	state: string;
+	message: string;
+	url: string | null;
+	code: string | null;
+	expires_at: string;
+	hosted?: boolean;
+};
+type StartInput = {
+	provider: Provider;
+	owner: Owner;
+	purpose: Purpose;
+	permissions: string[];
+	account_id?: string;
+	email?: string;
+};
+const ACTIVE = ['starting', 'awaiting_consent', 'verifying'];
 function mount(container: HTMLElement, context: ControlUiViewContext) {
 	const host = context.host;
 	const client = createFeatureClient(contract, host);
 	const root = el('section', undefined, 'fl-page');
 	const header = el('header', undefined, 'fl-header');
-	const version = PLUGIN_VERSION.includes('-')
-		? PLUGIN_VERSION.split('-').slice(1).join('-')
-		: PLUGIN_VERSION;
-	const title = el('h1', 'Falcon Link');
-	title.append(el('span', ` v${version}`, 'fl-version'));
 	const heading = el('div');
 	heading.append(
-		title,
-		el('p', "Control your Agents' access to third party accounts.", 'fl-page-description')
+		el('h1', 'Falcon Link'),
+		el(
+			'p',
+			'Connect your Google and Microsoft accounts so your assistant can help with email, calendar and files.',
+			'fl-page-description'
+		)
 	);
 	header.append(heading);
 	const notification = el('p', undefined, 'fl-notice');
@@ -75,7 +123,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	const detail = el('div', undefined, 'fl-detail');
 	const formHost = el('div', undefined, 'fl-form-host');
 	layout.append(nav, detail);
-	root.append(header, notification, layout);
+	const footer = el('footer', `Falcon Link ${PLUGIN_VERSION}`, 'fl-footer');
+	root.append(header, notification, layout, footer);
 	container.append(root);
 	let selected: Provider | null =
 		(context.props.integration as Provider) ||
@@ -88,21 +137,13 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		| null = null;
 	let accounts: Account[] = [];
 	let owners: Owner[] = [];
+	let viewer: string | null = null;
 	let disposed = false;
 	let refreshing = false;
 	let poll: ReturnType<typeof setTimeout> | undefined;
-	let activeLogin: {
-		provider: Provider;
-		id: string;
-		account_id: string;
-		state: string;
-		message: string;
-		url: string | null;
-		code: string | null;
-		expires_at: string;
-		hosted?: boolean;
-	} | null = null;
-	// Reserve the tab during the submit gesture; async provider setup can outlive popup permission.
+	let activeLogin: Login | null = null;
+	let lastStart: StartInput | null = null;
+	// Reserve the tab during the user's gesture; async provider setup can outlive popup permission.
 	let signInTab: Window | null = null;
 	let signInOpened = false;
 	function closePendingTab() {
@@ -173,7 +214,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		}
 	}
 	async function loadOwners() {
-		const [humans, agents] = await Promise.allSettled([
+		const [humans, agents, me] = await Promise.allSettled([
 			host.request<{ profiles: { id: string; displayName?: string; mergedInto?: string }[] }>(
 				'users.list',
 				{}
@@ -185,9 +226,12 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					name?: string;
 					identity?: { name?: string };
 				}[];
-			}>('agents.list', {})
+			}>('agents.list', {}),
+			client.invoke('viewer', {})
 		]);
 		if (disposed) return;
+		if (me.status === 'fulfilled')
+			viewer = (me.value as { profile_id?: string }).profile_id ?? null;
 		owners = [];
 		if (humans.status === 'fulfilled')
 			owners.push(
@@ -206,17 +250,14 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					}))
 			);
 		if (humans.status === 'rejected' || agents.status === 'rejected')
-			message(
-				'Some OpenClaw profiles could not be loaded. Only available profiles can be selected.',
-				true
-			);
+			message('Some people or agents could not be loaded. Only those shown can be chosen.', true);
 	}
 	function metadataFields(owner?: Owner, purpose?: Purpose) {
 		const choices = [
 			{ value: '', label: 'Choose an owner' },
 			...owners.map((o) => ({
 				value: `${o.kind}:${o.id}`,
-				label: `${o.name} · ${o.kind === 'agent' ? 'Agent' : 'Human'}`
+				label: o.kind === 'human' && o.id === viewer ? `${o.name} (you)` : o.name
 			}))
 		];
 		const ownerPicker = select(choices, owner ? `${owner.kind}:${owner.id}` : '');
@@ -259,39 +300,34 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const node = el('fieldset', undefined, 'fl-permissions');
 		node.append(el('legend', 'Access'));
 		const pickers: (() => string[])[] = [];
-		const technical = el('details', undefined, 'fl-technical');
-		const scopeList = el('p', undefined, 'fl-scopes');
-		technical.append(el('summary', 'Technical details'), scopeList);
-		const update = () => {
-			const ids = pickers.flatMap((p) => p());
-			try {
-				scopeList.textContent = selectionScopes(provider, catalog!, ids).join('\n');
-			} catch {
-				scopeList.textContent = 'Choose access for at least one service.';
-			}
-		};
 		if (!catalog) {
 			node.append(el('p', 'Permission choices could not be read from the CLI.', 'fl-muted'));
 			return { node, selected: () => [] as string[] };
 		}
+		const technical = el('details', undefined, 'fl-technical');
+		const scopeList = el('p', undefined, 'fl-scopes');
+		technical.append(el('summary', 'Technical details'), scopeList);
+		const update = () => {
+			try {
+				scopeList.textContent = selectionScopes(
+					provider,
+					catalog,
+					pickers.flatMap((p) => p())
+				).join('\n');
+			} catch {
+				scopeList.textContent = 'Choose access for at least one service.';
+			}
+		};
 		const initial = new Set(offeredSelection(provider, catalog, saved));
 		let more: HTMLElement | null = null;
 		for (const row of catalog.rows) {
 			const line = el('div', undefined, 'fl-permission');
 			const copy = el('div', undefined, 'fl-permission-copy');
-			const name = el('span', row.label, 'fl-permission-name');
-			copy.append(name);
 			const description = el('p', '', 'fl-muted');
-			const notes = [
-				row.work_only ? 'Work or school accounts only' : '',
-				row.admin_consent ? "Needs approval from your organization's administrator" : '',
-				row.note ?? ''
-			].filter(Boolean);
 			const choice = select(
 				[{ value: '', label: 'Off' }, ...row.levels.map((l) => ({ value: l.id, label: l.label }))],
 				row.levels.find((l) => initial.has(l.id))?.id ?? ''
 			);
-			choice.setAttribute('aria-label', row.label);
 			const describe = () => {
 				description.textContent = row.levels.find((l) => l.id === choice.value)?.description ?? '';
 			};
@@ -300,9 +336,22 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				update();
 			});
 			describe();
-			copy.append(description, ...notes.map((n) => el('p', n, 'fl-muted fl-permission-note')));
+			copy.append(
+				el('span', row.label, 'fl-permission-name'),
+				description,
+				...[
+					row.work_only ? 'Work or school accounts only' : '',
+					row.admin_consent ? "Needs approval from your organization's administrator" : '',
+					row.note ?? ''
+				]
+					.filter(Boolean)
+					.map((n) => el('p', n, 'fl-muted fl-permission-note'))
+			);
 			const controls = el('div', undefined, 'fl-permission-controls');
-			if (row.levels.length) controls.append(choice);
+			if (row.levels.length) {
+				choice.setAttribute('aria-label', row.label);
+				controls.append(choice);
+			}
 			let addon: HTMLInputElement | null = null;
 			if (row.addon) {
 				addon = el('input');
@@ -313,17 +362,17 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				label.append(addon, el('span', row.addon.label));
 				controls.append(label);
 			}
+			const level = row.levels.length ? choice : null;
+			const extra = row.addon ? { id: row.addon.id, input: addon! } : null;
 			pickers.push(() => [
-				...(choice.value && row.levels.length ? [choice.value] : []),
-				...(addon?.checked && row.addon ? [row.addon.id] : [])
+				...(level?.value ? [level.value] : []),
+				...(extra?.input.checked ? [extra.id] : [])
 			]);
 			line.append(copy, controls);
 			if (row.group === 'more') {
 				if (!more) {
 					const group = el('details', undefined, 'fl-more');
-					group.append(
-						el('summary', `More ${provider === 'google' ? 'Google' : 'Microsoft'} services`)
-					);
+					group.append(el('summary', `More ${NAMES[provider]} services`));
 					more = el('div');
 					group.append(more);
 					node.append(group);
@@ -335,59 +384,100 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		update();
 		return { node, selected: () => pickers.flatMap((p) => p()) };
 	}
+	// Where a person removes access they already gave, by provider and account type.
+	function revokeSentence(account: Account) {
+		const p = el('p', "To remove access you've already given, use ", 'fl-muted');
+		if (account.provider === 'google')
+			p.append(link("Google's app-access page", 'https://myaccount.google.com/connections'), '.');
+		else if (account.audience === 'consumer')
+			p.append(link("Microsoft's app-access page", 'https://account.live.com/consent/Manage'), '.');
+		else if (account.audience === 'enterprise')
+			p.append(link("Microsoft's app-access page", 'https://myapplications.microsoft.com/'), '.');
+		else
+			p.append(
+				"Microsoft's app-access page for ",
+				link('personal accounts', 'https://account.live.com/consent/Manage'),
+				' or ',
+				link('work or school accounts', 'https://myapplications.microsoft.com/'),
+				'.'
+			);
+		return p;
+	}
+	async function startSignIn(input: StartInput) {
+		closePendingTab();
+		signInOpened = false;
+		signInTab = window.open('about:blank', '_blank');
+		if (signInTab) {
+			signInTab.opener = null;
+			signInTab.document.title = 'Opening sign-in · Falcon Link';
+			signInTab.document.body.textContent =
+				'Opening secure sign-in… Your provider will appear here shortly. Keep your Office tab open.';
+		}
+		try {
+			lastStart = input;
+			const l = await client.invoke('start', input);
+			if (disposed) {
+				closePendingTab();
+				return;
+			}
+			activeLogin = l as Login;
+			followSignIn();
+		} catch (error) {
+			closePendingTab();
+			throw error;
+		}
+		closeForm();
+		await load();
+		scheduleLogin();
+	}
+	// Saved choices are enough to go straight back to the provider; otherwise open the form.
+	function retryInput(a: Account): StartInput | null {
+		if (!a.owner || !a.purpose || !a.requested.length) return null;
+		if (a.provider === 'google' && !a.email) return null;
+		return {
+			provider: a.provider,
+			owner: a.owner,
+			purpose: a.purpose,
+			permissions: a.requested,
+			account_id: a.id,
+			...(a.provider === 'google' ? { email: a.email! } : {})
+		};
+	}
 	function accountForm(account?: Account, metadataOnly = false) {
 		if (!selected || !status) return;
 		closeForm();
 		const provider = selected;
 		const form = el('form', undefined, 'fl-form');
-		const heading = el(
+		const title = el(
 			'h3',
 			metadataOnly
 				? 'Account details'
 				: account
-					? 'Reconnect / change permissions'
-					: 'Connect account'
+					? 'Change access'
+					: `Add a ${NAMES[provider]} account`
 		);
-		form.append(heading);
+		form.append(title);
 		const meta = metadataFields(account?.owner ?? undefined, account?.purpose ?? undefined);
 		form.append(...meta.nodes);
+		const rows = metadataOnly ? null : permissionRows(provider, account?.requested ?? []);
 		const email = el('input');
 		email.type = 'email';
 		email.maxLength = 254;
 		email.value = account?.email ?? '';
-		email.required = provider === 'google';
+		email.required = provider === 'google' && !metadataOnly;
 		email.readOnly = !!account?.email && provider === 'google';
-		const rows = permissionRows(provider, account?.requested ?? []);
-		const permissions = rows.node;
-		if (!metadataOnly) {
-			form.append(
-				...(provider === 'google' ? [field('Google account address', email)] : []),
-				permissions
-			);
-			form.append(
-				el(
-					'p',
-					'Requested permissions are not verified grants. Provider consent, tenant policy, and your operating instructions remain separate.',
-					'fl-muted'
-				)
-			);
-			if (account)
-				form.append(
-					el(
-						'p',
-						'Changing these selections does not revoke earlier provider consent. For narrower access, revoke the app at the provider and sign in again.',
-						'fl-muted'
-					)
-				);
+		email.autocomplete = 'email';
+		if (rows) {
+			form.append(rows.node);
+			if (account) form.append(revokeSentence(account));
 		}
-		const submit = el(
-			'button',
-			metadataOnly ? 'Save details' : 'Continue to sign-in',
-			'fl-btn fl-btn-primary'
-		);
+		const submit = metadataOnly
+			? el('button', 'Save details', 'fl-btn fl-btn-primary')
+			: signInButton(provider);
 		submit.type = 'submit';
 		submit.disabled = !canWrite();
-		const actions = el('div', undefined, 'fl-actions');
+		const actions = el('div', undefined, 'fl-actions fl-signin-row');
+		if (rows && provider === 'google') actions.append(field('Google account address', email));
 		actions.append(submit, button('Cancel', closeForm));
 		form.append(actions);
 		form.addEventListener('submit', (event) => {
@@ -395,152 +485,336 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			if (!form.reportValidity()) return;
 			void act(submit, async () => {
 				const values = meta.values();
-				if (!values.owner) throw new Error('Choose an existing human or agent.');
-				if (metadataOnly && account) {
+				if (!values.owner) throw new Error('Choose an owner.');
+				if (!rows && account) {
 					await client.invoke('metadata', { account_id: account.id, ...values });
 					closeForm();
 					await load();
 					return;
 				}
-				if (!rows.selected().length) throw new Error('Choose access for at least one service.');
-				closePendingTab();
-				signInOpened = false;
-				signInTab = window.open('about:blank', '_blank');
-				if (signInTab) {
-					signInTab.opener = null;
-					signInTab.document.title = 'Opening sign-in · Falcon Link';
-					signInTab.document.body.textContent =
-						'Opening secure sign-in… Your provider will appear here shortly. Keep your Office tab open.';
-				}
-				try {
-					const l = await client.invoke('start', {
-						provider,
-						...values,
-						permissions: rows.selected(),
-						...(account ? { account_id: account.id } : {}),
-						...(provider === 'google' ? { email: email.value.trim() } : {})
-					});
-					if (disposed) {
-						closePendingTab();
-						return;
-					}
-					activeLogin = l as typeof activeLogin;
-					followSignIn();
-				} catch (error) {
-					closePendingTab();
-					throw error;
-				}
-				closeForm();
-				render();
-				scheduleLogin();
+				const permissions = rows!.selected();
+				if (!permissions.length) throw new Error('Choose access for at least one service.');
+				await startSignIn({
+					provider,
+					...values,
+					permissions,
+					...(account ? { account_id: account.id } : {}),
+					...(provider === 'google' ? { email: email.value.trim() } : {})
+				});
 			});
 		});
 		formHost.append(form);
-		heading.tabIndex = -1;
-		heading.focus();
+		title.tabIndex = -1;
+		title.focus();
 	}
 	function scheduleLogin() {
 		clearTimeout(poll);
-		if (
-			disposed ||
-			!activeLogin ||
-			!['starting', 'awaiting_consent', 'verifying'].includes(activeLogin.state)
-		)
-			return;
+		if (disposed || !activeLogin || !ACTIVE.includes(activeLogin.state)) return;
 		poll = setTimeout(async () => {
 			try {
-				const l = await client.invoke('login', { id: activeLogin!.id });
+				const next = (await client.invoke('login', { id: activeLogin!.id })) as Login;
 				if (disposed) return;
-				const next = l as typeof activeLogin;
 				const changed = JSON.stringify(next) !== JSON.stringify(activeLogin);
 				activeLogin = next;
 				followSignIn();
-				if (changed) render();
-				if (activeLogin?.state === 'connected') await load();
+				if (changed) await load();
 				scheduleLogin();
 			} catch {
 				if (!disposed)
-					message(
-						'Sign-in status could not be refreshed. Refresh the page or start a new sign-in.',
-						true
-					);
+					message('Sign-in status could not be refreshed. Refresh the page or try again.', true);
 			}
 		}, 2000);
 	}
 	function loginCard() {
 		if (!activeLogin) return null;
-		const card = el('section', undefined, 'fl-card');
-		card.append(el('h3', 'Account sign-in'), el('p', activeLogin.message));
-		if (activeLogin.url) {
-			card.append(
+		const login = activeLogin;
+		const card = el('section', undefined, 'fl-card fl-login');
+		card.setAttribute('aria-live', 'polite');
+		const dismiss = button('Dismiss', () => {
+			activeLogin = null;
+			render();
+		});
+		const retry = button('Try again', async () => {
+			await act(retry, async () => startSignIn(lastStart!));
+		});
+		retry.disabled = !canWrite() || !lastStart;
+		if (ACTIVE.includes(login.state)) {
+			card.append(el('h3', 'Signing in…'), el('p', login.message));
+			if (login.url) {
+				card.append(
+					el(
+						'p',
+						signInOpened
+							? 'Sign-in opened in a new tab.'
+							: 'Your browser may have blocked the sign-in tab. Open sign-in to continue.',
+						'fl-muted'
+					)
+				);
+				const a = link(signInOpened ? 'Reopen sign-in' : 'Open sign-in', login.url);
+				a.className = 'fl-btn';
+				card.append(a);
+			}
+			if (login.code) card.append(el('p', login.code, 'fl-device-code'));
+			if (
+				login.url &&
+				!login.hosted &&
+				login.provider === 'google' &&
+				login.state === 'awaiting_consent'
+			) {
+				const form = el('form', undefined, 'fl-paste');
+				const input = el('input');
+				input.type = 'url';
+				input.required = true;
+				input.maxLength = 8192;
+				input.autocomplete = 'off';
+				const finish = el('button', 'Continue', 'fl-btn fl-btn-primary');
+				finish.type = 'submit';
+				finish.disabled = !canWrite();
+				form.append(field('Address shown in your browser after signing in', input), finish);
+				form.addEventListener('submit', (event) => {
+					event.preventDefault();
+					void act(finish, async () => {
+						const value = input.value;
+						input.value = '';
+						activeLogin = (await client.invoke('finish', {
+							id: login.id,
+							redirect: value
+						})) as Login;
+						if (!disposed) await load();
+					});
+				});
+				card.append(form);
+			}
+			if (login.state !== 'verifying') {
+				const cancel = button('Cancel sign-in', async () => {
+					await act(cancel, async () => {
+						activeLogin = (await client.invoke('cancel', { id: login.id })) as Login;
+						closePendingTab();
+						await load();
+					});
+				});
+				cancel.disabled = !canWrite();
+				card.append(cancel);
+			}
+			return card;
+		}
+		const actions = el('div', undefined, 'fl-actions');
+		if (login.state === 'connected') card.append(el('p', login.message));
+		else if (login.state === 'cancelled') {
+			card.append(el('p', login.message));
+			actions.append(retry);
+		} else {
+			card.append(el('p', login.message, 'fl-error'));
+			actions.append(retry);
+		}
+		actions.append(dismiss);
+		card.append(actions);
+		return card;
+	}
+	const signingIn = (a: Account) =>
+		activeLogin?.account_id === a.id && ACTIVE.includes(activeLogin.state);
+	// One vocabulary for the sidebar, the badge and each account.
+	function accountWord(a: Account) {
+		if (signingIn(a)) return 'Signing in…';
+		if (a.state === 'connected' || a.state === 'discovered') return 'Connected';
+		if (a.state === 'disconnected') return 'Not connected';
+		return 'Needs attention';
+	}
+	function providerWord(provider: Provider) {
+		const words: string[] = accounts.filter((a) => a.provider === provider).map(accountWord);
+		if (activeLogin?.provider === provider && ACTIVE.includes(activeLogin.state))
+			return 'Signing in…';
+		return (
+			['Signing in…', 'Needs attention', 'Connected'].find((w) => words.includes(w)) ??
+			'Not connected'
+		);
+	}
+	const ready = (i: IntegrationStatus) =>
+		i.setup.state === 'ready' && i.tool.state !== 'not_installed' && !i.below_minimum;
+	// Plain banners only when something needs doing; otherwise no plumbing is shown.
+	function banners(i: IntegrationStatus) {
+		const list = el('div', undefined, 'fl-banners');
+		const add = (text: string, action?: HTMLButtonElement) => {
+			const b = el('div', undefined, 'fl-banner');
+			b.setAttribute('role', 'status');
+			b.append(el('p', text));
+			if (action) b.append(action);
+			list.append(b);
+		};
+		const install = (label: string) => {
+			const b = button(label, async () => {
+				await act(
+					b,
+					async () => {
+						await client.invoke('install', { provider: i.id });
+						await load();
+					},
+					`${i.cli} is ready.`
+				);
+			});
+			b.disabled = !canWrite();
+			return b;
+		};
+		const outside = `${i.cli} was installed outside Link.`;
+		if (i.setup.state !== 'ready') add(i.setup.message);
+		if (i.tool.state === 'not_installed')
+			add(
+				i.installable
+					? `Install ${i.cli} to connect ${i.name} accounts.`
+					: `Install ${i.cli} on this computer to connect ${i.name} accounts. Link installs it automatically on Linux.`,
+				i.installable ? install('Install') : undefined
+			);
+		else if (i.below_minimum)
+			add(
+				`Update needed to connect ${i.name} accounts.${i.managed && i.installable ? '' : ' ' + outside}`,
+				i.managed && i.installable ? install('Update') : undefined
+			);
+		else if (i.update_available)
+			add(
+				`A ${i.name} update is available.${i.managed && i.installable ? '' : ' ' + outside}`,
+				i.managed && i.installable ? install('Update') : undefined
+			);
+		return list.childElementCount ? list : null;
+	}
+	function technicalDetails(i: IntegrationStatus) {
+		const details = el('details', undefined, 'fl-technical fl-tool');
+		details.append(el('summary', 'Technical details'));
+		const list = el('dl');
+		for (const [term, value] of [
+			['Tool', i.cli],
+			['Path', i.path ?? 'Not found'],
+			[
+				'Installed version',
+				i.tool.state === 'installed'
+					? i.tool.version
+					: i.tool.state === 'not_installed'
+						? 'Not installed'
+						: 'Unknown'
+			],
+			['Latest version', i.latest_version ?? 'Unknown'],
+			['Last checked', i.checked_at ? new Date(i.checked_at).toLocaleString() : 'Not checked']
+		]) {
+			list.append(el('dt', term), el('dd', value));
+		}
+		details.append(list);
+		return details;
+	}
+	function accountCard(a: Account, integration: IntegrationStatus) {
+		const card = el('section', undefined, 'fl-card fl-account');
+		const identity = el('div', undefined, 'fl-account-identity');
+		const avatar = el(
+			'span',
+			(a.email ?? a.owner?.name ?? '?').slice(0, 1).toUpperCase(),
+			'fl-account-avatar'
+		);
+		avatar.setAttribute('aria-hidden', 'true');
+		const accountName = el('div', undefined, 'fl-account-name');
+		accountName.append(el('h4', a.email ?? `${NAMES[a.provider]} account`));
+		const meta = el('div', undefined, 'fl-account-meta');
+		meta.append(el('span', a.owner ? `Owner: ${a.owner.name}` : 'No owner chosen'));
+		if (a.purpose)
+			meta.append(
 				el(
-					'p',
-					signInOpened
-						? activeLogin.hosted
-							? 'Sign-in opened in a new tab. Once you finish there, your agent will complete the connection automatically.'
-							: 'Sign-in opened in a new tab. Finish with your provider, then return here to complete the connection.'
-						: 'Your browser may have blocked the sign-in tab. Open sign-in below to continue.'
+					'span',
+					a.purpose.kind === 'other'
+						? a.purpose.label
+						: a.purpose.kind === 'work'
+							? 'Work'
+							: 'Personal',
+					'fl-account-purpose'
 				)
 			);
-			const a = el('a', signInOpened ? 'Reopen sign-in' : 'Open sign-in', 'fl-btn');
-			a.href = activeLogin.url;
-			a.target = '_blank';
-			a.rel = 'noopener noreferrer';
-			card.append(a);
+		accountName.append(meta);
+		const word = accountWord(a);
+		identity.append(
+			avatar,
+			accountName,
+			el(
+				'span',
+				word,
+				`fl-account-status${word === 'Connected' ? ' fl-account-status-ok' : word === 'Needs attention' ? ' fl-account-status-warn' : ''}`
+			)
+		);
+		card.append(identity);
+		const access = accessSummary(a, status!.catalogs[a.provider]);
+		const body = el('div', undefined, 'fl-account-access');
+		if (access) {
+			body.append(el('h5', access.title));
+			if (access.items.length) {
+				const capabilities = el('ul', undefined, 'fl-access-list');
+				for (const capability of access.items) capabilities.append(el('li', capability));
+				body.append(capabilities);
+			}
+			if (access.note) body.append(el('p', access.note, 'fl-muted'));
+			card.append(body);
 		}
-		if (activeLogin.code) card.append(el('p', activeLogin.code, 'fl-device-code'));
-		if (
-			activeLogin.url &&
-			!activeLogin.hosted &&
-			selected === 'google' &&
-			activeLogin.state === 'awaiting_consent'
-		) {
-			const form = el('form');
-			const input = el('input');
-			input.type = 'url';
-			input.required = true;
-			input.maxLength = 8192;
-			input.autocomplete = 'off';
-			const finish = el('button', 'Complete sign-in', 'fl-btn fl-btn-primary');
-			finish.type = 'submit';
-			finish.disabled = !canWrite();
-			form.append(field('Full redirect URL after consent', input), finish);
-			form.addEventListener('submit', (event) => {
-				event.preventDefault();
-				void act(finish, async () => {
-					const value = input.value;
-					input.value = '';
-					activeLogin = (await client.invoke('finish', {
-						id: activeLogin!.id,
-						redirect: value
-					})) as typeof activeLogin;
-					if (!disposed) {
-						render();
-						await load();
-					}
-				});
-			});
-			card.append(form);
-		}
-		if (['starting', 'awaiting_consent'].includes(activeLogin.state)) {
-			const cancel = button('Cancel sign-in', async () => {
-				await act(cancel, async () => {
-					activeLogin = (await client.invoke('cancel', {
-						id: activeLogin!.id
-					})) as typeof activeLogin;
-					closePendingTab();
-					render();
-				});
-			});
-			cancel.disabled = !canWrite();
-			card.append(cancel);
-		} else if (!['verifying'].includes(activeLogin.state))
-			card.append(
-				button('Dismiss', () => {
-					activeLogin = null;
-					render();
-				})
+		if (a.connection_error && word === 'Needs attention')
+			card.append(el('p', a.connection_error.message, 'fl-error fl-account-error'));
+		const footer = el('div', undefined, 'fl-account-footer');
+		const primary = el('div', undefined, 'fl-actions');
+		const retryWith = retryInput(a);
+		if (word === 'Needs attention' || word === 'Not connected') {
+			const retry = button(
+				'Try again',
+				async () => {
+					if (!retryWith) return accountForm(a);
+					await act(retry, async () => startSignIn(retryWith));
+				},
+				true
 			);
+			retry.disabled = !canWrite() || !ready(integration) || signingIn(a);
+			primary.append(retry);
+		}
+		const change = button('Change access', () => accountForm(a));
+		change.disabled = !canWrite() || !ready(integration) || signingIn(a);
+		primary.append(change);
+		footer.append(primary);
+		const actions = el('div', undefined, 'fl-actions');
+		const edit = button('Edit details', () => accountForm(a, true));
+		edit.disabled = !canWrite();
+		actions.append(edit);
+		const check = button('Check connection', async () => {
+			await act(
+				check,
+				async () => {
+					await client.invoke('check', { account_id: a.id });
+					await load();
+				},
+				'Connection checked.'
+			);
+		});
+		check.disabled = !canWrite() || !a.email || a.state === 'disconnected';
+		actions.append(check);
+		if (a.state !== 'disconnected') {
+			const disconnect = button('Disconnect', () => {
+				closeForm();
+				const confirm = el('section', undefined, 'fl-card');
+				confirm.append(
+					el('h3', `Disconnect ${a.email ?? 'this account'}?`),
+					el(
+						'p',
+						'This removes this account’s saved sign-in from this computer. Other accounts are unchanged.'
+					),
+					revokeSentence(a)
+				);
+				const yes = button('Disconnect account', async () => {
+					await act(yes, async () => {
+						await client.invoke('disconnect', { account_id: a.id });
+						closeForm();
+						await load();
+					});
+				});
+				yes.disabled = !canWrite();
+				confirm.append(yes, button('Cancel', closeForm));
+				formHost.append(confirm);
+			});
+			disconnect.disabled = !canWrite();
+			actions.append(disconnect);
+		}
+		const manage = el('details', undefined, 'fl-account-manage');
+		manage.append(el('summary', 'Manage account'), actions);
+		footer.append(manage);
+		card.append(footer);
 		return card;
 	}
 	function render() {
@@ -551,31 +825,25 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		layout.classList.toggle('fl-show-detail', selected !== null);
 		nav.replaceChildren(el('h2', 'Integrations', 'fl-nav-label'));
 		for (const id of ['google', 'microsoft'] as Provider[]) {
-			const integration = status?.integrations.find((i) => i.id === id);
 			const b = button('', () => navigate(id));
 			b.className = `fl-integration${selected === id ? ' fl-selected' : ''}`;
 			b.setAttribute('aria-current', selected === id ? 'page' : 'false');
-			const count = accounts.filter((a) => a.provider === id && a.state === 'connected').length;
-			const mark = el('span', id === 'google' ? 'G' : 'M', 'fl-provider-mark');
-			mark.setAttribute('aria-hidden', 'true');
+			const word = status ? providerWord(id) : 'Checking…';
 			const label = el('span', undefined, 'fl-nav-copy');
-			label.append(
-				el('span', id === 'google' ? 'Google' : 'Microsoft', 'fl-integration-name'),
-				el(
-					'span',
-					integration ? (count ? `${count} connected` : 'Not connected') : 'Checking…',
-					'fl-muted'
-				)
+			label.append(el('span', NAMES[id], 'fl-integration-name'), el('span', word, 'fl-muted'));
+			const dot = el(
+				'span',
+				undefined,
+				`fl-dot${word === 'Connected' ? ' fl-dot-ok' : word === 'Needs attention' ? ' fl-dot-warn' : ''}`
 			);
-			const dot = el('span', undefined, `fl-dot${count ? ' fl-dot-ok' : ''}`);
 			dot.setAttribute('aria-hidden', 'true');
-			b.append(mark, label, dot);
+			b.append(mark(id), label, dot);
 			nav.append(b);
 		}
 		// Keep the active form node mounted across status refreshes so input and focus survive.
 		detail.replaceChildren();
 		if (!selected || !status) {
-			if (!status) detail.append(el('p', 'Checking integrations…'));
+			if (!status) detail.append(el('p', 'Loading…'));
 			return;
 		}
 		const integration = status.integrations.find((i) => i.id === selected)!;
@@ -583,263 +851,38 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		back.classList.add('fl-back');
 		const providerHeader = el('header', undefined, 'fl-provider-header');
 		const identity = el('div', undefined, 'fl-provider-identity');
-		const mark = el(
-			'span',
-			integration.id === 'google' ? 'G' : 'M',
-			'fl-provider-mark fl-provider-mark-large'
+		identity.append(mark(integration.id, true), el('h2', integration.name));
+		const word = providerWord(integration.id);
+		providerHeader.append(
+			identity,
+			el('span', word, `fl-badge${word === 'Connected' ? ' fl-badge-ok' : ''}`)
 		);
-		mark.setAttribute('aria-hidden', 'true');
-		const providerCopy = el('div');
-		providerCopy.append(
-			el('h2', integration.name),
-			el('p', `${integration.cli} · ${toolLabel(integration.tool)}`, 'fl-muted')
-		);
-		identity.append(mark, providerCopy);
-		const ready = integration.setup.state === 'ready' && integration.tool.state === 'installed';
-		const badge = el(
-			'span',
-			ready
-				? 'Ready to connect'
-				: integration.setup.state !== 'ready'
-					? 'Setup required'
-					: 'Tool required',
-			`fl-badge${ready ? ' fl-badge-ok' : ''}`
-		);
-		providerHeader.append(identity, badge);
 		detail.append(back, providerHeader);
-		const tool = el('details', undefined, 'fl-tool');
-		tool.open = !ready;
-		const summary = el('summary');
-		summary.append(
-			el('span', 'Connection setup'),
-			el('span', ready ? 'Ready' : 'Needs attention', 'fl-muted')
-		);
-		tool.append(summary);
-		const setupRow = el('div', undefined, 'fl-setup-row');
-		const setupCopy = el('div');
-		setupCopy.append(
-			el(
-				'h4',
-				integration.setup.state === 'ready'
-					? 'Application configured'
-					: 'Application setup required'
-			),
-			el(
-				'p',
-				integration.setup.state === 'ready'
-					? 'Your administrator has configured this connection.'
-					: integration.setup.message,
-				'fl-muted'
-			)
-		);
-		setupRow.append(
-			el('span', integration.setup.state === 'ready' ? '✓' : '1', 'fl-step'),
-			setupCopy
-		);
-		tool.append(setupRow);
-		const cliRow = el('div', undefined, 'fl-setup-row');
-		const cliCopy = el('div');
-		cliCopy.append(
-			el(
-				'h4',
-				integration.tool.state === 'installed' ? 'CLI installed' : 'Install the connection tool'
-			),
-			el('p', `${integration.cli} · ${toolLabel(integration.tool)}`, 'fl-muted')
-		);
-		cliRow.append(
-			el('span', integration.tool.state === 'installed' ? '✓' : '2', 'fl-step'),
-			cliCopy
-		);
-		const installButton = button(
-			integration.tool.state === 'not_installed' ? 'Install CLI' : 'Update',
-			async () => {
-				await act(
-					installButton,
-					async () => {
-						await client.invoke('install', { provider: selected! });
-						await load();
-					},
-					'CLI installed and verified. Existing credentials retained.'
-				);
-			}
-		);
-		installButton.disabled = !canWrite();
-		const toolActions = el('div', undefined, 'fl-actions');
-		toolActions.append(installButton);
-		if (integration.latest_version)
-			cliCopy.append(el('p', `Latest release: ${integration.latest_version}`, 'fl-muted'));
-		cliRow.append(toolActions);
-		tool.append(cliRow);
+		const notices = banners(integration);
+		if (notices) detail.append(notices);
 		const list = accounts.filter((a) => a.provider === selected);
 		const accountHeading = el('div', undefined, 'fl-section-heading');
-		const accountTitle = el('div');
-		accountTitle.append(
-			el('h3', 'Accounts'),
-			el('p', 'Connected accounts and their access.', 'fl-muted')
-		);
-		accountHeading.append(accountTitle);
-		if (list.length && ready) {
-			const add = button('Connect account', () => accountForm(), true);
-			add.disabled = !canWrite();
-			accountHeading.append(add);
-		}
+		accountHeading.append(el('h3', 'Accounts'));
+		const add = () => {
+			const b = button('Add account', () => accountForm());
+			b.disabled = !canWrite() || !ready(integration);
+			return b;
+		};
+		if (list.length) accountHeading.append(add());
 		detail.append(accountHeading);
 		if (!list.length) {
 			const empty = el('section', undefined, 'fl-empty');
-			empty.append(
-				el('span', integration.id === 'google' ? 'G' : 'M', 'fl-empty-mark'),
-				el('h3', `No ${integration.name} accounts connected`),
-				el(
-					'p',
-					ready
-						? 'Choose an owner, label the account, then select the permissions you want to connect.'
-						: 'Complete the connection setup below to add your first account.',
-					'fl-muted'
-				)
-			);
-			if (ready) {
-				const add = button('Connect account', () => accountForm(), true);
-				add.disabled = !canWrite();
-				empty.append(add);
-			}
+			const emptyMark = mark(integration.id, true);
+			emptyMark.classList.add('fl-empty-mark');
+			empty.append(emptyMark, el('h3', `No ${integration.name} accounts connected`), add());
 			detail.append(empty);
 		}
-		for (const a of list) {
-			const card = el('section', undefined, 'fl-card fl-account');
-			const identity = el('div', undefined, 'fl-account-identity');
-			const avatar = el(
-				'span',
-				(a.email ?? a.owner?.name ?? '?').slice(0, 1).toUpperCase(),
-				'fl-account-avatar'
-			);
-			avatar.setAttribute('aria-hidden', 'true');
-			const accountName = el('div', undefined, 'fl-account-name');
-			accountName.append(el('h4', a.email ?? 'Finish connecting your account'));
-			const meta = el('div', undefined, 'fl-account-meta');
-			meta.append(el('span', a.owner ? `Owner: ${a.owner.name}` : 'Choose an account owner'));
-			if (a.purpose)
-				meta.append(
-					el(
-						'span',
-						a.purpose.kind === 'other'
-							? a.purpose.label
-							: a.purpose.kind === 'work'
-								? 'Work'
-								: 'Personal',
-						'fl-account-purpose'
-					)
-				);
-			accountName.append(meta);
-			const healthy = a.state === 'connected';
-			const state = el(
-				'span',
-				{
-					connected: 'Connected',
-					discovered: 'Not checked',
-					check_failed: 'Needs attention',
-					disconnected: 'Not connected',
-					pending: 'Finish sign-in',
-					failed: 'Sign-in incomplete'
-				}[a.state],
-				`fl-account-status${healthy ? ' fl-account-status-ok' : ''}`
-			);
-			identity.append(avatar, accountName, state);
-			card.append(identity);
-			const access = accessSummary(a, status.catalogs[a.provider]);
-			const body = el('div', undefined, 'fl-account-access');
-			if (access) {
-				body.append(el('h5', access.title));
-				if (access.items.length) {
-					const capabilities = el('ul', undefined, 'fl-access-list');
-					for (const capability of access.items) capabilities.append(el('li', capability));
-					body.append(capabilities);
-				}
-				if (access.note) body.append(el('p', access.note, 'fl-muted'));
-			} else
-				body.append(
-					el(
-						'p',
-						a.state === 'disconnected'
-							? 'This account is no longer connected.'
-							: 'Complete sign-in to connect this account.',
-						'fl-muted'
-					)
-				);
-			card.append(body);
-			if (a.connection_error)
-				card.append(el('p', a.connection_error.message, 'fl-error fl-account-error'));
-			else if (a.state === 'failed')
-				card.append(
-					el('p', 'Sign-in did not complete. Try connecting again.', 'fl-error fl-account-error')
-				);
-			const footer = el('div', undefined, 'fl-account-footer');
-			const actions = el('div', undefined, 'fl-actions');
-			const edit = button('Edit details', () => accountForm(a, true));
-			edit.disabled = !canWrite();
-			actions.append(edit);
-			const reconnect = button(
-				a.state === 'connected'
-					? 'Change access'
-					: a.state === 'failed' || a.state === 'pending'
-						? 'Finish sign-in'
-						: 'Reconnect',
-				() => accountForm(a),
-				a.state !== 'connected'
-			);
-			reconnect.disabled = !canWrite() || integration.setup.state !== 'ready';
-			footer.append(reconnect);
-			const check = button('Check connection', async () => {
-				await act(
-					check,
-					async () => {
-						await client.invoke('check', { account_id: a.id });
-						await load();
-					},
-					'Sign-in is working.'
-				);
-			});
-			check.disabled = !canWrite() || !a.email || a.state === 'disconnected';
-			actions.append(check);
-			if (a.state !== 'disconnected') {
-				const disconnect = button('Disconnect', () => {
-					closeForm();
-					const confirm = el('section', undefined, 'fl-card');
-					confirm.append(
-						el('h3', `Disconnect ${a.email ?? 'this incomplete sign-in'}?`),
-						el(
-							'p',
-							'This removes this account’s local credentials. Provider consent is not revoked, and other accounts are unchanged.'
-						)
-					);
-					const yes = button('Disconnect account', async () => {
-						await act(
-							yes,
-							async () => {
-								await client.invoke('disconnect', { account_id: a.id });
-								closeForm();
-								await load();
-							},
-							'Local credentials removed. Provider consent was not revoked.'
-						);
-					});
-					yes.disabled = !canWrite();
-					confirm.append(yes, button('Cancel', closeForm));
-					formHost.append(confirm);
-				});
-				disconnect.disabled = !canWrite();
-				actions.append(disconnect);
-			}
-			const manage = el('details', undefined, 'fl-account-manage');
-			manage.append(el('summary', 'Manage account'), actions);
-			footer.append(manage);
-			card.append(footer);
-			detail.append(card);
-		}
+		for (const a of list) detail.append(accountCard(a, integration));
 		if (activeLogin?.provider === selected) {
 			const login = loginCard();
 			if (login) detail.append(login);
 		}
-		detail.append(formHost, tool);
+		detail.append(formHost, technicalDetails(integration));
 		if (focused) focused.focus({ preventScroll: true });
 	}
 	void loadOwners().then(() => {

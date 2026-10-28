@@ -1,5 +1,6 @@
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
+import path from 'node:path';
 import { CallbackHandoff, callbackConfig, callbackURI, microsoftAuthority } from './callback.js';
 import type { ChildProcess } from 'node:child_process';
 import { Registry } from './store.js';
@@ -56,6 +57,7 @@ type Login = {
 	verifier?: string;
 	consuming?: boolean;
 	hosted?: boolean;
+	prior: Account | null;
 };
 export class LinkService {
 	readonly registry: Registry;
@@ -205,6 +207,7 @@ export class LinkService {
 			callback: _cb,
 			verifier: _v,
 			consuming: _p,
+			prior: _prior,
 			...result
 		} = l;
 		return result;
@@ -261,7 +264,7 @@ export class LinkService {
 		for (const l of this.logins.values()) {
 			this.login(l.id, l.actor);
 			if (
-				this.registry.get(l.account_id).provider === input.provider &&
+				l.provider === input.provider &&
 				['starting', 'awaiting_consent', 'verifying'].includes(l.state)
 			)
 				throw new Error('Finish or cancel the current sign-in for this integration first.');
@@ -309,7 +312,8 @@ export class LinkService {
 			message: 'Starting sign-in…',
 			audience,
 			email: input.email ?? '',
-			actor
+			actor,
+			prior
 		};
 		this.logins.set(l.id, l);
 		const callback = await this.hostedCallback(a);
@@ -506,6 +510,7 @@ export class LinkService {
 		return this.publicLogin(l);
 	}
 	private fail(l: Login, message: string, code = 'signin_failed') {
+		if (l.state === 'cancelled') return;
 		l.state = 'failed';
 		l.url = null;
 		l.code = null;
@@ -682,11 +687,14 @@ export class LinkService {
 			void l.callback?.cancel().catch(() => {});
 			l.url = null;
 			l.code = null;
-			l.message = 'Sign-in cancelled. No provider revocation was performed.';
-			const a = this.registry.get(l.account_id);
-			a.state = 'failed';
-			a.connection_error = { code: 'signin_cancelled', message: l.message };
-			this.registry.save(a);
+			l.message = 'You cancelled sign-in. Nothing changed.';
+			// The account returns to exactly what it was; a new account is not kept.
+			if (l.prior) this.registry.save(l.prior);
+			else {
+				this.registry.remove(l.account_id);
+				if (/^acct_[a-f0-9-]{36}$/.test(l.account_id))
+					rmSync(path.join(this.dir, 'accounts', l.account_id), { recursive: true, force: true });
+			}
 		}
 		return this.publicLogin(l);
 	}
@@ -925,8 +933,7 @@ export class LinkService {
 		if (
 			[...this.logins.values()].some(
 				(l) =>
-					this.registry.get(l.account_id).provider === provider &&
-					['starting', 'awaiting_consent', 'verifying'].includes(l.state)
+					l.provider === provider && ['starting', 'awaiting_consent', 'verifying'].includes(l.state)
 			)
 		)
 			throw new Error('Finish or cancel sign-in before changing the CLI.');

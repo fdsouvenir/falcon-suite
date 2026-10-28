@@ -26,6 +26,12 @@ export class Registry {
 		const i = accounts.findIndex((a) => a.id === account.id);
 		if (i < 0) accounts.push(account);
 		else accounts[i] = account;
+		this.write(accounts);
+	}
+	remove(id: string) {
+		this.write(this.list().filter((a) => a.id !== id));
+	}
+	private write(accounts: Account[]) {
 		const tmp = path.join(this.dir, `accounts.${randomUUID()}.tmp`);
 		writeFileSync(tmp, JSON.stringify({ version: 1, accounts }), { mode: 0o600 });
 		renameSync(tmp, path.join(this.dir, 'accounts.json'));

@@ -102,8 +102,8 @@ test('Microsoft device code is person-bound, private stderr stays hidden, and su
  for(let i=0;i<60;i++){await new Promise(r=>setTimeout(r,30));next=l.login(login.id,'fred');if(next.state==='connected')break;}
  assert.equal(next.state,'connected');const selected=await l.invocation(login.account_id);assert.deepEqual(selected.arguments,['--account',login.account_id]);assert.equal(selected.account.email,'microsoft@example.com');assert.deepEqual(selected.environment,{M365CLI_CONFIG_DIR:path.join(dir,'accounts',login.account_id,'.config','m365cli'),M365CLI_KEYRING_BACKEND:'file'});assert.equal(selected.granted_scopes,null);const incomplete=l.registry.get(login.account_id);incomplete.email=null;incomplete.state='check_failed';l.registry.save(incomplete);await l.disconnect(login.account_id);assert.equal(fs.existsSync(path.join(dir,'accounts',login.account_id,'m365-profile.json')),false);assert.equal(l.registry.get(login.account_id).state,'disconnected');
 `));
-test('cancelled Microsoft consent cannot become connected after the child exits', async () =>
+test('cancelled Microsoft consent cannot become connected after the child exits and changes nothing', async () =>
 	scenario(`
  const login=await l.start({provider:'microsoft',owner,purpose:{kind:'personal'},permissions:['mail-send']},'fred');
- l.cancel(login.id,'fred');await new Promise(r=>setTimeout(r,650));assert.equal(l.login(login.id,'fred').state,'cancelled');assert.equal(l.registry.get(login.account_id).state,'failed');
+ l.cancel(login.id,'fred');await new Promise(r=>setTimeout(r,650));assert.equal(l.login(login.id,'fred').state,'cancelled');assert.deepEqual(l.accounts(),[],'a cancelled new sign-in leaves nothing behind');
 `));
