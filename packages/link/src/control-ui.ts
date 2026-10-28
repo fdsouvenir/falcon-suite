@@ -164,6 +164,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	// Check connection results and open Manage sections stay with their card across refreshes.
 	const checks = new Map<string, { busy: boolean; error?: string }>();
 	const managing = new Set<string>();
+	// An account's own form or confirmation opens inside its card, replacing the card's actions.
+	let cardForm: { account: string; node: HTMLElement } | null = null;
 	const message = (s: string, error = false) => {
 		notification.textContent = s;
 		notification.classList.toggle('fl-error', error);
@@ -194,6 +196,16 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		formDisposer?.();
 		formDisposer = undefined;
 		formHost.replaceChildren();
+		if (cardForm) {
+			cardForm = null;
+			render();
+		}
+	}
+	function openInCard(account: Account, node: HTMLElement, title: HTMLElement) {
+		cardForm = { account: account.id, node };
+		render();
+		title.tabIndex = -1;
+		title.focus();
 	}
 	async function load() {
 		if (refreshing || disposed) return;
@@ -451,9 +463,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		if (!selected || !status) return;
 		closeForm();
 		const provider = selected;
-		const form = el('form', undefined, 'fl-form');
+		const form = el('form', undefined, account ? 'fl-form fl-card-form' : 'fl-form');
 		const title = el(
-			'h3',
+			account ? 'h5' : 'h3',
 			metadataOnly
 				? 'Account details'
 				: account
@@ -476,7 +488,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			if (account) form.append(revokeSentence(account));
 		}
 		const submit = metadataOnly
-			? el('button', 'Save details', 'fl-btn fl-btn-primary')
+			? el('button', 'Save', 'fl-btn fl-btn-primary')
 			: signInButton(provider);
 		submit.type = 'submit';
 		submit.disabled = !canWrite();
@@ -507,6 +519,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				});
 			});
 		});
+		if (account) return openInCard(account, form, title);
 		formHost.append(form);
 		title.tabIndex = -1;
 		title.focus();
@@ -763,9 +776,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const retryWith = retryInput(a);
 		const remove = button('Remove account', () => {
 			closeForm();
-			const confirm = el('section', undefined, 'fl-card');
+			const confirm = el('div', undefined, 'fl-card-form');
+			const title = el('h5', `Remove ${a.email ?? 'this account'}?`);
 			confirm.append(
-				el('h3', `Remove ${a.email ?? 'this account'}?`),
+				title,
 				el(
 					'p',
 					'This removes this account’s saved sign-in from this computer and removes it from this list. Other accounts are unchanged.'
@@ -780,8 +794,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				});
 			});
 			yes.disabled = !canWrite();
-			confirm.append(yes, button('Cancel', closeForm));
-			formHost.append(confirm);
+			const actions = el('div', undefined, 'fl-actions');
+			actions.append(yes, button('Cancel', closeForm));
+			confirm.append(actions);
+			openInCard(a, confirm, title);
 		});
 		remove.disabled = !canWrite();
 		if (word === 'Needs attention' || word === 'Not connected') {
@@ -834,14 +850,15 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		});
 		manage.append(el('summary', 'Manage account'), actions);
 		footer.append(manage);
-		card.append(footer);
+		card.append(cardForm?.account === a.id ? cardForm.node : footer);
 		return card;
 	}
 	function render() {
 		if (disposed) return;
-		const focused = formHost.contains(document.activeElement)
-			? (document.activeElement as HTMLElement)
-			: null;
+		const focused =
+			formHost.contains(document.activeElement) || cardForm?.node.contains(document.activeElement)
+				? (document.activeElement as HTMLElement)
+				: null;
 		layout.classList.toggle('fl-show-detail', selected !== null);
 		nav.replaceChildren(el('h2', 'Integrations', 'fl-nav-label'));
 		for (const id of ['google', 'microsoft'] as Provider[]) {

@@ -623,6 +623,23 @@
 	border-top: 1px solid var(--border);
 	background: var(--bg);
 }
+.fl-card-form {
+	margin: 0;
+	padding: var(--space-4) var(--space-5);
+	border: 0;
+	border-top: 1px solid var(--border);
+	border-radius: 0;
+	background: var(--bg);
+}
+.fl-card-form h5 {
+	font: inherit;
+	font-weight: 600;
+	color: var(--text-strong);
+	margin: 0 0 var(--space-3);
+}
+.fl-card-form > p {
+	margin: 0 0 var(--space-3);
+}
 .fl-account-manage {
 	margin-left: auto;
 	max-width: 100%;
@@ -655,7 +672,8 @@
 	.fl-account-access {
 		padding: 0 var(--space-4) var(--space-4);
 	}
-	.fl-account-footer {
+	.fl-account-footer,
+	.fl-card-form {
 		padding: var(--space-3) var(--space-4);
 	}
 	.fl-access-list {
