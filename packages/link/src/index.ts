@@ -9,7 +9,6 @@ import { contract } from './contract.js';
 import { overview } from './status.js';
 import { LinkService } from './service.js';
 import { PLUGIN_ID } from './identity.js';
-import { updateStatus } from './install.js';
 import { PERMISSIONS, BASE_SCOPES } from './model.js';
 
 function person(context: FeatureInvocationContext): string {
@@ -109,10 +108,6 @@ export default defineFeaturePlugin({
 			install(input, context) {
 				person(context);
 				return ready().install(input.provider);
-			},
-			updates(input, context) {
-				person(context);
-				return updateStatus(input.provider);
 			}
 		};
 	}

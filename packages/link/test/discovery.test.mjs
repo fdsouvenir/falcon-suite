@@ -31,10 +31,11 @@ test('private brief includes human accounts with compact scopes and failures; pu
 	try {
 		for (const [provider, version, binary] of [
 			['google', '0.47.0', 'gog'],
-			['microsoft', '2.0.0', 'm365cli']
+			['microsoft', '2.2.0', 'm365cli']
 		]) {
 			const folder = path.join(stateDir, 'falcon-link', 'tools', provider, version);
 			await mkdir(folder, { recursive: true });
+			await writeFile(path.join(folder, '..', 'current.json'), JSON.stringify({ version }));
 			await writeFile(
 				path.join(folder, binary),
 				`#!${process.execPath}\nconsole.log(JSON.stringify({accounts:[],profiles:[]}));\n`,

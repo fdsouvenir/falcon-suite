@@ -19,7 +19,7 @@ async function scenario(body) {
 			path.join(dir, 'm365cli'),
 			`#!${process.execPath}
 import fs from 'node:fs';import path from 'node:path';const args=process.argv.slice(2);const send=v=>console.log(JSON.stringify(v));const home=process.env.HOME;
-if(args[0]==='--version'){console.log('m365cli version v2.0.0 (fixture)');process.exit();}
+if(args[0]==='--version'){console.log('m365cli version v2.2.0 (fixture)');process.exit();}
 if(args.includes('login')){
  console.error('private diagnostic never reflected');console.error('To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code ABCDEF123 to authenticate.');
  const id=args[args.indexOf('--profile')+1];fs.writeFileSync(path.join(home,'m365-profile.json'),JSON.stringify({id}));

@@ -25,6 +25,7 @@ import {
 } from './cli.js';
 import { install } from './install.js';
 import { toolStatus } from './status.js';
+import { compareVersions } from './versions.js';
 
 type Login = {
 	provider: Provider;
@@ -256,18 +257,24 @@ export class LinkService {
 		const callback = callbackConfig(this.dir);
 		const tool = this.tool(a);
 		const env = this.env(a);
+		const name = a.provider === 'google' ? 'Google' : 'Microsoft';
 		let failure = {
-			code: 'cli_version',
-			message:
-				'The required CLI version could not be verified. Check connection setup before trying again.'
+			code: 'cli_unavailable',
+			message: `Install ${TOOLS[a.provider].binary} on this computer to connect ${name} accounts.`
 		};
 		try {
 			const version = await toolStatus(tool);
+			if (version.state === 'not_installed') throw new Error('CLI is not installed.');
 			if (
-				version.state !== 'installed' ||
-				version.version.replace(/^v/, '') !== TOOLS[a.provider].version
-			)
-				throw new Error('Install the qualified CLI version before connecting.');
+				version.state === 'installed' &&
+				(compareVersions(version.version, TOOLS[a.provider].minimum) ?? 0) < 0
+			) {
+				failure = {
+					code: 'cli_update_needed',
+					message: `Update needed to connect ${name} accounts.`
+				};
+				throw new Error('CLI is older than the minimum version.');
+			}
 			if (l.state !== 'starting') return this.publicLogin(l);
 			if (a.provider === 'google') {
 				failure = {

@@ -601,9 +601,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			cliCopy
 		);
 		const installButton = button(
-			integration.tool.state === 'not_installed'
-				? 'Install CLI'
-				: `Install / update to ${integration.qualified_version}`,
+			integration.tool.state === 'not_installed' ? 'Install CLI' : 'Update',
 			async () => {
 				await act(
 					installButton,
@@ -611,24 +609,15 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 						await client.invoke('install', { provider: selected! });
 						await load();
 					},
-					'Qualified CLI installed and verified. Existing credentials retained.'
+					'CLI installed and verified. Existing credentials retained.'
 				);
 			}
 		);
 		installButton.disabled = !canWrite();
-		const updates = el('p', 'Updates: not checked', 'fl-muted');
-		const checkUpdates = button('Check updates', async () => {
-			await act(checkUpdates, async () => {
-				const u = (await client.invoke('updates', { provider: selected! })) as any;
-				updates.textContent =
-					u.state === 'check_failed'
-						? 'Update check failed — latest version unknown.'
-						: `Latest release: ${u.latest_version}. Qualified version: ${u.qualified_version}.${u.qualification_pending ? ' Newer release requires qualification before installation.' : ''}`;
-			});
-		});
 		const toolActions = el('div', undefined, 'fl-actions');
-		toolActions.append(installButton, checkUpdates);
-		cliCopy.append(updates);
+		toolActions.append(installButton);
+		if (integration.latest_version)
+			cliCopy.append(el('p', `Latest release: ${integration.latest_version}`, 'fl-muted'));
 		cliRow.append(toolActions);
 		tool.append(cliRow);
 		const list = accounts.filter((a) => a.provider === selected);

@@ -5,8 +5,21 @@ import { homedir } from 'node:os';
 import type { CallbackConfig } from './callback.js';
 import type { Provider } from './model.js';
 export const TOOLS = {
-	google: { binary: 'gog', repo: 'openclaw/gogcli', version: '0.47.0', archive: 'gogcli' },
-	microsoft: { binary: 'm365cli', repo: 'fdsouvenir/m365cli', version: '2.0.0', archive: 'm365cli' }
+	google: {
+		binary: 'gog',
+		repo: 'openclaw/gogcli',
+		archive: 'gogcli',
+		// gogcli CHANGELOG 0.44.0: "Photos: upload media and list/create app-created albums with an
+		// explicit append-scope opt-in" — Link passes `--photos-scope append`.
+		minimum: '0.44.0'
+	},
+	microsoft: {
+		binary: 'm365cli',
+		repo: 'fdsouvenir/m365cli',
+		archive: 'm365cli',
+		// m365cli 2.1.0 added `auth workloads`, the grant report and `--audience auto`.
+		minimum: '2.1.0'
+	}
 } as const;
 export type Provision = {
 	google_credentials_file?: string;
@@ -55,17 +68,17 @@ export function executable(dir: string, provider: Provider): string {
 			return normal;
 		} catch {}
 	}
-	let version: string = tool.version;
+	let version: string | undefined;
 	try {
 		const current = JSON.parse(
 			readFileSync(path.join(dir, 'tools', provider, 'current.json'), 'utf8')
 		);
 		if (/^\d+\.\d+\.\d+$/.test(current.version)) version = current.version;
 	} catch {}
-	const managed = path.join(dir, 'tools', provider, version, tool.binary);
+	const managed = version ? path.join(dir, 'tools', provider, version, tool.binary) : '';
 	// After migration, removing the normal command must not reactivate a private copy.
 	const migrated = existsSync(path.join(dir, 'tools', provider, 'path-install.json'));
-	if (!migrated && existsSync(managed)) return managed;
+	if (!migrated && managed && existsSync(managed)) return managed;
 	// Prefer normal CLI installations. Private preview paths are legacy fallback only.
 	for (const folder of (process.env.PATH ?? '').split(path.delimiter)) {
 		if (!path.isAbsolute(folder)) continue;
@@ -115,7 +128,7 @@ export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 	return env;
 }
 
-// Only qualified gog stage markers become public facts. Never retain raw stderr,
+// Only recognized gog stage markers become public facts. Never retain raw stderr,
 // which can contain addresses, codes, tokens or provider diagnostic payloads.
 export class GoogleCompletionError extends Error {
 	constructor(

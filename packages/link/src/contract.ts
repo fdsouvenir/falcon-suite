@@ -99,13 +99,7 @@ export const contract = defineFeatureContract({
 		install: {
 			kind: 'action',
 			description:
-				'Install the qualified CLI release with checksum verification; preserve existing tools and credentials.',
-			input: obj({ provider }),
-			output: Type.Unknown()
-		},
-		updates: {
-			kind: 'query',
-			description: 'Check public provider release versions. Lookup failures remain unknown.',
+				'Install or update the CLI from its latest GitHub release with checksum verification; preserve existing tools and credentials.',
 			input: obj({ provider }),
 			output: Type.Unknown()
 		}

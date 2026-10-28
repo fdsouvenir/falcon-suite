@@ -40,10 +40,11 @@ async function scenario(run) {
 		);
 		for (const [provider, version, binary] of [
 			['google', '0.47.0', 'gog'],
-			['microsoft', '2.0.0', 'm365cli']
+			['microsoft', '2.2.0', 'm365cli']
 		]) {
 			const folder = path.join(dir, 'tools', provider, version);
 			await mkdir(folder, { recursive: true });
+			await writeFile(path.join(folder, '..', 'current.json'), JSON.stringify({ version }));
 			await writeFile(
 				path.join(folder, binary),
 				`#!${process.execPath}
