@@ -79,42 +79,45 @@ try {
 				'Callback configuration must identify an HTTPS service, pinned version, Office and private token file.'
 			);
 	}
-	// Native Gateway config supplies the same persisted secret to Link and normal agent exec.
-	// Never rotate an existing key or overwrite conflicting provider-specific passwords.
+	// Native Gateway config supplies each CLI's keyring password to Link and normal agent exec.
+	// Existing values are never overwritten or rotated.
 	const configPath =
 		process.env.OPENCLAW_CONFIG_PATH || path.join(path.dirname(dir), 'openclaw.json');
 	const config = JSON.parse(readFileSync(configPath, 'utf8'));
 	const vars = { ...config.env, ...config.env?.vars };
-	const names = [
-		'FALCON_LINK_KEYRING_PASSWORD',
-		'GOG_KEYRING_PASSWORD',
-		'M365CLI_KEYRING_PASSWORD'
-	];
-	const keys = names.map((k) => vars[k]).filter((v) => typeof v === 'string' && v.length);
-	if (new Set(keys).size > 1)
-		throw new Error('Conflicting existing keyring passwords; no password changed.');
-	if (!keys.length) {
-		let accounts;
-		try {
-			accounts = JSON.parse(readFileSync(path.join(dir, 'accounts.json'), 'utf8'));
-		} catch (e) {
-			if (e.code !== 'ENOENT') throw e;
-		}
-		if (accounts?.accounts?.length || accounts?.length)
-			throw new Error(
-				'Existing accounts require their original keyring password; no new password generated.'
-			);
+	const present = (name) => typeof vars[name] === 'string' && vars[name].length > 0;
+	let accounts = [];
+	try {
+		const data = JSON.parse(readFileSync(path.join(dir, 'accounts.json'), 'utf8'));
+		accounts = Array.isArray(data?.accounts) ? data.accounts : [];
+	} catch (e) {
+		if (e.code !== 'ENOENT') throw e;
 	}
 	const pluginId = path.basename(dir);
 	if (!['falcon-link', 'falcon-link-preview'].includes(pluginId))
 		throw new Error('Provision the named Falcon Link plugin state directory.');
-	const password = keys[0] ?? randomBytes(32).toString('base64url');
+	const settings = [];
+	for (const [name, provider, label] of [
+		['GOG_KEYRING_PASSWORD', 'google', 'Google'],
+		['M365CLI_KEYRING_PASSWORD', 'microsoft', 'Microsoft']
+	]) {
+		if (present(name)) continue;
+		if (present('FALCON_LINK_KEYRING_PASSWORD')) {
+			settings.push({ path: 'env.vars.' + name, value: vars.FALCON_LINK_KEYRING_PASSWORD });
+			continue;
+		}
+		if (accounts.some((a) => a?.provider === provider && !a.external && a.state !== 'disconnected'))
+			throw new Error(
+				`Existing ${label} accounts require their original keyring password; no new password generated.`
+			);
+		settings.push({ path: 'env.vars.' + name, value: randomBytes(32).toString('base64url') });
+	}
 	mkdirSync(dir, { recursive: true, mode: 0o700 });
 	const batch = path.join(dir, `.environment-${randomUUID()}.json`);
 	writeFileSync(
 		batch,
 		JSON.stringify([
-			...names.map((name) => ({ path: 'env.vars.' + name, value: password })),
+			...settings,
 			{ path: `plugins.entries.${pluginId}.hooks.allowConversationAccess`, value: true }
 		]),
 		{ mode: 0o600 }
@@ -137,7 +140,7 @@ try {
 	writeFileSync(tmp, JSON.stringify(next), { mode: 0o600 });
 	renameSync(tmp, target);
 	console.log(
-		'Operator configuration merged. The Office keyring password is supplied to Link and both CLI environments; the private account/usage hook is enabled. Restart the Gateway and verify through the agent command tool.'
+		'Operator configuration merged. GOG_KEYRING_PASSWORD and M365CLI_KEYRING_PASSWORD are set in the Office environment and the account hook is enabled. Restart the Gateway and verify through the agent command tool.'
 	);
 } catch (e) {
 	console.error(e instanceof SyntaxError ? 'Invalid configuration JSON.' : e.message);

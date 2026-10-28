@@ -36,9 +36,14 @@ export function provision(dir: string): Provision {
 		return {};
 	}
 }
+// Each CLI uses its own keyring password variable; Link's variable is the fallback.
+const KEYRING = { google: 'GOG_KEYRING_PASSWORD', microsoft: 'M365CLI_KEYRING_PASSWORD' } as const;
+export function keyringPassword(provider: Provider) {
+	return process.env[KEYRING[provider]] || process.env.FALCON_LINK_KEYRING_PASSWORD;
+}
 export function readiness(dir: string, provider: Provider) {
 	const p = provision(dir);
-	let ready = !!process.env.FALCON_LINK_KEYRING_PASSWORD && process.platform === 'linux';
+	let ready = !!keyringPassword(provider);
 	if (provider === 'google') {
 		try {
 			const raw = JSON.parse(readFileSync(p.google_credentials_file ?? '', 'utf8'));
@@ -55,8 +60,8 @@ export function readiness(dir: string, provider: Provider) {
 	return {
 		state: ready ? 'ready' : 'setup_required',
 		message: ready
-			? 'Connection setup ready'
-			: `${provider === 'google' ? 'Google' : 'Microsoft'} connection setup is incomplete. Contact your administrator.`
+			? ''
+			: `${provider === 'google' ? 'Google' : 'Microsoft'} sign-in isn't set up on this Office. Contact your administrator.`
 	};
 }
 export function executable(dir: string, provider: Provider): string {
@@ -108,10 +113,10 @@ export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 		GOG_STATE_DIR: path.join(home, 'gog-state'),
 		GOG_CACHE_DIR: path.join(home, 'gog-cache'),
 		GOG_KEYRING_BACKEND: 'file',
-		GOG_KEYRING_PASSWORD: process.env.FALCON_LINK_KEYRING_PASSWORD,
+		GOG_KEYRING_PASSWORD: keyringPassword('google'),
 		M365CLI_CONFIG_DIR: path.join(home, '.config', 'm365cli'),
 		M365CLI_KEYRING_BACKEND: 'file',
-		M365CLI_KEYRING_PASSWORD: process.env.FALCON_LINK_KEYRING_PASSWORD,
+		M365CLI_KEYRING_PASSWORD: keyringPassword('microsoft'),
 		M365CLI_CLIENT_ID: provision(dir).microsoft_client_id
 	};
 	// Do not inherit account/client selection or service-account overrides from the host.

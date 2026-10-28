@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-test('provisioning preserves the Office key and delivers both CLI variables without printing it', async () => {
+test('provisioning fills missing CLI keyring variables from the Office key, never overwrites one, and refuses a new key for existing accounts', async () => {
 	const root = await mkdtemp(path.join(tmpdir(), 'link-provision-'));
 	try {
 		const dir = path.join(root, 'falcon-link'),
@@ -41,11 +41,22 @@ const fs=require('fs');const p=process.env.OPENCLAW_CONFIG_PATH,c=JSON.parse(fs.
 			assert.equal(c.env.vars.UNRELATED, 'keep');
 			assert.equal(c.plugins.entries['falcon-link'].hooks.allowConversationAccess, true);
 		}
-		const conflict = JSON.parse(await readFile(config, 'utf8'));
-		conflict.env.vars.GOG_KEYRING_PASSWORD = 'different-existing-key';
-		await writeFile(config, JSON.stringify(conflict));
+		const different = JSON.parse(await readFile(config, 'utf8'));
+		different.env.vars.GOG_KEYRING_PASSWORD = 'different-existing-key';
+		await writeFile(config, JSON.stringify(different));
+		execFileSync(process.execPath, args, { env, stdio: 'pipe' });
+		assert.deepEqual(JSON.parse(await readFile(config, 'utf8')), different);
+		const missing = { env: { vars: { GOG_KEYRING_PASSWORD: key } } };
+		await writeFile(config, JSON.stringify(missing));
+		await writeFile(
+			path.join(dir, 'accounts.json'),
+			JSON.stringify({
+				version: 1,
+				accounts: [{ id: 'acct_x', provider: 'microsoft', state: 'connected' }]
+			})
+		);
 		assert.throws(() => execFileSync(process.execPath, args, { env, stdio: 'pipe' }));
-		assert.deepEqual(JSON.parse(await readFile(config, 'utf8')), conflict);
+		assert.deepEqual(JSON.parse(await readFile(config, 'utf8')), missing);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
