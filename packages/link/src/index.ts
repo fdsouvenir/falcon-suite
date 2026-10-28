@@ -9,7 +9,7 @@ import { contract } from './contract.js';
 import { overview } from './status.js';
 import { LinkService } from './service.js';
 import { PLUGIN_ID } from './identity.js';
-import { PERMISSIONS, BASE_SCOPES } from './model.js';
+import { BASE_SCOPES, type Provider } from './model.js';
 
 // Account facts are omitted in group, channel and room conversations and provided elsewhere.
 const shared = (sessionKey: string) =>
@@ -59,9 +59,13 @@ export default defineFeaturePlugin({
 		return {
 			async status() {
 				const l = ready();
+				const [status, ...catalogs] = await Promise.all([
+					overview(l.dir),
+					...(['google', 'microsoft'] as Provider[]).map((p) => l.catalog(p).catch(() => null))
+				]);
 				return {
-					...(await overview(l.dir)),
-					permissions: PERMISSIONS,
+					...status,
+					catalogs: { google: catalogs[0], microsoft: catalogs[1] },
 					baseline_scopes: BASE_SCOPES
 				};
 			},

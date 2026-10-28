@@ -5,11 +5,12 @@ import { PLUGIN_ID, PLUGIN_VERSION } from './identity.js';
 import type { Overview, ToolStatus } from './status.js';
 import {
 	type Account,
+	type Catalog,
 	type Owner,
 	type Purpose,
 	type Provider,
-	type Permission,
-	requestedScopes
+	offeredSelection,
+	selectionScopes
 } from './model.js';
 import './control-ui.css';
 import { accessSummary } from './access-summary.js';
@@ -81,7 +82,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		(window.matchMedia('(max-width: 700px)').matches ? null : 'google');
 	let status:
 		| (Overview & {
-				permissions: Record<Provider, Permission[]>;
+				catalogs: Record<Provider, Catalog | null>;
 				baseline_scopes: Record<Provider, string[]>;
 		  })
 		| null = null;
@@ -251,6 +252,89 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			})
 		};
 	}
+	// One row per service: a single choice (Off or a level), plus an addon where the provider
+	// grants it separately. Scope strings appear only under Technical details.
+	function permissionRows(provider: Provider, saved: string[]) {
+		const catalog = status!.catalogs[provider];
+		const node = el('fieldset', undefined, 'fl-permissions');
+		node.append(el('legend', 'Access'));
+		const pickers: (() => string[])[] = [];
+		const technical = el('details', undefined, 'fl-technical');
+		const scopeList = el('p', undefined, 'fl-scopes');
+		technical.append(el('summary', 'Technical details'), scopeList);
+		const update = () => {
+			const ids = pickers.flatMap((p) => p());
+			try {
+				scopeList.textContent = selectionScopes(provider, catalog!, ids).join('\n');
+			} catch {
+				scopeList.textContent = 'Choose access for at least one service.';
+			}
+		};
+		if (!catalog) {
+			node.append(el('p', 'Permission choices could not be read from the CLI.', 'fl-muted'));
+			return { node, selected: () => [] as string[] };
+		}
+		const initial = new Set(offeredSelection(provider, catalog, saved));
+		let more: HTMLElement | null = null;
+		for (const row of catalog.rows) {
+			const line = el('div', undefined, 'fl-permission');
+			const copy = el('div', undefined, 'fl-permission-copy');
+			const name = el('span', row.label, 'fl-permission-name');
+			copy.append(name);
+			const description = el('p', '', 'fl-muted');
+			const notes = [
+				row.work_only ? 'Work or school accounts only' : '',
+				row.admin_consent ? "Needs approval from your organization's administrator" : '',
+				row.note ?? ''
+			].filter(Boolean);
+			const choice = select(
+				[{ value: '', label: 'Off' }, ...row.levels.map((l) => ({ value: l.id, label: l.label }))],
+				row.levels.find((l) => initial.has(l.id))?.id ?? ''
+			);
+			choice.setAttribute('aria-label', row.label);
+			const describe = () => {
+				description.textContent = row.levels.find((l) => l.id === choice.value)?.description ?? '';
+			};
+			choice.addEventListener('change', () => {
+				describe();
+				update();
+			});
+			describe();
+			copy.append(description, ...notes.map((n) => el('p', n, 'fl-muted fl-permission-note')));
+			const controls = el('div', undefined, 'fl-permission-controls');
+			if (row.levels.length) controls.append(choice);
+			let addon: HTMLInputElement | null = null;
+			if (row.addon) {
+				addon = el('input');
+				addon.type = 'checkbox';
+				addon.checked = initial.has(row.addon.id);
+				addon.addEventListener('change', update);
+				const label = el('label', undefined, 'fl-check');
+				label.append(addon, el('span', row.addon.label));
+				controls.append(label);
+			}
+			pickers.push(() => [
+				...(choice.value && row.levels.length ? [choice.value] : []),
+				...(addon?.checked && row.addon ? [row.addon.id] : [])
+			]);
+			line.append(copy, controls);
+			if (row.group === 'more') {
+				if (!more) {
+					const group = el('details', undefined, 'fl-more');
+					group.append(
+						el('summary', `More ${provider === 'google' ? 'Google' : 'Microsoft'} services`)
+					);
+					more = el('div');
+					group.append(more);
+					node.append(group);
+				}
+				more.append(line);
+			} else node.append(line);
+		}
+		node.append(technical);
+		update();
+		return { node, selected: () => pickers.flatMap((p) => p()) };
+	}
 	function accountForm(account?: Account, metadataOnly = false) {
 		if (!selected || !status) return;
 		closeForm();
@@ -273,44 +357,12 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		email.value = account?.email ?? '';
 		email.required = provider === 'google';
 		email.readOnly = !!account?.email && provider === 'google';
-		const audience = select([
-			{ value: 'consumer', label: 'Personal Microsoft account' },
-			{ value: 'enterprise', label: 'Work or school account' }
-		]);
-		const permissions = el('fieldset');
-		permissions.append(el('legend', 'Connection permissions'));
-		const chosen = new Set(account?.requested ?? []);
-		const scopes = el('div', undefined, 'fl-scopes');
-		const review = () => {
-			scopes.replaceChildren(el('strong', 'Provider permissions to request'));
-			try {
-				scopes.append(el('p', requestedScopes(provider, [...chosen]).join('\n')));
-			} catch {
-				scopes.append(el('p', 'Select at least one permission. Nothing is preselected.'));
-			}
-		};
-		for (const p of status.permissions[provider]) {
-			const check = el('input');
-			check.type = 'checkbox';
-			check.value = p.id;
-			check.checked = chosen.has(p.id);
-			check.addEventListener('change', () => {
-				if (check.checked) chosen.add(p.id);
-				else chosen.delete(p.id);
-				review();
-			});
-			const label = el('label', undefined, 'fl-check');
-			label.append(check, el('span', p.label));
-			permissions.append(label);
-		}
-		review();
+		const rows = permissionRows(provider, account?.requested ?? []);
+		const permissions = rows.node;
 		if (!metadataOnly) {
 			form.append(
-				provider === 'google'
-					? field('Google account address', email)
-					: field('Microsoft account type', audience),
-				permissions,
-				scopes
+				...(provider === 'google' ? [field('Google account address', email)] : []),
+				permissions
 			);
 			form.append(
 				el(
@@ -350,7 +402,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					await load();
 					return;
 				}
-				if (!chosen.size) throw new Error('Select at least one connection permission.');
+				if (!rows.selected().length) throw new Error('Choose access for at least one service.');
 				closePendingTab();
 				signInOpened = false;
 				signInTab = window.open('about:blank', '_blank');
@@ -364,11 +416,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					const l = await client.invoke('start', {
 						provider,
 						...values,
-						permissions: [...chosen],
+						permissions: rows.selected(),
 						...(account ? { account_id: account.id } : {}),
-						...(provider === 'google'
-							? { email: email.value.trim() }
-							: { audience: audience.value as 'consumer' | 'enterprise' })
+						...(provider === 'google' ? { email: email.value.trim() } : {})
 					});
 					if (disposed) {
 						closePendingTab();
@@ -695,7 +745,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			);
 			identity.append(avatar, accountName, state);
 			card.append(identity);
-			const access = accessSummary(a);
+			const access = accessSummary(a, status.catalogs[a.provider]);
 			const body = el('div', undefined, 'fl-account-access');
 			if (access) {
 				body.append(el('h5', access.title));

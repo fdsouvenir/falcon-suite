@@ -6,13 +6,14 @@ import { Registry } from './store.js';
 import { existingAccounts } from './discover.js';
 import {
 	type Account,
+	type Catalog,
 	type Owner,
 	type Provider,
 	type Purpose,
-	requestedScopes,
-	validateMetadata,
-	PERMISSIONS
+	selectionScopes,
+	validateMetadata
 } from './model.js';
+import { googleCatalog, googleCommand, microsoftCatalog, workOnly } from './catalog.js';
 import {
 	accountEnvironment,
 	executable,
@@ -27,6 +28,9 @@ import { install } from './install.js';
 import { toolStatus } from './status.js';
 import { compareVersions } from './versions.js';
 
+const ADMIN_APPROVAL = /AADSTS(?:65001|90094)\b|\b(?:65001|90094)\b/;
+const ADMIN_MESSAGE =
+	'Your organization needs an administrator to approve Falcon Link before this account can connect.';
 type Login = {
 	provider: Provider;
 	id: string;
@@ -43,7 +47,7 @@ type Login = {
 	url: string | null;
 	code: string | null;
 	message: string;
-	audience: 'consumer' | 'enterprise';
+	audience: string[];
 	email: string;
 	child?: ChildProcess;
 	args?: string[];
@@ -71,6 +75,26 @@ export class LinkService {
 	}
 	accounts() {
 		return this.registry.list();
+	}
+	// Permission rows come from each CLI's own catalog, cached until the CLI changes.
+	private catalogs = new Map<Provider, Promise<Catalog>>();
+	catalog(provider: Provider): Promise<Catalog> {
+		let catalog = this.catalogs.get(provider);
+		if (!catalog) {
+			catalog = json(
+				executable(this.dir, provider),
+				provider === 'google'
+					? ['auth', 'services', '--json', '--no-input']
+					: ['auth', 'workloads', '--json', '--no-input'],
+				process.env,
+				5000
+			).then((out) =>
+				provider === 'google' ? googleCatalog(out?.services) : microsoftCatalog(out?.workloads)
+			);
+			this.catalogs.set(provider, catalog);
+			catalog.catch(() => this.catalogs.delete(provider));
+		}
+		return catalog;
 	}
 	discoveryUnavailable: Provider[] = [];
 	private discoveryAt = 0;
@@ -181,23 +205,25 @@ export class LinkService {
 			purpose: Purpose;
 			permissions: string[];
 			email?: string;
-			audience?: 'consumer' | 'enterprise';
 		},
 		actor: string
 	) {
 		validateMetadata(input.owner, input.purpose);
-		requestedScopes(input.provider, input.permissions);
+		const catalog = await this.catalog(input.provider).catch(() => {
+			throw new Error('Permission choices could not be read from the CLI. Try again.');
+		});
+		const scopes = selectionScopes(input.provider, catalog, input.permissions);
 		if (readiness(this.dir, input.provider).state !== 'ready')
 			throw new Error('Connection setup is incomplete. Contact your administrator.');
 		if (input.provider === 'google' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email ?? ''))
 			throw new Error('Enter the Google email address you intend to connect.');
-		const audience = input.audience ?? 'consumer';
-		if (
-			input.provider === 'microsoft' &&
-			audience === 'consumer' &&
-			input.permissions.some((p) => ['excel', 'groups'].includes(p))
-		)
-			throw new Error('Excel and Groups require a business account.');
+		// m365cli detects the account type itself, except where only work or school accounts
+		// qualify or the operator provisioned a tenant.
+		const tenant = provision(this.dir).microsoft_tenant;
+		const audience =
+			tenant || workOnly(catalog, input.permissions)
+				? ['--audience', 'enterprise', ...(tenant ? ['--tenant', tenant] : [])]
+				: ['--audience', 'auto'];
 		// Consent is serialized per provider. Google remote state reuse must not bind a second
 		// pending account to the first account's callback.
 		for (const l of this.logins.values()) {
@@ -294,37 +320,17 @@ export class LinkService {
 					],
 					env
 				);
-				const selected = new Set(a.requested);
-				const gmail = a.requested.filter((p) => p.startsWith('gmail-'));
-				// --extra-scopes is used only for Google's compose bundle; other services stay read-only.
-				const services = gmail.length ? ['gmail'] : a.requested;
-				const extra = a.requested
-					.filter((p) => !p.startsWith('gmail-'))
-					.flatMap((id) => PERMISSIONS.google.find((p) => p.id === id)!.scopes);
-				if (selected.has('gmail-drafts'))
-					extra.push('https://www.googleapis.com/auth/gmail.compose');
-				const gmailScope =
-					(gmail.includes('gmail-read') || gmail.includes('gmail-drafts')) &&
-					gmail.includes('gmail-send')
-						? 'read-send'
-						: gmail.includes('gmail-send')
-							? 'send'
-							: 'readonly';
+				const command = googleCommand(catalog, a.requested);
 				const args = [
 					'auth',
 					'add',
 					l.email,
-					'--services',
-					services.join(','),
+					...command.args,
 					'--remote',
 					'--force-consent',
 					'--json',
 					'--no-input'
 				];
-				if (gmail.length) {
-					args.push('--gmail-scope', gmailScope);
-					if (extra.length) args.push('--extra-scopes', extra.join(','));
-				} else args.push('--readonly');
 				if (callback) args.push('--redirect-uri', callbackURI(callback, 'google'));
 				l.args = args;
 				failure = {
@@ -342,7 +348,7 @@ export class LinkService {
 				)
 					throw new Error('Provider authorization URL could not be verified.');
 				const actual = new Set((url.searchParams.get('scope') ?? '').split(' '));
-				const wanted = new Set(requestedScopes('google', a.requested));
+				const wanted = new Set(command.scopes);
 				failure = {
 					code: 'google_permission_mismatch',
 					message:
@@ -377,13 +383,13 @@ export class LinkService {
 				const p = provision(this.dir);
 				const state = randomBytes(32).toString('base64url');
 				l.verifier = randomBytes(32).toString('base64url');
-				const url = new URL(microsoftAuthority(p, audience) + '/authorize');
+				const url = new URL(microsoftAuthority(p) + '/authorize');
 				url.search = new URLSearchParams({
 					client_id: p.microsoft_client_id!,
 					response_type: 'code',
 					response_mode: 'query',
 					redirect_uri: callbackURI(callback, 'microsoft'),
-					scope: requestedScopes('microsoft', a.requested).join(' '),
+					scope: scopes.join(' '),
 					state,
 					code_challenge: createHash('sha256').update(l.verifier).digest('base64url'),
 					code_challenge_method: 'S256',
@@ -410,15 +416,12 @@ export class LinkService {
 					'login',
 					'--profile',
 					a.id,
-					'--audience',
-					audience,
+					...audience,
 					'--scope-workloads',
 					a.requested.join(','),
 					'--no-input',
 					'--json'
 				];
-				const tenant = provision(this.dir).microsoft_tenant;
-				if (tenant && audience === 'enterprise') args.push('--tenant', tenant);
 				let stderr = '';
 				l.child = deviceLogin(
 					tool,
@@ -435,17 +438,15 @@ export class LinkService {
 							l.url = url[0];
 							l.code = code[1];
 							l.state = 'awaiting_consent';
-							l.message =
-								'Open Microsoft sign-in and enter this code. Business accounts may require administrator consent.';
+							l.message = 'Open Microsoft sign-in and enter this code.';
 						}
 					},
 					(success) => {
 						if (!['starting', 'awaiting_consent'].includes(l.state)) return;
 						if (!success) {
-							this.fail(
-								l,
-								'Sign-in did not complete. Consent may be denied, expired, or require a tenant administrator. Try a new sign-in.'
-							);
+							if (ADMIN_APPROVAL.test(stderr))
+								this.fail(l, ADMIN_MESSAGE, 'admin_approval_required');
+							else this.fail(l, 'Sign-in did not complete. Try again.');
 							return;
 						}
 						l.state = 'verifying';
@@ -454,8 +455,7 @@ export class LinkService {
 						void this.check(a.id, true)
 							.then(() => {
 								l.state = 'connected';
-								l.message =
-									'Account identity verified. Granted scope readback is unavailable for Microsoft; selected permissions are recorded as requested only.';
+								l.message = 'Account connected.';
 							})
 							.catch(() =>
 								this.fail(
@@ -533,8 +533,7 @@ export class LinkService {
 			l.state = 'connected';
 			l.url = null;
 			l.code = null;
-			l.message =
-				'Account identity and token refresh verified. Scopes are recorded from the CLI token store, not independently read back from Google.';
+			l.message = 'Account connected.';
 		} catch (e) {
 			if (e instanceof GoogleCompletionError) failure = { code: e.code, message: e.message };
 			this.fail(l, failure.message, failure.code);
@@ -575,24 +574,29 @@ export class LinkService {
 				code: result.code,
 				redirect_uri: callbackURI(l.callback.config, 'microsoft'),
 				code_verifier: l.verifier!,
-				scope: requestedScopes('microsoft', a.requested).join(' ')
+				scope: selectionScopes('microsoft', await this.catalog('microsoft'), a.requested).join(' ')
 			});
 			if (secret) body.set('client_secret', secret);
-			const response = await fetch(microsoftAuthority(p, l.audience) + '/token', {
+			const response = await fetch(microsoftAuthority(p) + '/token', {
 				method: 'POST',
 				body,
 				redirect: 'error',
 				signal: AbortSignal.timeout(20000)
 			});
-			const token = (await response.json()) as { refresh_token?: string };
+			const token = (await response.json()) as {
+				refresh_token?: string;
+				error_codes?: unknown;
+				error_description?: unknown;
+			};
+			if (ADMIN_APPROVAL.test(JSON.stringify([token.error_codes, token.error_description])))
+				throw new Error(ADMIN_MESSAGE);
 			if (!response.ok || !token.refresh_token) throw new Error('exchange');
 			const args = [
 				'auth',
 				'login',
 				'--profile',
 				a.id,
-				'--audience',
-				l.audience,
+				...l.audience,
 				'--scope-workloads',
 				a.requested.join(','),
 				'--refresh-token-env',
@@ -601,8 +605,6 @@ export class LinkService {
 				'--json'
 			];
 			if (secret) args.push('--client-secret-env', 'FALCON_LINK_LOGIN_SECRET');
-			if (p.microsoft_tenant && l.audience === 'enterprise')
-				args.push('--tenant', p.microsoft_tenant);
 			await json(
 				this.tool(a),
 				args,
@@ -616,13 +618,16 @@ export class LinkService {
 			await this.check(a.id, true);
 			l.state = 'connected';
 			l.message = 'Account connected.';
-		} catch {
+		} catch (e) {
 			if (['awaiting_consent', 'verifying'].includes(l.state))
-				this.fail(
-					l,
-					'Sign-in did not complete. Start again, or contact your administrator to check the callback and provider application setup.',
-					'callback_completion_failed'
-				);
+				if ((e as Error).message === ADMIN_MESSAGE)
+					this.fail(l, ADMIN_MESSAGE, 'admin_approval_required');
+				else
+					this.fail(
+						l,
+						'Sign-in did not complete. Try again, or contact your administrator if it keeps failing.',
+						'callback_completion_failed'
+					);
 		} finally {
 			l.consuming = false;
 			if (l.state !== 'awaiting_consent') {
@@ -698,7 +703,19 @@ export class LinkService {
 					a.provider_id = out.identity.id;
 					a.email = out.identity.mail || out.identity.userPrincipalName || null;
 					if (!a.email) throw new Error('Provider did not return an account address.');
-					a.granted_scopes = null;
+					if (['consumer', 'enterprise'].includes(out.audience)) a.audience = out.audience;
+					// m365cli reads the current Graph grant; `unknown` is never shown as granted.
+					const known = out.grant?.status === 'known' && Array.isArray(out.grant.scopes);
+					a.granted_scopes = known
+						? out.grant.scopes.filter((s: unknown) => typeof s === 'string')
+						: null;
+					a.grant = {
+						status: known ? 'known' : 'unknown',
+						selected_not_granted:
+							known && Array.isArray(out.grant.selected_not_granted)
+								? out.grant.selected_not_granted.filter((s: unknown) => typeof s === 'string')
+								: null
+					};
 					a.recorded_scopes = null;
 				}
 				a.owner = this.registry.get(id).owner;
@@ -787,7 +804,7 @@ export class LinkService {
 		this.registry.save(a);
 		return a;
 	}
-	invocation(id: string) {
+	async invocation(id: string) {
 		const a = this.registry.get(id);
 		if (!['connected', 'discovered'].includes(a.state) || !a.email)
 			throw new Error('Account is not connected.');
@@ -844,7 +861,9 @@ export class LinkService {
 			inherited_environment: [
 				a.provider === 'google' ? 'GOG_KEYRING_PASSWORD' : 'M365CLI_KEYRING_PASSWORD'
 			],
-			requested_scopes: requestedScopes(a.provider, a.requested),
+			requested_scopes: await this.catalog(a.provider)
+				.then((c) => selectionScopes(a.provider, c, a.requested))
+				.catch(() => null),
 			granted_scopes: a.granted_scopes
 		};
 	}
@@ -857,7 +876,11 @@ export class LinkService {
 			)
 		)
 			throw new Error('Finish or cancel sign-in before changing the CLI.');
-		return install(this.dir, provider);
+		try {
+			return await install(this.dir, provider);
+		} finally {
+			this.catalogs.delete(provider);
+		}
 	}
 	stop() {
 		for (const l of this.logins.values()) {
@@ -868,4 +891,3 @@ export class LinkService {
 		}
 	}
 }
-export { PERMISSIONS, TOOLS };

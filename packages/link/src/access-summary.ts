@@ -1,11 +1,11 @@
-import { BASE_SCOPES, requestedScopes, type Account } from './model.js';
+import { BASE_SCOPES, describeSelection, type Account, type Catalog } from './model.js';
 
 // Translate known capabilities, not scope names or selected permission IDs, into user-facing text.
 const accessLabels: Record<string, string> = {
 	'gmail.readonly': 'Read email',
 	'gmail.send': 'Send email',
 	'gmail.compose': 'Create email drafts and send email',
-	'gmail.modify': 'Read, organize and send email',
+	'gmail.modify': 'Read, send, organize and delete (to trash) email',
 	'https://mail.google.com/': 'Manage all email, including permanent deletion',
 	'gmail.settings.basic': 'Manage email settings',
 	'gmail.settings.sharing': 'Manage email sharing settings',
@@ -20,9 +20,43 @@ const accessLabels: Record<string, string> = {
 	'drive.file': 'Manage files opened with this app',
 	spreadsheets: 'Manage spreadsheets',
 	documents: 'Manage documents',
+	'documents.readonly': 'View documents',
+	'spreadsheets.readonly': 'View spreadsheets',
+	presentations: 'Manage presentations',
+	'presentations.readonly': 'View presentations',
+	tasks: 'Manage tasks',
+	'tasks.readonly': 'View tasks',
+	'forms.body': 'Manage forms',
+	'forms.body.readonly': 'View forms',
+	'forms.responses.readonly': 'View form responses',
+	'meetings.space.created': 'Manage meetings created by this app',
+	'meetings.space.readonly': 'View meetings',
+	'meetings.space.settings': 'Manage meeting settings',
+	'script.projects': 'Manage Apps Script projects',
+	'script.projects.readonly': 'View Apps Script projects',
+	'script.deployments': 'Manage Apps Script deployments',
+	'script.deployments.readonly': 'View Apps Script deployments',
+	'script.processes': 'View Apps Script runs',
+	'analytics.readonly': 'View Analytics data',
+	webmasters: 'Manage Search Console',
+	'webmasters.readonly': 'View Search Console data',
+	'drive.activity.readonly': 'View Drive activity',
+	'drive.labels.readonly': 'View Drive labels',
+	'youtube.readonly': 'View YouTube account',
+	'photoslibrary.readonly.appcreateddata': 'View photos added by this app',
+	'photoslibrary.appendonly': 'Upload photos and create albums',
+	'chat.spaces': 'Manage Chat spaces',
+	'chat.spaces.readonly': 'View Chat spaces',
+	'chat.messages': 'Read and send Chat messages',
+	'chat.messages.readonly': 'Read Chat messages',
+	'chat.memberships': 'Manage Chat memberships',
+	'chat.memberships.readonly': 'View Chat memberships',
+	'chat.users.readstate.readonly': 'View Chat read state',
+	'chat.messages.reactions.create': 'Add Chat reactions',
+	'chat.messages.reactions.readonly': 'View Chat reactions',
 	'Mail.Read': 'Read email',
 	'Mail.Send': 'Send email',
-	'Mail.ReadWrite': 'Read, create, modify and delete email (including drafts)',
+	'Mail.ReadWrite': 'Read, organize and delete (to Deleted Items) email, and write drafts',
 	'Calendars.Read': 'View calendars and events',
 	'Calendars.ReadWrite': 'Manage calendars and events',
 	'Contacts.Read': 'View contacts',
@@ -32,26 +66,10 @@ const accessLabels: Record<string, string> = {
 	'Files.Read': 'View files',
 	'Files.ReadWrite': 'Manage files',
 	'Group.Read.All': 'View groups',
-	'GroupMember.Read.All': 'View group membership'
+	'GroupMember.Read.All': 'View group membership',
+	'Files.ReadWrite.All': 'Manage all files'
 };
-export function accessSummary(a: Account) {
-	if (!['connected', 'discovered', 'check_failed'].includes(a.state)) return null;
-	if (Array.isArray(a.granted_scopes) && a.granted_scopes.length === 0)
-		return { title: 'Allowed access', items: [], note: 'No account service access.' };
-	let values = a.granted_scopes ?? a.recorded_scopes;
-	if (a.granted_scopes === null && !values?.length && a.requested.length) {
-		try {
-			values = requestedScopes(a.provider, a.requested);
-		} catch {
-			values = null;
-		}
-	}
-	if (!values?.length)
-		return {
-			title: 'Account access',
-			items: [],
-			note: 'Access details aren’t available for this account.'
-		};
+function scopeItems(a: Account, values: string[]) {
 	const baseline = new Set([
 		...BASE_SCOPES[a.provider],
 		'profile',
@@ -70,8 +88,9 @@ export function accessSummary(a: Account) {
 		else additional = true;
 	}
 	for (const [broad, narrow] of [
-		['Read, organize and send email', 'Read email'],
-		['Read, organize and send email', 'Send email'],
+		['Read, send, organize and delete (to trash) email', 'Read email'],
+		['Read, send, organize and delete (to trash) email', 'Send email'],
+		['Read, send, organize and delete (to trash) email', 'Create email drafts and send email'],
 		['Create email drafts and send email', 'Send email'],
 		['Manage calendars and events', 'View calendars and events'],
 		['Manage contacts', 'View contacts'],
@@ -80,10 +99,46 @@ export function accessSummary(a: Account) {
 	])
 		if (items.has(broad)) items.delete(narrow);
 	if (additional) items.add('Additional permissions');
+	return [...items];
+}
+// Granted access when the provider confirmed it; otherwise what was recorded or selected.
+export function accessSummary(a: Account, catalog?: Catalog | null) {
+	if (!['connected', 'discovered', 'check_failed'].includes(a.state)) return null;
+	const name = a.provider === 'google' ? 'Google' : 'Microsoft';
+	if (Array.isArray(a.granted_scopes)) {
+		const missing = catalog
+			? describeSelection(a.provider, catalog, a.grant?.selected_not_granted ?? [])
+			: [];
+		return {
+			title: 'Allowed access',
+			items: scopeItems(a, a.granted_scopes),
+			note: [
+				a.granted_scopes.length ? '' : 'No account service access.',
+				missing.length ? `${name} didn't grant: ${missing.join(', ')}.` : ''
+			]
+				.filter(Boolean)
+				.join(' ')
+		};
+	}
+	if (a.recorded_scopes?.length)
+		return {
+			title: 'Recorded at sign-in',
+			items: scopeItems(a, a.recorded_scopes),
+			note: `Not confirmed by ${name}.`
+		};
+	const selected = catalog ? describeSelection(a.provider, catalog, a.requested) : [];
+	if (selected.length)
+		return {
+			title: `Selected — not confirmed by ${name}`,
+			items: selected,
+			note:
+				a.grant?.status === 'unknown'
+					? "Microsoft didn't confirm which permissions it granted."
+					: ''
+		};
 	return {
-		title: a.granted_scopes !== null ? 'Allowed access' : 'Selected access',
-		items: [...items],
-		note:
-			a.granted_scopes !== null ? '' : 'Saved from sign-in. Current permissions aren’t confirmed.'
+		title: 'Account access',
+		items: [],
+		note: 'Access details aren’t available for this account.'
 	};
 }

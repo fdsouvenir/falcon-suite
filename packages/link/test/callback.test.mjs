@@ -6,6 +6,7 @@ import path from 'node:path';
 import { randomBytes, createHash, webcrypto } from 'node:crypto';
 import { LinkService } from '../dist/service.js';
 import { CallbackHandoff } from '../dist/callback.js';
+import { services, workloads } from './catalogs.mjs';
 const sha = (v) => createHash('sha256').update(v).digest('hex');
 const b64 = (v) => Buffer.from(v).toString('base64');
 async function scenario(run) {
@@ -50,7 +51,9 @@ async function scenario(run) {
 				`#!${process.execPath}
 import fs from 'node:fs';import path from 'node:path';const a=process.argv.slice(2),send=v=>console.log(JSON.stringify(v));
 if(a[0]==='--version'){console.log('${version}');process.exit();}
-if(a.includes('credentials'))send({saved:true});
+if(a.includes('services'))send(${JSON.stringify({ services })});
+else if(a.includes('workloads'))send(${JSON.stringify({ workloads })});
+else if(a.includes('credentials'))send({saved:true});
 else if(a.includes('--step')&&a[a.indexOf('--step')+1]==='1'){
 const u=new URL('https://accounts.google.com/o/oauth2/auth');u.search=new URLSearchParams({state:'local-state-01234567890123456789',redirect_uri:a[a.indexOf('--redirect-uri')+1],scope:'openid email https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly'}).toString();send({auth_url:u.href});
 }else if(a.includes('--step')){fs.writeFileSync(path.join(process.env.HOME,'identity'),a[2]);send({stored:true,email:a[2]});}

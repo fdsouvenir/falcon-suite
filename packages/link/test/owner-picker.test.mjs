@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { setImmediate } from 'node:timers/promises';
 import { parseHTML } from 'linkedom';
-import { PERMISSIONS, BASE_SCOPES } from '../dist/model.js';
+import { BASE_SCOPES } from '../dist/model.js';
+import { googleCatalog, microsoftCatalog } from '../dist/catalog.js';
+import { services, workloads } from './catalogs.mjs';
+const catalogs = { google: googleCatalog(services), microsoft: microsoftCatalog(workloads) };
 
 test('owner picker excludes system agents by roster kind, not by name', async () => {
 	const manifest = JSON.parse(await readFile(new URL('../openclaw.plugin.json', import.meta.url)));
@@ -121,7 +124,7 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 								]
 							}
 						: {
-								permissions: PERMISSIONS,
+								catalogs,
 								baseline_scopes: BASE_SCOPES,
 								integrations: ['google', 'microsoft'].map((id) => ({
 									id,
@@ -153,7 +156,7 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		);
 		assert.match(
 			account.textContent,
-			/Selected access/,
+			/Recorded at sign-in.*Not confirmed by Google/,
 			'saved scopes must not be promoted to confirmed access'
 		);
 		assert.equal(
@@ -195,6 +198,10 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 			value: 'human:fred',
 			configurable: true
 		});
+		Object.defineProperty(document.querySelector('select[aria-label="Email"]'), 'value', {
+			value: 'gmail:readonly',
+			configurable: true
+		});
 		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await setImmediate();
 		assert.equal(opened, true, document.body.textContent);
@@ -213,8 +220,10 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 
 test('Microsoft mail-write discloses existing-email deletion, not just draft access', async () => {
 	const { accessSummary } = await import('../dist/access-summary.js');
-	const permission = PERMISSIONS.microsoft.find((p) => p.id === 'mail-write');
-	assert.match(permission.label, /read.*(?:modify|edit).*delete/i);
+	const permission = catalogs.microsoft.rows
+		.find((r) => r.id === 'mail')
+		.levels.find((l) => l.id === 'mail-write');
+	assert.match(permission.description, /read.*organize.*delete/i);
 	assert.deepEqual(permission.scopes, ['Mail.ReadWrite']);
 	const summary = accessSummary({
 		provider: 'microsoft',
@@ -222,6 +231,6 @@ test('Microsoft mail-write discloses existing-email deletion, not just draft acc
 		requested: ['mail-write'],
 		granted_scopes: ['Mail.ReadWrite']
 	});
-	assert.match(summary.items.join(' '), /read.*(?:modify|edit).*delete/i);
+	assert.match(summary.items.join(' '), /read.*organize.*delete/i);
 	assert.doesNotMatch(summary.items.join(' '), /send/i);
 });
