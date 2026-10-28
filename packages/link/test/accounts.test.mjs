@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { services, workloads } from './catalogs.mjs';
 const run = promisify(execFile);
 const service = new URL('../dist/service.js', import.meta.url).href;
-// Full process/CLI boundary: these fixtures emit the qualified CLI's public schema.
+// Full process/CLI boundary: these fixtures emit the CLIs' published JSON schemas.
 // They protect account isolation, sign-in-state binding, and no-default-fallback behavior.
 async function scenario(body) {
 	const dir = await mkdtemp(path.join(tmpdir(), 'link-accounts-'));

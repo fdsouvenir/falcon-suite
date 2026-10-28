@@ -29,7 +29,8 @@ import { install } from './install.js';
 import { toolStatus } from './status.js';
 import { compareVersions } from './versions.js';
 
-const ADMIN_APPROVAL = /AADSTS(?:65001|90094)\b|\b(?:65001|90094)\b/;
+// Microsoft's "administrator approval required" errors.
+const ADMIN_APPROVAL = /AADSTS(?:65001|90094)\b/;
 const ADMIN_MESSAGE =
 	'Your organization needs an administrator to approve Falcon Link before this account can connect.';
 type Login = {
@@ -188,6 +189,19 @@ export class LinkService {
 			return undefined;
 		}
 	}
+	// A missing CLI, or one older than the version Link relies on, stops sign-in.
+	private async cliProblem(provider: Provider) {
+		const name = provider === 'google' ? 'Google' : 'Microsoft';
+		const version = await toolStatus(executable(this.dir, provider));
+		if (version.state === 'not_installed')
+			return `Install ${TOOLS[provider].binary} on this computer to connect ${name} accounts.`;
+		if (
+			version.state === 'installed' &&
+			(compareVersions(version.version, TOOLS[provider].minimum) ?? 0) < 0
+		)
+			return `Update needed to connect ${name} accounts.`;
+		return null;
+	}
 	private async locked<T>(id: string, fn: () => Promise<T>): Promise<T> {
 		if (this.locks.has(id)) throw new Error('An account operation is already running.');
 		this.locks.add(id);
@@ -244,14 +258,17 @@ export class LinkService {
 		actor: string
 	) {
 		validateMetadata(input.owner, input.purpose);
-		const catalog = await this.catalog(input.provider).catch(() => {
-			throw new Error('Permission choices could not be read from the CLI. Try again.');
-		});
-		const scopes = selectionScopes(input.provider, catalog, input.permissions);
-		if (readiness(this.dir, input.provider).state !== 'ready')
-			throw new Error('Connection setup is incomplete. Contact your administrator.');
+		const setup = readiness(this.dir, input.provider);
+		if (setup.state !== 'ready') throw new Error(setup.message);
 		if (input.provider === 'google' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email ?? ''))
 			throw new Error('Enter the Google email address you intend to connect.');
+		const catalog = await this.catalog(input.provider).catch(async () => {
+			throw new Error(
+				(await this.cliProblem(input.provider)) ??
+					'Permission choices could not be read from the CLI. Try again.'
+			);
+		});
+		const scopes = selectionScopes(input.provider, catalog, input.permissions);
 		// m365cli detects the account type itself, except where only work or school accounts
 		// qualify or the operator provisioned a tenant.
 		const tenant = provision(this.dir).microsoft_tenant;
@@ -319,23 +336,15 @@ export class LinkService {
 		const callback = await this.hostedCallback(a);
 		const tool = this.tool(a);
 		const env = this.env(a);
-		const name = a.provider === 'google' ? 'Google' : 'Microsoft';
-		let failure = {
-			code: 'cli_unavailable',
-			message: `Install ${TOOLS[a.provider].binary} on this computer to connect ${name} accounts.`
-		};
+		let failure = { code: 'cli_unavailable', message: '' };
 		try {
-			const version = await toolStatus(tool);
-			if (version.state === 'not_installed') throw new Error('CLI is not installed.');
-			if (
-				version.state === 'installed' &&
-				(compareVersions(version.version, TOOLS[a.provider].minimum) ?? 0) < 0
-			) {
+			const problem = await this.cliProblem(a.provider);
+			if (problem) {
 				failure = {
-					code: 'cli_update_needed',
-					message: `Update needed to connect ${name} accounts.`
+					code: problem.startsWith('Update') ? 'cli_update_needed' : 'cli_unavailable',
+					message: problem
 				};
-				throw new Error('CLI is older than the minimum version.');
+				throw new Error(problem);
 			}
 			if (l.state !== 'starting') return this.publicLogin(l);
 			if (a.provider === 'google') {
@@ -627,7 +636,11 @@ export class LinkService {
 				error_codes?: unknown;
 				error_description?: unknown;
 			};
-			if (ADMIN_APPROVAL.test(JSON.stringify([token.error_codes, token.error_description])))
+			if (
+				ADMIN_APPROVAL.test(String(token.error_description)) ||
+				(Array.isArray(token.error_codes) &&
+					token.error_codes.some((c) => c === 65001 || c === 90094))
+			)
 				throw new Error(ADMIN_MESSAGE);
 			if (!response.ok || !token.refresh_token) throw new Error('exchange');
 			const args = [
