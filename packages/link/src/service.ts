@@ -115,6 +115,9 @@ export class LinkService {
 									? {
 											...prior,
 											recorded_scopes: account.recorded_scopes,
+											external: account.external,
+											...(account.audience ? { audience: account.audience } : {}),
+											requested: account.requested.length ? account.requested : prior.requested,
 											state: prior.state === 'disconnected' ? 'discovered' : prior.state
 										}
 									: account
@@ -151,8 +154,37 @@ export class LinkService {
 	}
 	private env(a: Account) {
 		if (a.external)
-			return { ...process.env, ...(a.external.client ? { GOG_CLIENT: a.external.client } : {}) };
+			return {
+				...process.env,
+				...(a.provider === 'google' && a.external.client ? { GOG_CLIENT: a.external.client } : {}),
+				...(a.provider === 'microsoft' && a.external.client_id
+					? { M365CLI_CLIENT_ID: a.external.client_id }
+					: {})
+			};
 		return accountEnvironment(this.dir, a.id);
+	}
+	// Providers accept the hosted redirect only for the provisioned Link client. Accounts in a
+	// CLI's own store with another client use that CLI's manual or device-code sign-in.
+	private async hostedCallback(a: Account) {
+		const callback = callbackConfig(this.dir);
+		if (!callback || !a.external) return callback;
+		try {
+			const p = provision(this.dir);
+			if (a.provider === 'microsoft')
+				return a.external.client_id === p.microsoft_client_id ? callback : undefined;
+			const out = await json(
+				this.tool(a),
+				['auth', 'credentials', 'list', '--json', '--no-input'],
+				this.env(a)
+			);
+			const entry = out?.clients?.find((c: any) => c?.client === (a.external!.client ?? 'default'));
+			const stored = JSON.parse(readFileSync(entry.path, 'utf8'));
+			const link = JSON.parse(readFileSync(p.google_credentials_file!, 'utf8')).web?.client_id;
+			const id = stored.client_id ?? stored.web?.client_id ?? stored.installed?.client_id;
+			return link && id === link ? callback : undefined;
+		} catch {
+			return undefined;
+		}
 	}
 	private async locked<T>(id: string, fn: () => Promise<T>): Promise<T> {
 		if (this.locks.has(id)) throw new Error('An account operation is already running.');
@@ -240,8 +272,6 @@ export class LinkService {
 					this.logins.delete(id);
 		}
 		const prior = input.account_id ? this.registry.get(input.account_id) : null;
-		if (prior?.external)
-			throw new Error('Existing CLI accounts are managed in their original CLI.');
 		if (prior && this.locks.has(prior.id))
 			throw new Error('An account operation is already running.');
 		if (prior && prior.provider !== input.provider)
@@ -261,9 +291,11 @@ export class LinkService {
 			provider_id: prior?.provider_id ?? null,
 			requested: input.permissions,
 			granted_scopes: null,
+			...(prior?.audience ? { audience: prior.audience } : {}),
+			...(prior?.external ? { external: prior.external } : {}),
 			state: 'pending',
 			checked_at: null,
-			created_at: new Date().toISOString()
+			created_at: prior?.created_at ?? new Date().toISOString()
 		};
 		this.registry.save(a);
 		const l: Login = {
@@ -280,7 +312,7 @@ export class LinkService {
 			actor
 		};
 		this.logins.set(l.id, l);
-		const callback = callbackConfig(this.dir);
+		const callback = await this.hostedCallback(a);
 		const tool = this.tool(a);
 		const env = this.env(a);
 		const name = a.provider === 'google' ? 'Google' : 'Microsoft';
@@ -308,18 +340,20 @@ export class LinkService {
 					message:
 						'Google client configuration could not be loaded into the account store. Contact your administrator.'
 				};
-				await json(
-					tool,
-					[
-						'auth',
-						'credentials',
-						'set',
-						provision(this.dir).google_credentials_file!,
-						'--json',
-						'--no-input'
-					],
-					env
-				);
+				// Accounts found in gog's own store keep that store's OAuth client.
+				if (!a.external)
+					await json(
+						tool,
+						[
+							'auth',
+							'credentials',
+							'set',
+							provision(this.dir).google_credentials_file!,
+							'--json',
+							'--no-input'
+						],
+						env
+					);
 				const command = googleCommand(catalog, a.requested);
 				const args = [
 					'auth',
@@ -415,7 +449,7 @@ export class LinkService {
 					'auth',
 					'login',
 					'--profile',
-					a.id,
+					this.selection(a),
 					...audience,
 					'--scope-workloads',
 					a.requested.join(','),
@@ -595,7 +629,7 @@ export class LinkService {
 				'auth',
 				'login',
 				'--profile',
-				a.id,
+				this.selection(a),
 				...l.audience,
 				'--scope-workloads',
 				a.requested.join(','),
@@ -691,6 +725,10 @@ export class LinkService {
 						: null;
 					// gog reports scopes from stored token metadata; do not promote them to verified grants.
 				} else {
+					// m365cli replaces a profile's account on sign-in; a reconnected profile found in
+					// the CLI's own store must still belong to the account it held before.
+					const previous =
+						completingLogin && a.external && !a.provider_id ? a.email?.toLowerCase() : null;
 					const out = await json(
 						this.tool(a),
 						['--account', this.selection(a), 'auth', 'check', '--json', '--no-input'],
@@ -700,8 +738,17 @@ export class LinkService {
 						throw new Error('Identity not verified.');
 					if (a.provider_id && a.provider_id !== out.identity.id)
 						throw new Error('Account identity changed.');
+					if (
+						previous &&
+						![out.identity.mail, out.identity.userPrincipalName].some(
+							(v) => typeof v === 'string' && v.toLowerCase() === previous
+						)
+					)
+						throw new Error('Account identity changed.');
 					a.provider_id = out.identity.id;
 					a.email = out.identity.mail || out.identity.userPrincipalName || null;
+					if (a.external && Array.isArray(out.selected_workloads))
+						a.requested = out.selected_workloads.filter((w: unknown) => typeof w === 'string');
 					if (!a.email) throw new Error('Provider did not return an account address.');
 					if (['consumer', 'enterprise'].includes(out.audience)) a.audience = out.audience;
 					// m365cli reads the current Graph grant; `unknown` is never shown as granted.
@@ -745,7 +792,6 @@ export class LinkService {
 	async disconnect(id: string) {
 		return this.locked(id, async () => {
 			const a = this.registry.get(id);
-			if (a.external) throw new Error('Existing CLI accounts are managed in their original CLI.');
 			if (a.state === 'disconnected') return a;
 			if (
 				[...this.logins.values()].some(
@@ -757,11 +803,16 @@ export class LinkService {
 			// Only this account's CLI-native encrypted credentials are removed. Never revoke provider-wide consent.
 			const tool = this.tool(a);
 			const env = this.env(a);
+			// A CLI's own store keeps every other account; Link's isolated store holds only this one.
+			const same = (e: any) =>
+				typeof e?.email === 'string' &&
+				e.email.toLowerCase() === a.email?.toLowerCase() &&
+				(e.client ?? 'default') === (a.external?.client ?? 'default');
 			if (a.provider === 'google') {
 				const stored = await json(tool, ['auth', 'list', '--json', '--no-input'], env);
 				if (!Array.isArray(stored.accounts))
 					throw new Error('Local credential inventory could not be verified.');
-				for (const entry of stored.accounts) {
+				for (const entry of a.external ? stored.accounts.filter(same) : stored.accounts) {
 					if (typeof entry.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry.email))
 						throw new Error('Local account identity is unavailable.');
 					await json(tool, ['auth', 'remove', entry.email, '--force', '--json', '--no-input'], env);
@@ -770,8 +821,9 @@ export class LinkService {
 				const stored = await json(tool, ['auth', 'status', '--json', '--no-input'], env);
 				if (!Array.isArray(stored.profiles))
 					throw new Error('Local credential inventory could not be verified.');
-				if (stored.profiles.some((p: any) => p.name === a.id))
-					await json(tool, ['auth', 'logout', '--profile', a.id, '--json', '--no-input'], env);
+				const profile = this.selection(a);
+				if (stored.profiles.some((p: any) => p.name === profile))
+					await json(tool, ['auth', 'logout', '--profile', profile, '--json', '--no-input'], env);
 			}
 
 			const after = await json(
@@ -783,8 +835,10 @@ export class LinkService {
 			);
 			if (
 				a.provider === 'google'
-					? !Array.isArray(after.accounts) || after.accounts.length !== 0
-					: !Array.isArray(after.profiles) || after.profiles.some((p: any) => p.name === a.id)
+					? !Array.isArray(after.accounts) ||
+						(a.external ? after.accounts.some(same) : after.accounts.length !== 0)
+					: !Array.isArray(after.profiles) ||
+						after.profiles.some((p: any) => p.name === this.selection(a))
 			)
 				throw new Error('Local credential removal could not be verified.');
 

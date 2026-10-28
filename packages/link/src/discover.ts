@@ -55,6 +55,14 @@ export async function existingAccounts(dir: string, provider: Provider): Promise
 			client
 		]);
 		const id = 'existing_' + createHash('sha256').update(identity).digest('hex').slice(0, 32);
+		const strings = (v: unknown) =>
+			Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string' && s.length <= 64) : [];
+		const clientId =
+			provider === 'microsoft' &&
+			typeof entry.client_id === 'string' &&
+			/^[a-fA-F0-9-]{36}$/.test(entry.client_id)
+				? entry.client_id
+				: undefined;
 		accounts.push({
 			id,
 			provider,
@@ -62,7 +70,10 @@ export async function existingAccounts(dir: string, provider: Provider): Promise
 			owner: null,
 			purpose: null,
 			provider_id: null,
-			requested: [],
+			requested: provider === 'microsoft' ? strings(entry.delegated_scope_workloads) : [],
+			...(provider === 'microsoft' && ['consumer', 'enterprise'].includes(entry.audience)
+				? { audience: entry.audience }
+				: {}),
 			recorded_scopes:
 				provider === 'google' && Array.isArray(entry.scopes)
 					? entry.scopes
@@ -73,7 +84,11 @@ export async function existingAccounts(dir: string, provider: Provider): Promise
 			state: 'discovered',
 			checked_at: null,
 			created_at: new Date().toISOString(),
-			external: { selection, ...(client ? { client } : {}) }
+			external: {
+				selection,
+				...(client ? { client } : {}),
+				...(clientId ? { client_id: clientId } : {})
+			}
 		});
 	}
 	return accounts;

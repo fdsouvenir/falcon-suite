@@ -787,15 +787,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				a.state !== 'connected'
 			);
 			reconnect.disabled = !canWrite() || integration.setup.state !== 'ready';
-			if (!a.external) footer.append(reconnect);
-			else
-				card.append(
-					el(
-						'p',
-						'This account was connected outside Link. Sign-in changes aren’t available here yet.',
-						'fl-muted'
-					)
-				);
+			footer.append(reconnect);
 			const check = button('Check connection', async () => {
 				await act(
 					check,
@@ -808,7 +800,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			});
 			check.disabled = !canWrite() || !a.email || a.state === 'disconnected';
 			actions.append(check);
-			if (a.state !== 'disconnected' && !a.external) {
+			if (a.state !== 'disconnected') {
 				const disconnect = button('Disconnect', () => {
 					closeForm();
 					const confirm = el('section', undefined, 'fl-card');
