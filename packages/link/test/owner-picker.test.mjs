@@ -169,6 +169,20 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 			false,
 			'routine actions start collapsed'
 		);
+		[...account.querySelectorAll('button')]
+			.find((b) => b.textContent === 'Check connection')
+			.click();
+		const card = () =>
+			[...document.querySelectorAll('.fl-account')].find((c) =>
+				c.textContent.includes('work@example.com')
+			);
+		for (let i = 0; i < 50 && !/checked just now/.test(card().textContent); i++)
+			await setImmediate();
+		assert.match(
+			card().querySelector('.fl-account-result')?.textContent ?? '',
+			/^Working — checked just now$/,
+			'the check result stays on its card after the page refreshes'
+		);
 		const empty = [...document.querySelectorAll('.fl-account')].find((card) =>
 			card.textContent.includes('empty@example.com')
 		);

@@ -161,6 +161,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		} else if (!['starting', 'awaiting_consent'].includes(activeLogin.state)) closePendingTab();
 	}
 	let formDisposer: (() => void) | undefined;
+	// Check connection results and open Manage sections stay with their card across refreshes.
+	const checks = new Map<string, { busy: boolean; error?: string }>();
+	const managing = new Set<string>();
 	const message = (s: string, error = false) => {
 		notification.textContent = s;
 		notification.classList.toggle('fl-error', error);
@@ -415,6 +418,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		}
 		try {
 			lastStart = input;
+			if (input.account_id) checks.delete(input.account_id);
 			const l = await client.invoke('start', input);
 			if (disposed) {
 				closePendingTab();
@@ -743,7 +747,16 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			if (access.note) body.append(el('p', access.note, 'fl-muted'));
 			card.append(body);
 		}
-		if (a.connection_error && word === 'Needs attention')
+		const checked = checks.get(a.id);
+		if (checked && !checked.busy) {
+			const result = el(
+				'p',
+				checked.error ?? 'Working — checked just now',
+				`fl-account-result${checked.error ? ' fl-error' : ''}`
+			);
+			result.setAttribute('role', 'status');
+			card.append(result);
+		} else if (a.connection_error && word === 'Needs attention')
 			card.append(el('p', a.connection_error.message, 'fl-error fl-account-error'));
 		const footer = el('div', undefined, 'fl-account-footer');
 		const primary = el('div', undefined, 'fl-actions');
@@ -793,20 +806,32 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const edit = button('Edit details', () => accountForm(a, true));
 		edit.disabled = !canWrite();
 		actions.append(edit);
-		const check = button('Check connection', async () => {
-			await act(
-				check,
-				async () => {
-					await client.invoke('check', { account_id: a.id });
-					await load();
-				},
-				'Connection checked.'
-			);
+		const check = button(checked?.busy ? 'Checking…' : 'Check connection', async () => {
+			checks.set(a.id, { busy: true });
+			render();
+			try {
+				await client.invoke('check', { account_id: a.id });
+				checks.set(a.id, { busy: false });
+			} catch (e) {
+				checks.set(a.id, {
+					busy: false,
+					error: (e as Error).message || 'The connection check failed.'
+				});
+			}
+			if (disposed) return;
+			await load();
+			render();
 		});
-		check.disabled = !canWrite() || !a.email || a.state === 'disconnected';
+		check.disabled = !canWrite() || !a.email || a.state === 'disconnected' || !!checked?.busy;
+		if (checked?.busy) check.setAttribute('aria-busy', 'true');
 		actions.append(check);
 		if (a.state !== 'disconnected') actions.append(remove);
 		const manage = el('details', undefined, 'fl-account-manage');
+		manage.open = managing.has(a.id);
+		manage.addEventListener('toggle', () => {
+			if (manage.open) managing.add(a.id);
+			else managing.delete(a.id);
+		});
 		manage.append(el('summary', 'Manage account'), actions);
 		footer.append(manage);
 		card.append(footer);

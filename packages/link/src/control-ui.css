@@ -609,7 +609,8 @@
 .fl-account-access p {
 	margin: var(--space-2) 0 0;
 }
-.fl-account-error {
+.fl-account-error,
+.fl-account-result {
 	margin: 0;
 	padding: 0 var(--space-5) var(--space-4);
 }
