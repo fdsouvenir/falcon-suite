@@ -7,8 +7,9 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 
 - Lists each person's and agent's Google and Microsoft accounts with their owner, purpose,
   connection state (Connected / Needs attention / Not connected) and access in plain words.
-- Adds accounts, changes their access, checks them and disconnects them — including accounts
-  already present in the CLIs' own stores.
+- Adds accounts, changes their access, checks them and removes them — including accounts
+  already present in the CLIs' own stores. Removing an account deletes its saved sign-in from
+  the CLI's store and removes it from Link's list.
 - Uses the existing command-line tools for everything provider-specific:
   [gog](https://github.com/openclaw/gogcli) for Google and
   [m365cli](https://github.com/fdsouvenir/m365cli) for Microsoft (not the unrelated PnP CLI).

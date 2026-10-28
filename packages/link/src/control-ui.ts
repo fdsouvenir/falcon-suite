@@ -753,6 +753,29 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const footer = el('div', undefined, 'fl-account-footer');
 		const primary = el('div', undefined, 'fl-actions');
 		const retryWith = retryInput(a);
+		const remove = button('Remove account', () => {
+			closeForm();
+			const confirm = el('section', undefined, 'fl-card');
+			confirm.append(
+				el('h3', `Remove ${a.email ?? 'this account'}?`),
+				el(
+					'p',
+					'This removes this account’s saved sign-in from this computer and removes it from this list. Other accounts are unchanged.'
+				),
+				revokeSentence(a)
+			);
+			const yes = button('Remove account', async () => {
+				await act(yes, async () => {
+					await client.invoke('remove', { account_id: a.id });
+					closeForm();
+					await load();
+				});
+			});
+			yes.disabled = !canWrite();
+			confirm.append(yes, button('Cancel', closeForm));
+			formHost.append(confirm);
+		});
+		remove.disabled = !canWrite();
 		if (word === 'Needs attention' || word === 'Not connected') {
 			const retry = button(
 				'Try again',
@@ -768,6 +791,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const change = button('Change access', () => accountForm(a));
 		change.disabled = !canWrite() || !ready(integration) || signingIn(a);
 		primary.append(change);
+		// Records left disconnected by an earlier version show Remove next to Try again.
+		if (a.state === 'disconnected') primary.append(remove);
 		footer.append(primary);
 		const actions = el('div', undefined, 'fl-actions');
 		const edit = button('Edit details', () => accountForm(a, true));
@@ -785,32 +810,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		});
 		check.disabled = !canWrite() || !a.email || a.state === 'disconnected';
 		actions.append(check);
-		if (a.state !== 'disconnected') {
-			const disconnect = button('Disconnect', () => {
-				closeForm();
-				const confirm = el('section', undefined, 'fl-card');
-				confirm.append(
-					el('h3', `Disconnect ${a.email ?? 'this account'}?`),
-					el(
-						'p',
-						'This removes this account’s saved sign-in from this computer. Other accounts are unchanged.'
-					),
-					revokeSentence(a)
-				);
-				const yes = button('Disconnect account', async () => {
-					await act(yes, async () => {
-						await client.invoke('disconnect', { account_id: a.id });
-						closeForm();
-						await load();
-					});
-				});
-				yes.disabled = !canWrite();
-				confirm.append(yes, button('Cancel', closeForm));
-				formHost.append(confirm);
-			});
-			disconnect.disabled = !canWrite();
-			actions.append(disconnect);
-		}
+		if (a.state !== 'disconnected') actions.append(remove);
 		const manage = el('details', undefined, 'fl-account-manage');
 		manage.append(el('summary', 'Manage account'), actions);
 		footer.append(manage);

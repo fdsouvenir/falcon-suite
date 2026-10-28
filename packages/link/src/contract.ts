@@ -88,9 +88,10 @@ export const contract = defineFeatureContract({
 			input: obj({ account_id: Type.String({ maxLength: 64 }) }),
 			output: Type.Unknown()
 		},
-		disconnect: {
+		remove: {
 			kind: 'action',
-			description: 'Remove this account’s local CLI credentials. Does not revoke provider consent.',
+			description:
+				'Remove this account’s saved sign-in from its CLI store and delete it from Link. Does not revoke provider consent.',
 			input: obj({ account_id: Type.String({ maxLength: 64 }) }),
 			output: Type.Unknown()
 		},
