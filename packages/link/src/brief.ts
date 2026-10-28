@@ -42,7 +42,7 @@ function scopes(a: Account) {
 export function accountBrief(accounts: Account[], unavailable: Provider[] = []): string {
 	const lines = [
 		'Falcon Link integrations and configured accounts',
-		'Use falcon_link_accounts to list accounts, then pass account_id to obtain the CLI account arguments and isolated storage environment. Run gog or m365cli from the normal PATH with that environment and account selection. The keyring passwords are inherited from Office provisioning; do not print them or request them in chat. Do not replace the inherited keyring variables. Connection capabilities do not authorize sending or other unrequested actions.'
+		'falcon_link_accounts lists accounts; with account_id it returns the CLI account arguments and storage environment for that account. gog and m365cli are on the normal PATH. The keyring password variables are already present in the command environment.'
 	];
 	for (const provider of ['google', 'microsoft'] as const) {
 		lines.push('', provider === 'google' ? 'gogcli' : 'm365cli');

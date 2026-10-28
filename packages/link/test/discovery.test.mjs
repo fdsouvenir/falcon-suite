@@ -65,16 +65,28 @@ test('private brief includes human accounts with compact scopes and failures; pu
 		);
 		assert.doesNotMatch(result.prependContext, /acct_fixture|agent_owned_accounts/);
 		assert.match(result.prependContext, /falcon_link_accounts/);
-		assert.match(result.prependContext, /inherited.*keyring/i);
+		assert.match(result.prependContext, /keyring password variables are already present/i);
+		assert.doesNotMatch(result.prependContext, /\b(?:do not|never)\b/i, 'facts only');
 		assert.equal(
 			result.prependSystemContext,
 			undefined,
 			'connection facts add no operating instructions'
 		);
-		assert.equal(
-			await hook({}, { agentId: 'main', sessionKey: 'agent:main:discord:group:fixture' }),
-			undefined
-		);
+		for (const sessionKey of [
+			'agent:main:discord:group:fixture',
+			'agent:main:slack:channel:fixture',
+			'agent:main:matrix:room:fixture'
+		])
+			assert.equal(await hook({}, { agentId: 'main', sessionKey }), undefined);
+		for (const sessionKey of [
+			'agent:main:telegram:direct:fixture',
+			'agent:main:cron:daily',
+			'agent:main:subagent:fixture'
+		])
+			assert.match(
+				(await hook({}, { agentId: 'main', sessionKey }))?.prependContext ?? '',
+				/fred@example.com/
+			);
 	} finally {
 		await service.stop();
 		await rm(stateDir, { recursive: true, force: true });

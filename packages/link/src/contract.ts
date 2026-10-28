@@ -25,8 +25,7 @@ export const contract = defineFeatureContract({
 	operations: {
 		status: {
 			kind: 'query',
-			description:
-				'Read integration tool and operator-provisioning readiness. Connection permissions are technical facts, not agent operating instructions.',
+			description: 'Read integration tool, version and operator-provisioning status.',
 			input: obj({}),
 			output: Type.Unknown(),
 			tool: { name: 'falcon_link_status', label: 'Read integration status' }
@@ -34,7 +33,7 @@ export const contract = defineFeatureContract({
 		accounts: {
 			kind: 'query',
 			description:
-				'Read account identity, human/agent owner, purpose, connection state and requested versus verified granted scopes. Pass account_id to obtain CLI arguments and storage environment; run the normal PATH CLI with that environment, preserving inherited keyring password variables. Never print passwords. Connection capabilities do not grant behavioral authority. Does not change AGENTS.md.',
+				'Read account identity, human/agent owner, purpose, connection state and selected, recorded or granted scopes. With account_id, returns the CLI arguments and storage environment for that account; the CLIs are on the normal PATH and the keyring password variables are already present in the command environment.',
 			input: obj({ account_id: Type.Optional(Type.String({ maxLength: 64 })) }),
 			output: Type.Unknown(),
 			tool: { name: 'falcon_link_accounts', label: 'Read account facts' }
