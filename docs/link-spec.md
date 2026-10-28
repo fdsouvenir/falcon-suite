@@ -25,6 +25,15 @@ their service clients or building a second OAuth/token implementation.
 - Provide operator-only provisioning outside customer onboarding. The exact operator interface
   and protected storage contract remain implementation decisions.
 
+## Decisions (2026-10-28)
+
+- No ready-made permission sets: people choose access per service.
+- No IT-administrator approval workflow. When Microsoft reports that administrator approval
+  is required, Link shows a plain message saying so.
+- Link installs the CLIs on Linux only and says so on the page. Sign-in is allowed on macOS
+  when the CLI is already installed.
+- Account facts are hidden only in group, channel and room conversations.
+
 ## Proposed interaction
 
 Each integration has independent tool, setup and account state:
