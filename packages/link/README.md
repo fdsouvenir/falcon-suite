@@ -5,8 +5,9 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 
 ## What it does
 
-- Lists each person's and agent's Google and Microsoft accounts with their owner, purpose,
-  connection state (Connected / Needs attention / Not connected) and access in plain words.
+- Lists each person's and agent's Google and Microsoft accounts with their owner, purpose and
+  access in plain words. A connected account shows no status; otherwise it shows Needs
+  attention, Signing in… or Not connected.
 - Adds accounts, changes their access, checks them and removes them — including accounts
   already present in the CLIs' own stores. Removing an account deletes its saved sign-in from
   the CLI's store and removes it from Link's list.

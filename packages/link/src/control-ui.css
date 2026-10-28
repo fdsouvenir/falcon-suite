@@ -238,9 +238,6 @@
 	background: var(--muted);
 	flex: none;
 }
-.fl-dot-ok {
-	background: var(--ok);
-}
 .fl-dot-warn {
 	background: var(--warn);
 }
@@ -270,19 +267,6 @@
 }
 .fl-provider-header p {
 	margin: var(--space-1) 0 0;
-}
-.fl-badge {
-	display: inline-flex;
-	padding: var(--space-1) var(--space-3);
-	border: 1px solid var(--border);
-	border-radius: 99px;
-	background: var(--bg-hover);
-	color: var(--muted);
-	font-size: var(--control-ui-text-sm);
-	white-space: nowrap;
-}
-.fl-badge-ok {
-	color: var(--ok);
 }
 .fl-section-heading h3 {
 	font-size: var(--control-ui-text-lg);
@@ -521,9 +505,6 @@
 	.fl-provider-header h2 {
 		font-size: var(--control-ui-text-lg);
 	}
-	.fl-provider-header .fl-badge {
-		margin-left: 56px;
-	}
 	.fl-empty {
 		min-height: 220px;
 		padding: var(--space-5) var(--space-4);
@@ -596,9 +577,6 @@
 	height: 6px;
 	border-radius: 50%;
 	background: currentColor;
-}
-.fl-account-status-ok {
-	color: var(--ok);
 }
 .fl-account-status-warn {
 	color: var(--warn);

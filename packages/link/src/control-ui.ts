@@ -613,21 +613,16 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	}
 	const signingIn = (a: Account) =>
 		activeLogin?.account_id === a.id && ACTIVE.includes(activeLogin.state);
-	// One vocabulary for the sidebar, the badge and each account.
+	// One vocabulary wherever a status appears. Connected is the quiet default and is not shown.
 	function accountWord(a: Account) {
 		if (signingIn(a)) return 'Signing in…';
 		if (a.state === 'connected' || a.state === 'discovered') return 'Connected';
 		if (a.state === 'disconnected') return 'Not connected';
 		return 'Needs attention';
 	}
-	function providerWord(provider: Provider) {
+	function attentionWord(provider: Provider) {
 		const words: string[] = accounts.filter((a) => a.provider === provider).map(accountWord);
-		if (activeLogin?.provider === provider && ACTIVE.includes(activeLogin.state))
-			return 'Signing in…';
-		return (
-			['Signing in…', 'Needs attention', 'Connected'].find((w) => words.includes(w)) ??
-			'Not connected'
-		);
+		return ['Needs attention', 'Not connected'].find((w) => words.includes(w)) ?? null;
 	}
 	const ready = (i: IntegrationStatus) =>
 		i.setup.state === 'ready' && i.tool.state !== 'not_installed' && !i.below_minimum;
@@ -726,15 +721,15 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			);
 		accountName.append(meta);
 		const word = accountWord(a);
-		identity.append(
-			avatar,
-			accountName,
-			el(
-				'span',
-				word,
-				`fl-account-status${word === 'Connected' ? ' fl-account-status-ok' : word === 'Needs attention' ? ' fl-account-status-warn' : ''}`
-			)
-		);
+		identity.append(avatar, accountName);
+		if (word !== 'Connected')
+			identity.append(
+				el(
+					'span',
+					word,
+					`fl-account-status${word === 'Signing in…' ? '' : ' fl-account-status-warn'}`
+				)
+			);
 		card.append(identity);
 		const access = accessSummary(a, status!.catalogs[a.provider]);
 		const body = el('div', undefined, 'fl-account-access');
@@ -828,16 +823,29 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			const b = button('', () => navigate(id));
 			b.className = `fl-integration${selected === id ? ' fl-selected' : ''}`;
 			b.setAttribute('aria-current', selected === id ? 'page' : 'false');
-			const word = status ? providerWord(id) : 'Checking…';
+			const count = accounts.filter((a) => a.provider === id).length;
 			const label = el('span', undefined, 'fl-nav-copy');
-			label.append(el('span', NAMES[id], 'fl-integration-name'), el('span', word, 'fl-muted'));
-			const dot = el(
-				'span',
-				undefined,
-				`fl-dot${word === 'Connected' ? ' fl-dot-ok' : word === 'Needs attention' ? ' fl-dot-warn' : ''}`
+			label.append(
+				el('span', NAMES[id], 'fl-integration-name'),
+				el(
+					'span',
+					!status
+						? 'Checking…'
+						: count
+							? `${count} account${count === 1 ? '' : 's'}`
+							: 'No accounts',
+					'fl-muted'
+				)
 			);
-			dot.setAttribute('aria-hidden', 'true');
-			b.append(mark(id), label, dot);
+			b.append(mark(id), label);
+			const attention = status ? attentionWord(id) : null;
+			if (attention) {
+				const dot = el('span', undefined, 'fl-dot fl-dot-warn');
+				dot.setAttribute('role', 'img');
+				dot.setAttribute('aria-label', attention);
+				dot.title = attention;
+				b.append(dot);
+			}
 			nav.append(b);
 		}
 		// Keep the active form node mounted across status refreshes so input and focus survive.
@@ -852,11 +860,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const providerHeader = el('header', undefined, 'fl-provider-header');
 		const identity = el('div', undefined, 'fl-provider-identity');
 		identity.append(mark(integration.id, true), el('h2', integration.name));
-		const word = providerWord(integration.id);
-		providerHeader.append(
-			identity,
-			el('span', word, `fl-badge${word === 'Connected' ? ' fl-badge-ok' : ''}`)
-		);
+		providerHeader.append(identity);
 		detail.append(back, providerHeader);
 		const notices = banners(integration);
 		if (notices) detail.append(notices);
