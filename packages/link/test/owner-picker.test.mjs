@@ -162,11 +162,8 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 			account.textContent,
 			/Send email|Requested:|Granted scopes|Identity last checked|2026/
 		);
-		assert.match(
-			account.textContent,
-			/Recorded at sign-in.*Not confirmed by Google/,
-			'saved scopes must not be promoted to confirmed access'
-		);
+		assert.equal(account.querySelector('.fl-account-access h5')?.textContent, 'Access');
+		assert.doesNotMatch(account.textContent, /Recorded at sign-in|not confirmed/i);
 		assert.equal(
 			account.querySelector('.fl-account-manage').hasAttribute('open'),
 			false,
