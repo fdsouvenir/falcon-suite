@@ -184,8 +184,19 @@ export class LinkService implements Host {
 		// pending account to the first account's callback.
 		for (const l of this.logins.values()) {
 			this.login(l.id, l.actor);
-			if (l.provider === providerId && ACTIVE.includes(l.state))
+			if (l.provider !== providerId || !ACTIVE.includes(l.state)) continue;
+			if (l.state === 'verifying')
 				throw new Error('Finish or cancel the current sign-in for this integration first.');
+			// Starting again replaces a sign-in still waiting on the provider (for example one the
+			// provider refused on its own page, which never returns here).
+			if (l.account_id === accountId) {
+				l.state = 'cancelled';
+				l.child?.kill();
+				void l.callback?.cancel().catch(() => {});
+				l.url = null;
+				l.code = null;
+				l.paste = undefined;
+			} else this.cancel(l.id, l.actor);
 		}
 		if (this.logins.size >= 100) {
 			for (const [id, l] of this.logins) if (!ACTIVE.includes(l.state)) this.logins.delete(id);
