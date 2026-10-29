@@ -25,8 +25,7 @@ export const contract = defineFeatureContract({
 	operations: {
 		status: {
 			kind: 'query',
-			description:
-				'Read integration tool and operator-provisioning readiness. Connection permissions are technical facts, not agent operating instructions.',
+			description: 'Read integration tool, version and operator-provisioning status.',
 			input: obj({}),
 			output: Type.Unknown(),
 			tool: { name: 'falcon_link_status', label: 'Read integration status' }
@@ -34,7 +33,7 @@ export const contract = defineFeatureContract({
 		accounts: {
 			kind: 'query',
 			description:
-				'Read account identity, human/agent owner, purpose, connection state and requested versus verified granted scopes. Pass account_id to obtain CLI arguments and storage environment; run the normal PATH CLI with that environment, preserving inherited keyring password variables. Never print passwords. Connection capabilities do not grant behavioral authority. Does not change AGENTS.md.',
+				'Read account identity, human/agent owner, purpose, connection state and selected, recorded or granted scopes. With account_id, returns the CLI arguments and storage environment for that account; the CLIs are on the normal PATH and the keyring password variables are already present in the command environment.',
 			input: obj({ account_id: Type.Optional(Type.String({ maxLength: 64 })) }),
 			output: Type.Unknown(),
 			tool: { name: 'falcon_link_accounts', label: 'Read account facts' }
@@ -47,14 +46,19 @@ export const contract = defineFeatureContract({
 				provider,
 				owner,
 				purpose,
-				permissions: Type.Array(Type.String({ maxLength: 32 }), {
+				permissions: Type.Array(Type.String({ maxLength: 64 }), {
 					minItems: 1,
-					maxItems: 12,
+					maxItems: 64,
 					uniqueItems: true
 				}),
-				email: Type.Optional(Type.String({ maxLength: 254 })),
-				audience: Type.Optional(Type.Union([Type.Literal('consumer'), Type.Literal('enterprise')]))
+				email: Type.Optional(Type.String({ maxLength: 254 }))
 			}),
+			output: Type.Unknown()
+		},
+		viewer: {
+			kind: 'query',
+			description: 'Read the signed-in profile ID of the person using the Link page.',
+			input: obj({}),
 			output: Type.Unknown()
 		},
 		login: {
@@ -99,13 +103,7 @@ export const contract = defineFeatureContract({
 		install: {
 			kind: 'action',
 			description:
-				'Install the qualified CLI release with checksum verification; preserve existing tools and credentials.',
-			input: obj({ provider }),
-			output: Type.Unknown()
-		},
-		updates: {
-			kind: 'query',
-			description: 'Check public provider release versions. Lookup failures remain unknown.',
+				'Install or update the CLI from its latest GitHub release with checksum verification; preserve existing tools and credentials.',
 			input: obj({ provider }),
 			output: Type.Unknown()
 		}

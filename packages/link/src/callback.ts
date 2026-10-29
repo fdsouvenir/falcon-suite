@@ -30,8 +30,8 @@ export function callbackConfig(dir: string): CallbackConfig | undefined {
 export function callbackURI(config: CallbackConfig, provider: Provider) {
 	return new URL(`/oauth2/callback/${provider}`, config.url).href;
 }
-export function microsoftAuthority(p: Provision, audience: string) {
-	return `https://login.microsoftonline.com/${audience === 'consumer' ? 'consumers' : p.microsoft_tenant || 'organizations'}/oauth2/v2.0`;
+export function microsoftAuthority(p: Provision) {
+	return `https://login.microsoftonline.com/${p.microsoft_tenant || 'common'}/oauth2/v2.0`;
 }
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 async function request(

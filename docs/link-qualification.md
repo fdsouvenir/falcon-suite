@@ -2,10 +2,13 @@
 
 ## Qualified adapter contracts
 
-| Provider  | Executable | Release | Source               | Preview platform |
-| --------- | ---------- | ------- | -------------------- | ---------------- |
-| Google    | `gog`      | 0.47.0  | `openclaw/gogcli`    | Linux x64/arm64  |
-| Microsoft | `m365cli`  | 1.0.0   | `fdsouvenir/m365cli` | Linux x64/arm64  |
+| Provider  | Executable | Minimum | Latest checked (2026-10-28) | Source               | Link installs on |
+| --------- | ---------- | ------- | --------------------------- | -------------------- | ---------------- |
+| Google    | `gog`      | 0.44.0  | 0.47.1                      | `openclaw/gogcli`    | Linux x64/arm64  |
+| Microsoft | `m365cli`  | 2.1.0   | 2.2.0                       | `fdsouvenir/m365cli` | Linux x64/arm64  |
+
+Since preview.9 Link installs each CLI's latest GitHub release; the minimums above are the
+only version requirements. The archive checks below were recorded for the 2026-10-24 preview.
 
 Both release archives were downloaded into an isolated temporary test root using the actual
 Link installer, checked against GitHub asset SHA-256 digests, extracted without archive-path
@@ -154,3 +157,21 @@ Local Chrome fixtures checked desktop and phone layouts, active/incomplete/disco
 unverified states, saved vs verified permissions, collapsed management and working edit,
 no horizontal phone overflow and zero page errors. These are local fixture checks, not
 hosted customer acceptance. No release or installation is part of this change.
+
+## Preview.9 contract checks — 2026-10-28
+
+Checked against the released gog 0.47.1 binary and an m365cli build of the 2.2.0 commit
+(which reports `v2.1.0-11-ga62c062` because it was built before tagging). No provider
+consent or code exchange was attempted.
+
+- Version parsing: `v0.47.1` and `v2.1.0-11-ga62c062` are recognized; the git-describe build
+  sorts after 2.1.0 and before 2.2.0. Both meet the minimums.
+- `m365cli auth workloads --json` parses into 7 rows (Email with a separate Send email choice,
+  Calendar, Contacts, Tasks, OneDrive files, Groups, Excel workbooks) from 18 workloads; the
+  5 compatibility bundles remain valid saved selections.
+- Google: for every row level (39) plus mixed-level and preview.8 selections (4),
+  `gog auth add … --remote --step 1 --json --no-input` with a throwaway `GOG_HOME` and a
+  dummy client produced an authorization URL whose scopes exactly match Link's selection.
+- Link's read-only scope set for each of the 15 services with a Read level equals the scopes
+  gog 0.47.1 itself requests for that service with `--readonly`.
+- gog's global `--readonly` only affects the command it is passed to; Link does not use it.

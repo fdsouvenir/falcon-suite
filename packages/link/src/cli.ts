@@ -5,8 +5,21 @@ import { homedir } from 'node:os';
 import type { CallbackConfig } from './callback.js';
 import type { Provider } from './model.js';
 export const TOOLS = {
-	google: { binary: 'gog', repo: 'openclaw/gogcli', version: '0.47.0', archive: 'gogcli' },
-	microsoft: { binary: 'm365cli', repo: 'fdsouvenir/m365cli', version: '2.0.0', archive: 'm365cli' }
+	google: {
+		binary: 'gog',
+		repo: 'openclaw/gogcli',
+		archive: 'gogcli',
+		// gogcli CHANGELOG 0.44.0: "Photos: upload media and list/create app-created albums with an
+		// explicit append-scope opt-in" — Link passes `--photos-scope append`.
+		minimum: '0.44.0'
+	},
+	microsoft: {
+		binary: 'm365cli',
+		repo: 'fdsouvenir/m365cli',
+		archive: 'm365cli',
+		// m365cli 2.1.0 added `auth workloads`, the grant report and `--audience auto`.
+		minimum: '2.1.0'
+	}
 } as const;
 export type Provision = {
 	google_credentials_file?: string;
@@ -23,9 +36,14 @@ export function provision(dir: string): Provision {
 		return {};
 	}
 }
+// Each CLI uses its own keyring password variable; Link's variable is the fallback.
+const KEYRING = { google: 'GOG_KEYRING_PASSWORD', microsoft: 'M365CLI_KEYRING_PASSWORD' } as const;
+export function keyringPassword(provider: Provider) {
+	return process.env[KEYRING[provider]] || process.env.FALCON_LINK_KEYRING_PASSWORD;
+}
 export function readiness(dir: string, provider: Provider) {
 	const p = provision(dir);
-	let ready = !!process.env.FALCON_LINK_KEYRING_PASSWORD && process.platform === 'linux';
+	let ready = !!keyringPassword(provider);
 	if (provider === 'google') {
 		try {
 			const raw = JSON.parse(readFileSync(p.google_credentials_file ?? '', 'utf8'));
@@ -42,8 +60,8 @@ export function readiness(dir: string, provider: Provider) {
 	return {
 		state: ready ? 'ready' : 'setup_required',
 		message: ready
-			? 'Connection setup ready'
-			: `${provider === 'google' ? 'Google' : 'Microsoft'} connection setup is incomplete. Contact your administrator.`
+			? ''
+			: `${provider === 'google' ? 'Google' : 'Microsoft'} sign-in isn't set up on this Office. Contact your administrator.`
 	};
 }
 export function executable(dir: string, provider: Provider): string {
@@ -55,17 +73,17 @@ export function executable(dir: string, provider: Provider): string {
 			return normal;
 		} catch {}
 	}
-	let version: string = tool.version;
+	let version: string | undefined;
 	try {
 		const current = JSON.parse(
 			readFileSync(path.join(dir, 'tools', provider, 'current.json'), 'utf8')
 		);
 		if (/^\d+\.\d+\.\d+$/.test(current.version)) version = current.version;
 	} catch {}
-	const managed = path.join(dir, 'tools', provider, version, tool.binary);
+	const managed = version ? path.join(dir, 'tools', provider, version, tool.binary) : '';
 	// After migration, removing the normal command must not reactivate a private copy.
 	const migrated = existsSync(path.join(dir, 'tools', provider, 'path-install.json'));
-	if (!migrated && existsSync(managed)) return managed;
+	if (!migrated && managed && existsSync(managed)) return managed;
 	// Prefer normal CLI installations. Private preview paths are legacy fallback only.
 	for (const folder of (process.env.PATH ?? '').split(path.delimiter)) {
 		if (!path.isAbsolute(folder)) continue;
@@ -95,10 +113,10 @@ export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 		GOG_STATE_DIR: path.join(home, 'gog-state'),
 		GOG_CACHE_DIR: path.join(home, 'gog-cache'),
 		GOG_KEYRING_BACKEND: 'file',
-		GOG_KEYRING_PASSWORD: process.env.FALCON_LINK_KEYRING_PASSWORD,
+		GOG_KEYRING_PASSWORD: keyringPassword('google'),
 		M365CLI_CONFIG_DIR: path.join(home, '.config', 'm365cli'),
 		M365CLI_KEYRING_BACKEND: 'file',
-		M365CLI_KEYRING_PASSWORD: process.env.FALCON_LINK_KEYRING_PASSWORD,
+		M365CLI_KEYRING_PASSWORD: keyringPassword('microsoft'),
 		M365CLI_CLIENT_ID: provision(dir).microsoft_client_id
 	};
 	// Do not inherit account/client selection or service-account overrides from the host.
@@ -115,7 +133,7 @@ export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 	return env;
 }
 
-// Only qualified gog stage markers become public facts. Never retain raw stderr,
+// Only recognized gog stage markers become public facts. Never retain raw stderr,
 // which can contain addresses, codes, tokens or provider diagnostic payloads.
 export class GoogleCompletionError extends Error {
 	constructor(

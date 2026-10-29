@@ -9,9 +9,11 @@ import { contract } from './contract.js';
 import { overview } from './status.js';
 import { LinkService } from './service.js';
 import { PLUGIN_ID } from './identity.js';
-import { updateStatus } from './install.js';
-import { PERMISSIONS, BASE_SCOPES } from './model.js';
+import { BASE_SCOPES, type Provider } from './model.js';
 
+// Account facts are omitted in group, channel and room conversations and provided elsewhere.
+const shared = (sessionKey: string) =>
+	/^agent:[^:]+:[^:]+:(?:group|channel|room):/.test(sessionKey);
 function person(context: FeatureInvocationContext): string {
 	if (context.source !== 'session-action')
 		throw new Error('This operation requires the signed-in Link page.');
@@ -44,17 +46,10 @@ export default defineFeaturePlugin({
 				link = undefined;
 			}
 		});
-		// Account facts and CLI usage guidance, without credential values or authority grants.
-		// Private Office inventory includes both human and agent accounts.
+		// Account facts for human and agent accounts, without credential values.
 		api.on('before_prompt_build', async (_event, ctx) => {
 			try {
-				if (
-					!link ||
-					!ctx.agentId ||
-					!ctx.sessionKey ||
-					!/^agent:[^:]+:(?:main$|dashboard:)/.test(ctx.sessionKey)
-				)
-					return;
+				if (!link || !ctx.agentId || !ctx.sessionKey || shared(ctx.sessionKey)) return;
 				await link.discover();
 				return { prependContext: accountBrief(link.accounts(), link.discoveryUnavailable) };
 			} catch {
@@ -64,23 +59,28 @@ export default defineFeaturePlugin({
 		return {
 			async status() {
 				const l = ready();
+				const [status, ...catalogs] = await Promise.all([
+					overview(l.dir),
+					...(['google', 'microsoft'] as Provider[]).map((p) => l.catalog(p).catch(() => null))
+				]);
 				return {
-					...(await overview(l.dir)),
-					permissions: PERMISSIONS,
+					...status,
+					catalogs: { google: catalogs[0], microsoft: catalogs[1] },
 					baseline_scopes: BASE_SCOPES
 				};
 			},
 			async accounts(input, context) {
 				const l = ready();
-				// Account facts are Office-local inventory, not an agent access-control list. On public
-				// channel routes, do not automatically enumerate other people's account identities.
 				if (
 					context.source === 'tool' &&
-					!/^agent:[^:]+:(?:main$|dashboard:)/.test(context.tool.sessionKey ?? '')
+					(!context.tool.sessionKey || shared(context.tool.sessionKey))
 				)
-					throw new Error('Account inventory is available in private Office sessions only.');
+					throw new Error('Account facts are not available in this conversation.');
 				await l.discover();
 				return input.account_id ? l.invocation(input.account_id) : { accounts: l.accounts() };
+			},
+			viewer(_input, context) {
+				return { profile_id: person(context) };
 			},
 			start(input, context) {
 				return ready().start(input, person(context));
@@ -109,10 +109,6 @@ export default defineFeaturePlugin({
 			install(input, context) {
 				person(context);
 				return ready().install(input.provider);
-			},
-			updates(input, context) {
-				person(context);
-				return updateStatus(input.provider);
 			}
 		};
 	}

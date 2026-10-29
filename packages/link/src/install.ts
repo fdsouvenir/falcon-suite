@@ -30,52 +30,47 @@ async function get(url: string): Promise<Response> {
 	if (!response.ok) throw new Error('Release lookup failed. Try again later.');
 	return response;
 }
-export async function targetRelease(provider: Provider): Promise<Release> {
-	const t = TOOLS[provider];
-	return (
-		await get(`https://api.github.com/repos/${t.repo}/releases/tags/v${t.version}`)
-	).json() as Promise<Release>;
-}
-export async function updateStatus(provider: Provider) {
+// Release lookups are cached in memory to stay well inside GitHub's unauthenticated limit.
+const HOUR = 60 * 60 * 1000;
+const releases = new Map<Provider, { at: number; release: Release | null }>();
+export async function latestRelease(provider: Provider, retryFailure = false) {
+	const cached = releases.get(provider);
+	if (cached && Date.now() - cached.at < HOUR && (cached.release || !retryFailure))
+		return cached.release;
+	let release: Release | null = null;
 	try {
-		const t = TOOLS[provider];
 		const r = (await (
-			await get(`https://api.github.com/repos/${t.repo}/releases/latest`)
+			await get(`https://api.github.com/repos/${TOOLS[provider].repo}/releases/latest`)
 		).json()) as Release;
-		return {
-			state: 'checked',
-			qualified_version: t.version,
-			latest_version: r.tag_name.replace(/^v/, ''),
-			qualification_pending: r.tag_name !== `v${t.version}`
-		};
-	} catch {
-		return {
-			state: 'check_failed',
-			qualified_version: TOOLS[provider].version,
-			latest_version: null,
-			qualification_pending: false
-		};
-	}
+		if (/^v\d+\.\d+\.\d+$/.test(r.tag_name) && Array.isArray(r.assets)) release = r;
+	} catch {}
+	releases.set(provider, { at: Date.now(), release });
+	return release;
+}
+export function releaseCheckedAt(provider: Provider) {
+	const at = releases.get(provider)?.at;
+	return at ? new Date(at).toISOString() : null;
 }
 const busy = new Set<string>();
 export async function install(dir: string, provider: Provider) {
 	if (process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch))
-		throw new Error('Preview installation supports Linux x64 and arm64 only.');
+		throw new Error('Link installs CLIs on Linux x64 and arm64 only.');
 	const lock = `${dir}:${provider}`;
 	if (busy.has(lock)) throw new Error('Installation is already running.');
 	busy.add(lock);
 	let stage: string | undefined;
 	try {
 		const t = TOOLS[provider];
-		const release = await targetRelease(provider);
-		if (release.tag_name !== `v${t.version}`) throw new Error('Release version mismatch.');
-		const name = `${t.archive}_${t.version}_linux_${process.arch === 'x64' ? 'amd64' : 'arm64'}.tar.gz`;
+		const release = await latestRelease(provider, true);
+		if (!release) throw new Error('Release lookup failed. Try again later.');
+		const version = release.tag_name.slice(1);
+		const name = `${t.archive}_${version}_linux_${process.arch === 'x64' ? 'amd64' : 'arm64'}.tar.gz`;
 		const asset = release.assets.find((a) => a.name === name);
 		if (
 			!asset ||
 			!/^sha256:[a-f0-9]{64}$/.test(asset.digest ?? '') ||
 			asset.browser_download_url !==
-				`https://github.com/${t.repo}/releases/download/v${t.version}/${name}`
+				`https://github.com/${t.repo}/releases/download/${release.tag_name}/${name}`
 		)
 			throw new Error('Release checksum or source is unavailable.');
 		const response = await get(asset.browser_download_url);
@@ -97,7 +92,7 @@ export async function install(dir: string, provider: Provider) {
 			throw new Error('Release checksum mismatch. Existing tool retained.');
 		const base = path.join(dir, 'tools', provider);
 		await mkdir(base, { recursive: true, mode: 0o700 });
-		const destination = path.join(base, t.version);
+		const destination = path.join(base, version);
 		const activate = async () => {
 			// The installed command is an ordinary user-local executable on the Office PATH.
 			// Versioned download copies remain only for rollback, never required by the agent.
@@ -141,7 +136,7 @@ export async function install(dir: string, provider: Provider) {
 			const pendingReceipt = path.join(base, `.path-install-${randomUUID()}`);
 			await writeFile(
 				pendingReceipt,
-				JSON.stringify({ path: command, version: t.version, binary_sha256: nextDigest }),
+				JSON.stringify({ path: command, version, binary_sha256: nextDigest }),
 				{ mode: 0o600 }
 			);
 			await rename(pendingReceipt, receiptPath);
@@ -151,7 +146,7 @@ export async function install(dir: string, provider: Provider) {
 				previous = JSON.parse(await readFile(path.join(base, 'current.json'), 'utf8')).version;
 			} catch {}
 			const tmp = path.join(base, `.current-${randomUUID()}.json`);
-			await writeFile(tmp, JSON.stringify({ version: t.version, previous_version: previous }), {
+			await writeFile(tmp, JSON.stringify({ version, previous_version: previous }), {
 				mode: 0o600
 			});
 			await rename(tmp, path.join(base, 'current.json'));
@@ -160,9 +155,8 @@ export async function install(dir: string, provider: Provider) {
 		try {
 			const receipt = JSON.parse(await readFile(path.join(destination, 'receipt.json'), 'utf8'));
 			if (receipt.digest === asset.digest) {
-				const version = await run(path.join(destination, t.binary), ['--version']);
-				if (!version.includes(t.version))
-					throw new Error('Installed executable failed validation.');
+				const output = await run(path.join(destination, t.binary), ['--version']);
+				if (!output.includes(version)) throw new Error('Installed executable failed validation.');
 				await activate();
 				return receipt;
 			}
@@ -190,12 +184,12 @@ export async function install(dir: string, provider: Provider) {
 		const binaryPath = path.join(stage, t.binary);
 		await writeFile(binaryPath, binary, { mode: 0o700 });
 		await chmod(binaryPath, 0o700);
-		const version = await run(binaryPath, ['--version']);
-		if (!version.includes(t.version))
+		const output = await run(binaryPath, ['--version']);
+		if (!output.includes(version))
 			throw new Error('Downloaded tool version could not be verified.');
 		const receipt = {
 			provider,
-			version: t.version,
+			version,
 			digest: asset.digest,
 			source: asset.browser_download_url,
 			installed_at: new Date().toISOString(),

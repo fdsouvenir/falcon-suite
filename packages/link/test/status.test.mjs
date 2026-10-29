@@ -21,7 +21,7 @@ async function inspect(script) {
 			[
 				'--input-type=module',
 				'-e',
-				`import { overview } from ${JSON.stringify(moduleUrl)}; console.log(JSON.stringify(await overview()));`
+				`globalThis.fetch = async () => Response.json({ tag_name: 'v0.47.1', assets: [] }); import { overview } from ${JSON.stringify(moduleUrl)}; console.log(JSON.stringify(await overview()));`
 			],
 			{ env: { ...process.env, PATH: dir }, timeout: 10000 }
 		);
@@ -31,11 +31,15 @@ async function inspect(script) {
 	}
 }
 
-test('reports the documented version, without exposing build output or inspecting accounts', async () => {
+test('reports the documented version and newer releases, without exposing build output or inspecting accounts', async () => {
 	const result = await inspect(
-		`if (JSON.stringify(process.argv.slice(2)) !== '["--version"]') process.exit(9); console.log('v0.45.0 (abc123 2026-10-22)');`
+		`if (JSON.stringify(process.argv.slice(2)) !== '["--version"]') process.exit(9); console.log('v0.9.0 (abc123 2026-10-22)');`
 	);
-	assert.deepEqual(result.integrations[0].tool, { state: 'installed', version: 'v0.45.0' });
+	assert.deepEqual(result.integrations[0].tool, { state: 'installed', version: 'v0.9.0' });
+	assert.equal(result.integrations[0].latest_version, '0.47.1');
+	assert.equal(result.integrations[0].update_available, true, 'versions compare numerically');
+	assert.equal(result.integrations[0].below_minimum, true);
+	assert.equal(result.integrations[1].update_available, false);
 	assert.equal(result.integrations[1].tool.state, 'not_installed');
 	assert.ok(result.integrations.every((i) => i.setup.state === 'setup_required'));
 });
