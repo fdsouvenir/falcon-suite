@@ -1,7 +1,8 @@
 import { Type } from 'typebox';
 import { defineFeatureContract } from 'openclaw/plugin-sdk/feature-contract';
 import { PLUGIN_ID } from './identity.js';
-const provider = Type.Union([Type.Literal('google'), Type.Literal('microsoft')]);
+import { PROVIDER_IDS } from './providers/ui.js';
+const provider = Type.Unsafe<string>(Type.Union(PROVIDER_IDS.map((id) => Type.Literal(id))));
 const owner = Type.Object(
 	{
 		kind: Type.Union([Type.Literal('human'), Type.Literal('agent')]),

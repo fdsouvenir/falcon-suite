@@ -1,120 +1,55 @@
-import { BASE_SCOPES, describeSelection, type Account, type Catalog } from './model.js';
+import { describeSelection, type Account, type Catalog } from './model.js';
+import { PROVIDER_UI } from './providers/ui.js';
 
+// Where one capability covers another, show only the broader one.
+const BROADER = [
+	['Read, send, organize and delete (to trash) email', 'Read email'],
+	['Read, send, organize and delete (to trash) email', 'Send email'],
+	['Read, send, organize and delete (to trash) email', 'Create email drafts and send email'],
+	['Create email drafts and send email', 'Send email'],
+	['Manage calendars and events', 'View calendars and events'],
+	['Manage contacts', 'View contacts'],
+	['Manage tasks', 'View tasks'],
+	['Manage files', 'View files']
+];
 // Translate known capabilities, not scope names or selected permission IDs, into user-facing text.
-const accessLabels: Record<string, string> = {
-	'gmail.readonly': 'Read email',
-	'gmail.send': 'Send email',
-	'gmail.compose': 'Create email drafts and send email',
-	'gmail.modify': 'Read, send, organize and delete (to trash) email',
-	'https://mail.google.com/': 'Manage all email, including permanent deletion',
-	'gmail.settings.basic': 'Manage email settings',
-	'gmail.settings.sharing': 'Manage email forwarding, delegation and send-as settings',
-	'calendar.readonly': 'View calendars and events',
-	calendar: 'Manage calendars and events',
-	'contacts.readonly': 'View contacts',
-	'contacts.other.readonly': 'View other contacts',
-	'directory.readonly': 'View the contact directory',
-	contacts: 'Manage contacts',
-	'drive.readonly': 'View files',
-	drive: 'Manage files',
-	'drive.file': 'Manage files opened with this app',
-	spreadsheets: 'Manage spreadsheets',
-	documents: 'Manage documents',
-	'documents.readonly': 'View documents',
-	'spreadsheets.readonly': 'View spreadsheets',
-	presentations: 'Manage presentations',
-	'presentations.readonly': 'View presentations',
-	tasks: 'Manage tasks',
-	'tasks.readonly': 'View tasks',
-	'forms.body': 'Manage forms',
-	'forms.body.readonly': 'View forms',
-	'forms.responses.readonly': 'View form responses',
-	'meetings.space.created': 'Manage meetings created by this app',
-	'meetings.space.readonly': 'View meetings',
-	'meetings.space.settings': 'Manage meeting settings',
-	'script.projects': 'Manage Apps Script projects',
-	'script.projects.readonly': 'View Apps Script projects',
-	'script.deployments': 'Manage Apps Script deployments',
-	'script.deployments.readonly': 'View Apps Script deployments',
-	'script.processes': 'View Apps Script runs',
-	'analytics.readonly': 'View Analytics data',
-	webmasters: 'Manage Search Console',
-	'webmasters.readonly': 'View Search Console data',
-	'drive.activity.readonly': 'View Drive activity',
-	'drive.labels.readonly': 'View Drive labels',
-	'youtube.readonly': 'View YouTube account',
-	'photoslibrary.readonly.appcreateddata': 'View photos added by this app',
-	'photoslibrary.appendonly': 'Upload photos and create albums',
-	'chat.spaces': 'Manage Chat spaces',
-	'chat.spaces.readonly': 'View Chat spaces',
-	'chat.messages': 'Read and send Chat messages',
-	'chat.messages.readonly': 'Read Chat messages',
-	'chat.memberships': 'Manage Chat memberships',
-	'chat.memberships.readonly': 'View Chat memberships',
-	'chat.users.readstate.readonly': 'View Chat read state',
-	'chat.messages.reactions.create': 'Add Chat reactions',
-	'chat.messages.reactions.readonly': 'View Chat reactions',
-	'Mail.Read': 'Read email',
-	'Mail.Send': 'Send email',
-	'Mail.ReadWrite': 'Read, organize, write drafts and delete email, including permanently',
-	'Calendars.Read': 'View calendars and events',
-	'Calendars.ReadWrite': 'Manage calendars and events',
-	'Contacts.Read': 'View contacts',
-	'Contacts.ReadWrite': 'Manage contacts',
-	'Tasks.Read': 'View tasks',
-	'Tasks.ReadWrite': 'Manage tasks',
-	'Files.Read': 'View files',
-	'Files.ReadWrite': 'Manage files',
-	'Group.Read.All': 'View groups',
-	'GroupMember.Read.All': 'View group membership',
-	'Files.ReadWrite.All': 'Manage all files'
-};
 function scopeItems(a: Account, values: string[]) {
+	const ui = PROVIDER_UI.find((p) => p.id === a.provider);
 	const baseline = new Set([
-		...BASE_SCOPES[a.provider],
+		...(ui?.baseline ?? []),
 		'profile',
 		'https://www.googleapis.com/auth/userinfo.profile'
 	]);
 	const items = new Set<string>();
 	let additional = false;
+	const rest: string[] = [];
 	for (const scope of values) {
 		if (baseline.has(scope)) continue;
-		const key =
-			a.provider === 'google'
-				? scope.replace(/^https:\/\/www\.googleapis\.com\/auth\//, '')
-				: scope;
-		const label = accessLabels[key];
+		const key = ui?.access.key ? ui.access.key(scope) : scope;
+		const label = ui?.access.labels[key];
 		if (label) items.add(label);
-		else additional = true;
+		else rest.push(key);
 	}
-	for (const [broad, narrow] of [
-		['Read, send, organize and delete (to trash) email', 'Read email'],
-		['Read, send, organize and delete (to trash) email', 'Send email'],
-		['Read, send, organize and delete (to trash) email', 'Create email drafts and send email'],
-		['Create email drafts and send email', 'Send email'],
-		['Manage calendars and events', 'View calendars and events'],
-		['Manage contacts', 'View contacts'],
-		['Manage tasks', 'View tasks'],
-		['Manage files', 'View files']
-	])
-		if (items.has(broad)) items.delete(narrow);
+	const described = ui?.access.describe ? ui.access.describe(rest) : [];
+	for (const item of described) items.add(item);
+	if (rest.length && !ui?.access.describe) additional = true;
+	for (const [broad, narrow] of BROADER) if (items.has(broad)) items.delete(narrow);
 	if (additional) items.add('Additional permissions');
 	return [...items];
 }
 // Granted access when the provider confirmed it; otherwise what was recorded or selected.
 export function accessSummary(a: Account, catalog?: Catalog | null) {
 	if (!['connected', 'discovered', 'check_failed'].includes(a.state)) return null;
+	const ui = PROVIDER_UI.find((p) => p.id === a.provider);
 	if (Array.isArray(a.granted_scopes)) {
-		const name = a.provider === 'google' ? 'Google' : 'Microsoft';
-		const missing = catalog
-			? describeSelection(a.provider, catalog, a.grant?.selected_not_granted ?? [])
-			: [];
+		const missing =
+			catalog && ui ? describeSelection(ui, catalog, a.grant?.selected_not_granted ?? []) : [];
 		return {
 			title: 'Access',
 			items: scopeItems(a, a.granted_scopes),
 			note: [
 				a.granted_scopes.length ? '' : 'No account service access.',
-				missing.length ? `${name} didn't grant: ${missing.join(', ')}.` : ''
+				missing.length ? `${ui?.name} didn't grant: ${missing.join(', ')}.` : ''
 			]
 				.filter(Boolean)
 				.join(' ')
@@ -122,11 +57,11 @@ export function accessSummary(a: Account, catalog?: Catalog | null) {
 	}
 	if (a.recorded_scopes?.length)
 		return { title: 'Access', items: scopeItems(a, a.recorded_scopes), note: '' };
-	const selected = catalog ? describeSelection(a.provider, catalog, a.requested) : [];
+	const selected = catalog && ui ? describeSelection(ui, catalog, a.requested) : [];
 	if (selected.length) return { title: 'Access', items: selected, note: '' };
 	return {
 		title: 'Access',
 		items: [],
-		note: 'Access details aren’t available for this account.'
+		note: ui?.access.unknown?.(a) ?? 'Access details aren’t available for this account.'
 	};
 }

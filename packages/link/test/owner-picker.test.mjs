@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { setImmediate } from 'node:timers/promises';
 import { parseHTML } from 'linkedom';
-import { BASE_SCOPES } from '../dist/model.js';
+import { BASE_SCOPES } from '../dist/providers/ui.js';
 import { PLUGIN_VERSION } from '../dist/identity.js';
-import { googleCatalog, microsoftCatalog } from '../dist/catalog.js';
+import { googleCatalog } from '../dist/providers/google/catalog.js';
+import { microsoftCatalog } from '../dist/providers/microsoft/catalog.js';
 import { services, workloads } from './catalogs.mjs';
 const catalogs = { google: googleCatalog(services), microsoft: microsoftCatalog(workloads) };
 

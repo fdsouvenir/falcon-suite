@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { install } from '../dist/install.js';
-import { executable } from '../dist/cli.js';
+import { executable } from '../dist/tools.js';
 import { execFileSync } from 'node:child_process';
 
 test(
@@ -61,7 +61,7 @@ test('verified installation publishes a normal PATH binary without replacing unr
    import {createHash} from 'node:crypto';
    import {execFileSync} from 'node:child_process';
    import {install} from ${JSON.stringify(new URL('../dist/install.js', import.meta.url).href)};
-   import {executable} from ${JSON.stringify(new URL('../dist/cli.js', import.meta.url).href)};
+   import {executable} from ${JSON.stringify(new URL('../dist/tools.js', import.meta.url).href)};
    const home=process.env.HOME, dir=path.join(home,'.openclaw','falcon-link');
    const archive=fs.readFileSync(path.join(home,'release.tar.gz'));
    const asset={name:'gogcli_0.47.0_linux_'+(process.arch==='x64'?'amd64':'arm64')+'.tar.gz',digest:'sha256:'+createHash('sha256').update(archive).digest('hex')};

@@ -12,8 +12,8 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { homedir } from 'node:os';
-import { TOOLS, run } from './cli.js';
-import type { Provider } from './model.js';
+import { run } from './cli.js';
+import { provider as providerOf } from './providers/index.js';
 
 type Release = {
 	tag_name: string;
@@ -32,27 +32,32 @@ async function get(url: string): Promise<Response> {
 }
 // Release lookups are cached in memory to stay well inside GitHub's unauthenticated limit.
 const HOUR = 60 * 60 * 1000;
-const releases = new Map<Provider, { at: number; release: Release | null }>();
-export async function latestRelease(provider: Provider, retryFailure = false) {
+const releases = new Map<string, { at: number; release: Release | null }>();
+function githubSource(provider: string) {
+	const source = providerOf(provider).tool.source;
+	if (source.kind !== 'github') throw new Error('Unsupported release source.');
+	return source;
+}
+export async function latestRelease(provider: string, retryFailure = false) {
 	const cached = releases.get(provider);
 	if (cached && Date.now() - cached.at < HOUR && (cached.release || !retryFailure))
 		return cached.release;
 	let release: Release | null = null;
 	try {
 		const r = (await (
-			await get(`https://api.github.com/repos/${TOOLS[provider].repo}/releases/latest`)
+			await get(`https://api.github.com/repos/${githubSource(provider).repo}/releases/latest`)
 		).json()) as Release;
 		if (/^v\d+\.\d+\.\d+$/.test(r.tag_name) && Array.isArray(r.assets)) release = r;
 	} catch {}
 	releases.set(provider, { at: Date.now(), release });
 	return release;
 }
-export function releaseCheckedAt(provider: Provider) {
+export function releaseCheckedAt(provider: string) {
 	const at = releases.get(provider)?.at;
 	return at ? new Date(at).toISOString() : null;
 }
 const busy = new Set<string>();
-export async function install(dir: string, provider: Provider) {
+export async function install(dir: string, provider: string) {
 	if (process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch))
 		throw new Error('Link installs CLIs on Linux x64 and arm64 only.');
 	const lock = `${dir}:${provider}`;
@@ -60,7 +65,7 @@ export async function install(dir: string, provider: Provider) {
 	busy.add(lock);
 	let stage: string | undefined;
 	try {
-		const t = TOOLS[provider];
+		const t = { ...githubSource(provider), binary: providerOf(provider).tool.binary };
 		const release = await latestRelease(provider, true);
 		if (!release) throw new Error('Release lookup failed. Try again later.');
 		const version = release.tag_name.slice(1);

@@ -1,51 +1,17 @@
-import type { Account, Provider } from './model.js';
+import type { Account } from './model.js';
+import { PROVIDERS } from './providers/index.js';
 
 // Escape table delimiters/control characters in user/provider-supplied facts.
 const cell = (value: string) => value.replace(/[\r\n\x00-\x1f\x7f]/g, ' ').replaceAll('|', '\\|');
-const googleScopes: Record<string, string> = {
-	'gmail.readonly': 'Gmail: read',
-	'gmail.send': 'Gmail: send',
-	'gmail.compose': 'Gmail: drafts/send',
-	'gmail.modify': 'Gmail: read/modify/send',
-	'calendar.readonly': 'Calendar: read',
-	calendar: 'Calendar: read/write',
-	'drive.readonly': 'Drive: read',
-	drive: 'Drive: read/write',
-	'drive.file': 'Drive: app-selected files',
-	'contacts.readonly': 'Contacts: read',
-	'contacts.other.readonly': 'Other contacts: read',
-	'directory.readonly': 'Directory: read',
-	contacts: 'Contacts: read/write',
-	spreadsheets: 'Sheets: read/write',
-	documents: 'Docs: read/write',
-	'gmail.settings.basic': 'Gmail: manage basic settings',
-	'gmail.settings.sharing': 'Gmail: manage sharing settings',
-	email: 'Identity: email',
-	openid: 'Identity: OpenID',
-	'userinfo.email': 'Identity: email',
-	'userinfo.profile': 'Identity: profile'
-};
-function scopes(a: Account) {
-	const values = a.granted_scopes ?? a.recorded_scopes;
-	if (!values?.length) return 'unknown';
-	const readable = [
-		...new Set(
-			values.map((s) => {
-				if (a.provider !== 'google') return s;
-				const short = s.replace(/^https:\/\/www\.googleapis\.com\/auth\//, '');
-				return googleScopes[short] ?? short;
-			})
-		)
-	].join('; ');
-	return readable + (a.granted_scopes === null ? ' (recorded)' : '');
-}
-export function accountBrief(accounts: Account[], unavailable: Provider[] = []): string {
+export function accountBrief(accounts: Account[], unavailable: string[] = []): string {
+	const clis = PROVIDERS.map((p) => p.tool.binary);
 	const lines = [
 		'Falcon Link integrations and configured accounts',
-		'falcon_link_accounts lists accounts; with account_id it returns the CLI account arguments and storage environment for that account. gog and m365cli are on the normal PATH. The keyring password variables are already present in the command environment.'
+		`falcon_link_accounts lists accounts; with account_id it returns the CLI account arguments and storage environment for that account. ${clis.slice(0, -1).join(', ')} and ${clis.at(-1)} are on the normal PATH. The keyring password variables are already present in the command environment.`
 	];
-	for (const provider of ['google', 'microsoft'] as const) {
-		lines.push('', provider === 'google' ? 'gogcli' : 'm365cli');
+	for (const p of PROVIDERS) {
+		const provider = p.ui.id;
+		lines.push('', p.brief.heading);
 		const rows = accounts.filter((a) => a.provider === provider && a.state !== 'disconnected');
 		if (rows.length) {
 			lines.push("Email | Owner's profile | Purpose | Scopes");
@@ -60,16 +26,19 @@ export function accountBrief(accounts: Account[], unavailable: Provider[] = []):
 								: a.state === 'discovered'
 									? ' — not checked'
 									: '';
+				const scopes = p.brief.scopes(a);
+				const recorded =
+					a.granted_scopes === null && a.recorded_scopes?.length ? ' (recorded)' : '';
 				lines.push(
 					[
-						a.email ?? 'unknown',
+						p.brief.identity?.(a) ?? a.email ?? 'unknown',
 						a.owner?.name ?? 'unassigned',
 						a.purpose
 							? a.purpose.kind === 'other'
 								? a.purpose.label!
 								: a.purpose.kind
 							: 'unassigned',
-						scopes(a) + attention
+						scopes + recorded + attention
 					]
 						.map(cell)
 						.join(' | ')

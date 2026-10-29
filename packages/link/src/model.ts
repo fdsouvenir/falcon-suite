@@ -1,4 +1,5 @@
-export type Provider = 'google' | 'microsoft';
+// An integration ID from the provider registry (src/providers).
+export type Provider = string;
 export type Owner = { kind: 'human' | 'agent'; id: string; name: string };
 export type Purpose = { kind: 'work' | 'personal' | 'other'; label?: string };
 export type Account = {
@@ -13,6 +14,8 @@ export type Account = {
 	granted_scopes: string[] | null;
 	grant?: { status: 'known' | 'unknown'; selected_not_granted: string[] | null };
 	audience?: 'consumer' | 'enterprise';
+	// How the account signs in, where a provider offers more than one way.
+	auth?: 'oauth' | 'service_key';
 	external?: { selection: string; client?: string; client_id?: string };
 	state: 'discovered' | 'pending' | 'connected' | 'check_failed' | 'disconnected' | 'failed';
 	checked_at: string | null;
@@ -34,34 +37,13 @@ export type Row = {
 };
 // `saved` lists selection IDs from earlier versions that existing accounts keep using.
 export type Catalog = { rows: Row[]; saved: Record<string, { label: string; scopes: string[] }> };
-export const BASE_SCOPES: Record<Provider, string[]> = {
-	google: ['openid', 'email', 'https://www.googleapis.com/auth/userinfo.email'],
-	microsoft: ['openid', 'profile', 'offline_access', 'User.Read']
+// How a provider's permission choices map to scopes. `normalize` translates selections
+// saved by earlier versions; `offer` maps saved selections to the current form's choices.
+export type Permissions = {
+	baseline: string[];
+	normalize?: (selected: string[]) => string[];
+	offer?: (selected: string[]) => string[];
 };
-// Preview.8 Google selections. Each maps to the gog Gmail mode or read level it requested.
-const GOOGLE_PREVIOUS = [
-	'gmail-read',
-	'gmail-send',
-	'gmail-drafts',
-	'calendar',
-	'contacts',
-	'drive'
-];
-export function normalizeGoogle(selected: string[]) {
-	const previous = new Set(selected.filter((id) => GOOGLE_PREVIOUS.includes(id)));
-	if (!previous.size) return selected;
-	const out = selected.filter((id) => !previous.has(id));
-	const [read, send, drafts] = ['gmail-read', 'gmail-send', 'gmail-drafts'].map((id) =>
-		previous.has(id)
-	);
-	if (drafts) out.push(send ? 'gmail:compose' : 'gmail:read-compose');
-	else if (read && send) out.push('gmail:read-send');
-	else if (read) out.push('gmail:readonly');
-	else if (send) out.push('gmail:send');
-	for (const service of ['calendar', 'contacts', 'drive'])
-		if (previous.has(service)) out.push(`${service}:read`);
-	return out;
-}
 const levelOf = (catalog: Catalog, id: string) => {
 	for (const row of catalog.rows) {
 		const level = row.levels.find((l) => l.id === id);
@@ -70,10 +52,10 @@ const levelOf = (catalog: Catalog, id: string) => {
 	}
 	return undefined;
 };
-export function selectionScopes(provider: Provider, catalog: Catalog, selected: string[]) {
-	const ids = provider === 'google' ? normalizeGoogle(selected) : selected;
+export function selectionScopes(p: Permissions, catalog: Catalog, selected: string[]) {
+	const ids = p.normalize ? p.normalize(selected) : selected;
 	const rows = new Set<string>();
-	const scopes = [...BASE_SCOPES[provider]];
+	const scopes = [...p.baseline];
 	if (!ids.length || new Set(ids).size !== ids.length)
 		throw new Error('Select supported permissions.');
 	for (const id of ids) {
@@ -89,23 +71,13 @@ export function selectionScopes(provider: Provider, catalog: Catalog, selected: 
 	return [...new Set(scopes)];
 }
 // Choices to preselect when someone changes an existing account's access.
-const MICROSOFT_EQUIVALENTS: Record<string, string[]> = {
-	mail: ['mail-read', 'mail-send'],
-	calendar: ['calendar-write'],
-	contacts: ['contacts-write'],
-	tasks: ['tasks-write'],
-	onedrive: ['onedrive-write']
-};
-export function offeredSelection(provider: Provider, catalog: Catalog, selected: string[]) {
-	const ids =
-		provider === 'google'
-			? normalizeGoogle(selected).map((id) => (id === 'gmail:read-compose' ? 'gmail:compose' : id))
-			: selected.flatMap((id) => MICROSOFT_EQUIVALENTS[id] ?? [id]);
+export function offeredSelection(p: Permissions, catalog: Catalog, selected: string[]) {
+	const ids = p.offer ? p.offer(selected) : selected;
 	return [...new Set(ids)].filter((id) => levelOf(catalog, id));
 }
 // Plain-words description of a selection, by service row.
-export function describeSelection(provider: Provider, catalog: Catalog, selected: string[]) {
-	return (provider === 'google' ? normalizeGoogle(selected) : selected).flatMap((id) => {
+export function describeSelection(p: Permissions, catalog: Catalog, selected: string[]) {
+	return (p.normalize ? p.normalize(selected) : selected).flatMap((id) => {
 		const found = levelOf(catalog, id);
 		if (!found) return catalog.saved[id] ? [catalog.saved[id].label] : [];
 		return [found.addon ? found.level.label : `${found.row.label}: ${found.level.label}`];
