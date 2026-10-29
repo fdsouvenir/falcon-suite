@@ -20,10 +20,11 @@ import type { Revoke } from './providers/types.js';
 import googleSignIn from '../assets/brand/google-signin-light-square.svg' with { type: 'text' };
 import microsoftSignIn from '../assets/brand/microsoft-signin-light.svg' with { type: 'text' };
 import microsoftLogo from '../assets/brand/microsoft-logo.svg' with { type: 'text' };
+import hubspotLogo from '../assets/brand/hubspot-logo.svg' with { type: 'text' };
 
 const svg = (source: string) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
 // Provider artwork by integration ID. Integrations without artwork use a neutral initial.
-const LOGOS: Record<string, string> = { microsoft: microsoftLogo };
+const LOGOS: Record<string, string> = { microsoft: microsoftLogo, hubspot: hubspotLogo };
 const SIGN_IN_ART: Record<string, string> = { google: googleSignIn, microsoft: microsoftSignIn };
 const name = (id: Provider) => uiOf(id).name;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) {
