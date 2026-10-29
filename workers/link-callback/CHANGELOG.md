@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 — 2026-10-29
+
+- Dropbox callback routing (`/oauth2/callback/dropbox`) and Dropbox sessions, with the same
+  Office-bound encrypted code handoff as Google and Microsoft.
+
 ## 0.1.1 — 2026-10-26
 
 - Friendly, responsive callback pages with self-contained graphics and clear return-to-agent guidance.

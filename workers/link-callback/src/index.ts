@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { callbackPage } from './page.js';
 
 // Kept in step with package.json; /health and deployment metadata identify the artifact.
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 const TTL = 10 * 60 * 1000;
 const headers = {
 	'Cache-Control': 'no-store',
@@ -26,8 +26,9 @@ function b64(bytes: ArrayBuffer | Uint8Array) {
 		)
 	);
 }
+const PROVIDERS = ['google', 'microsoft', 'dropbox'];
 export type SessionInput = {
-	provider: 'google' | 'microsoft';
+	provider: 'google' | 'microsoft' | 'dropbox';
 	state: string;
 	poll_hash: string;
 	public_key: JsonWebKey;
@@ -165,7 +166,7 @@ export default {
 					return reply({ error: 'unauthorized' }, 401);
 				const input = (await boundedJSON(request)) as SessionInput;
 				if (
-					!['google', 'microsoft'].includes(input.provider) ||
+					!PROVIDERS.includes(input.provider) ||
 					!/^[A-Za-z0-9_-]{16,256}$/.test(input.state) ||
 					!/^[a-f0-9]{64}$/.test(input.poll_hash) ||
 					input.public_key?.kty !== 'RSA' ||
@@ -196,7 +197,7 @@ export default {
 					? reply({ id, expires_in: TTL / 1000, protocol: 1 }, 201)
 					: reply({ error: 'session_exists' }, 409);
 			}
-			const callback = url.pathname.match(/^\/oauth2\/callback\/(google|microsoft)$/);
+			const callback = url.pathname.match(/^\/oauth2\/callback\/(google|microsoft|dropbox)$/);
 			if (request.method === 'GET' && callback) {
 				const state = url.searchParams.get('state') ?? '';
 				const code = url.searchParams.get('code');

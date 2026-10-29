@@ -70,7 +70,7 @@ async function decrypt(s, envelope) {
 test('health identifies the versioned public protocol', async () => {
 	const r = await call('/health');
 	assert.equal(r.headers.get('Cache-Control'), 'no-store');
-	assert.deepEqual(await r.json(), { name: 'Link Callback Worker', version: '0.1.1', protocol: 1 });
+	assert.deepEqual(await r.json(), { name: 'Link Callback Worker', version: '0.1.2', protocol: 1 });
 });
 test('unregistered Offices cannot create handoffs, including prototype property names', async () => {
 	for (const office of ['alpha', 'toString', '__proto__'])
@@ -84,8 +84,8 @@ test('unregistered Offices cannot create handoffs, including prototype property 
 			401
 		);
 });
-test('Google and Microsoft callbacks are encrypted to their originating Office; replay and cross-provider callbacks fail', async () => {
-	for (const provider of ['google', 'microsoft']) {
+test('Google, Microsoft and Dropbox callbacks are encrypted to their originating Office; replay and cross-provider callbacks fail', async () => {
+	for (const provider of ['google', 'microsoft', 'dropbox']) {
 		const s = await start(provider);
 		assert.equal((await consume(s)).status, 202);
 		assert.equal((await call('/v1/sessions', s.options)).status, 409);
