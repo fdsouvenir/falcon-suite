@@ -69,7 +69,9 @@ async function whoami(tool: string, env: NodeJS.ProcessEnv, a: Account, completi
 	const out = await runRaw(tool, ['whoami', '--format', 'json'], env);
 	let me: any;
 	try {
+		// 0.16.0 returns whoami as a one-element list, unlike its help text.
 		me = data(JSON.parse(out.stdout));
+		if (Array.isArray(me)) me = me.length === 1 ? me[0] : null;
 	} catch {
 		me = null;
 	}

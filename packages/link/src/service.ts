@@ -148,7 +148,8 @@ export class LinkService implements Host {
 			prior: _prior,
 			...result
 		} = l;
-		return result;
+		// Gateway feature output must be plain JSON; cleared fields are undefined.
+		return JSON.parse(JSON.stringify(result));
 	}
 	private active(id: string) {
 		return [...this.logins.values()].some((l) => l.account_id === id && ACTIVE.includes(l.state));
