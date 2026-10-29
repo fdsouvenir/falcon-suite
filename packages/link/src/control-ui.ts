@@ -124,16 +124,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	const heading = el('div');
 	heading.append(
 		el('h1', 'Falcon Link'),
-		el(
-			'p',
-			`Connect your ${PROVIDER_UI.map((p) => p.name)
-				.join(', ')
-				.replace(
-					/, ([^,]*)$/,
-					' and $1'
-				)} accounts so your assistant can help with your email, calendar, files and customer records.`,
-			'fl-page-description'
-		)
+		el('p', 'Manage account connections for your agents.', 'fl-page-description')
 	);
 	header.append(heading);
 	const notification = el('p', undefined, 'fl-notice');
