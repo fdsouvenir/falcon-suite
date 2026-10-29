@@ -114,24 +114,24 @@ app key (`dropbox_app_key`); the app is a public (PKCE) client with no secret.
 
 - **Permissions.** One row per area, each a single choice in plain words:
   - Files: Off / View files (`files.metadata.read`, `files.content.read`) / View and change
-    files (adds `files.metadata.write`, `files.content.write`). With View and change, a
-    separate checkbox "Permanently delete files (can't be recovered)" adds
-    `files.permanent_delete`.
+    files (adds `files.metadata.write`, `files.content.write`).
   - Sharing: Off / See shared links and folders (`sharing.read`) / Share files and manage links
     (adds `sharing.write`).
   - File requests and Contacts: Off / See / Create and manage (or Manage).
   - Account: `account_info.read` is always included so Link can confirm the account; a checkbox
     adds `account_info.write`.
   - **Dropbox team administration — for team admins**, collapsed: Team info, Members (plus
-    "Remove members from the team" with Manage), Groups, Team files and folders, Sharing and
+    "Remove members from the team" with Manage), Groups, Team files and folders (plus
+    "Permanently delete files (can't be recovered)" with View and change, because Dropbox
+    allows `files.permanent_delete` only in a team sign-in), Sharing and
     governance policies, Sign-in sessions and Activity log, each Off / See / Manage.
 - **Why team administration is a second sign-in.** Dropbox links any authorization that asks
   for a team scope to the whole team rather than the person, and such a token reaches a person's
   files only on their behalf (`Dropbox-API-Select-User`, dbxcli `--as-member`). So Link asks
   for the person's choices in one sign-in and the team choices in a second one that a team admin
   approves, and says so on the form. The team sign-in always includes `team_info.read` so Link
-  can confirm the team; Team files includes `team_data.member`, which Dropbox requires for
-  acting as a member. The approving team must be the account's own team.
+  can confirm the team and `team_data.member`, without which Dropbox refuses any team sign-in
+  (`scope_team_data_member_required`). The approving team must be the account's own team.
 - **Sign-in.** Link builds Dropbox's authorize address itself (PKCE S256,
   `token_access_type=offline`, `scope` = the chosen scopes) because `dbxcli login` sends no
   scope and would get every scope the app allows. With the hosted callback configured, sign-in

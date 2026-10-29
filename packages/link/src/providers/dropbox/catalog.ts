@@ -13,8 +13,14 @@ const level = (id: string, label: string, description: string, scopes: string[])
 	description,
 	scopes
 });
-// Link confirms which team approved with team/get_info, which needs team_info.read.
-const team = (scopes: string[]) => [TEAM + 'team_info.read', ...scopes.map((s) => TEAM + s)];
+// Link confirms which team approved with team/get_info, which needs team_info.read. Dropbox
+// refuses any sign-in with a team scope unless it also asks for team_data.member
+// (error scope_team_data_member_required, observed 2026-10-29).
+const team = (scopes: string[]) => [
+	TEAM + 'team_info.read',
+	TEAM + 'team_data.member',
+	...scopes.map((s) => TEAM + s)
+];
 // Acting as a team member (dbxcli --as-member) needs team_data.member; dbxcli also reads the
 // member's account (account_info.read) to find their root folder.
 const memberFiles = ['team_data.member', 'account_info.read', 'team_data.team_space'];
@@ -40,11 +46,7 @@ const rows: Row[] = [
 				"Also upload, edit, move, rename and delete files. Deleted files stay in Dropbox's deleted files, where they can be restored.",
 				changeFiles
 			)
-		],
-		addon: level('files:permanent-delete', "Permanently delete files (can't be recovered)", '', [
-			'files.permanent_delete'
-		]),
-		addon_requires: 'files:change'
+		]
 	},
 	{
 		id: 'sharing',
@@ -195,7 +197,16 @@ const rows: Row[] = [
 					...changeFiles
 				])
 			)
-		]
+		],
+		// Dropbox allows files.permanent_delete only for team-linked sign-ins (it is refused
+		// without team_data.member), so permanent deletion is offered here, not under Files.
+		addon: level(
+			'team_files:permanent-delete',
+			"Permanently delete files (can't be recovered)",
+			'',
+			team(['files.permanent_delete'])
+		),
+		addon_requires: 'team_files:change'
 	},
 	{
 		id: 'governance',
@@ -265,14 +276,14 @@ export const DROPBOX_CATALOG: Catalog = {
 	groups: {
 		team: {
 			title: 'Dropbox team administration — for team admins',
-			note: 'These let the assistant manage your Dropbox team. A team admin must approve them.',
+			note: 'These let the assistant manage your Dropbox team and act for its members. A team admin must approve them.',
 			chosen_note:
 				'Dropbox asks twice: first you sign in with this account, then a team admin approves team administration.'
 		}
 	},
 	technical: [
 		'account_info.read is always included so Link can confirm which Dropbox account signed in.',
-		'Scopes starting with team: are requested in a second sign-in that a team admin approves. It always includes team_info.read so Link can confirm the team. Team files access includes team_data.member, which Dropbox requires for acting as a team member.'
+		'Scopes starting with team: are requested in a second sign-in that a team admin approves. It always includes team_info.read so Link can confirm the team, and team_data.member, which Dropbox requires for every team sign-in. Dropbox allows files.permanent_delete only in that team sign-in.'
 	]
 };
 // The two Dropbox sign-ins for a selection: the person's own, and the team admin's (if any).

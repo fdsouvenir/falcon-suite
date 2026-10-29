@@ -83,22 +83,23 @@ ${body}; l.stop(); console.log('passed');`;
 
 test('Dropbox asks for exactly the chosen access, and team administration is a second sign-in saved in the team slots dbxcli reads', () =>
 	scenario(`
- await assert.rejects(()=>l.start(input(['files:permanent-delete']),'fred'),/supported/,'permanent delete needs View and change files');
- const login=await l.start(input(['files:change','files:permanent-delete','sharing:view','members:view']),'fred');
+ await assert.rejects(()=>l.start(input(['team_files:permanent-delete']),'fred'),/supported/,'permanent delete needs View and change team files');
+ const stale=await l.start(input(['files:view']),'fred'); assert.equal(stale.state,'awaiting_consent');
+ const login=await l.start(input(['files:change','sharing:view','members:view']),'fred'); assert.equal(l.login(stale.id,'fred').state,'cancelled','starting again replaces a sign-in Dropbox refused on its own page');
  assert.equal(login.state,'awaiting_consent'); assert.deepEqual(login.step,{number:1,total:2}); assert.equal(login.paste.kind,'text');
  const first=new URL(login.url); assert.equal(first.origin+first.pathname,'https://www.dropbox.com/oauth2/authorize');
  assert.equal(first.searchParams.get('client_id'),'fixtureappkey1'); assert.equal(first.searchParams.get('token_access_type'),'offline'); assert.equal(first.searchParams.get('code_challenge_method'),'S256'); assert.equal(first.searchParams.get('redirect_uri'),null);
- assert.deepEqual(ask(login),['account_info.read','files.content.read','files.content.write','files.metadata.read','files.metadata.write','files.permanent_delete','sharing.read']);
+ assert.deepEqual(ask(login),['account_info.read','files.content.read','files.content.write','files.metadata.read','files.metadata.write','sharing.read']);
  const second=await l.finish(login.id,' fred-code-0001 ','fred'); assert.equal(second.state,'awaiting_consent',second.message); assert.deepEqual(second.step,{number:2,total:2});
- assert.deepEqual(ask(second),['members.read','team_info.read']); assert.notEqual(new URL(second.url).searchParams.get('state'),first.searchParams.get('state'));
+ assert.deepEqual(ask(second),['members.read','team_data.member','team_info.read'],'Dropbox refuses team sign-ins without team_data.member'); assert.notEqual(new URL(second.url).searchParams.get('state'),first.searchParams.get('state'));
  assert.equal(fs.existsSync(file(login.account_id)),false,'nothing is saved before every sign-in finishes');
  const done=await l.finish(login.id,'team-code-0001','fred'); assert.equal(done.state,'connected',done.message);
  assert.ok(exchanges.every(p=>p.client_id==='fixtureappkey1'&&p.code_verifier&&!p.redirect_uri&&!p.client_secret));
  const saved=JSON.parse(fs.readFileSync(file(login.account_id),'utf8'))['']; assert.equal(fs.statSync(file(login.account_id)).mode&0o777,0o600);
- assert.equal(saved.personal.access_token,'sl.fred'); assert.equal(saved.personal.app_key,'fixtureappkey1'); assert.equal(saved.teamManage.access_token,'sl.team'); assert.equal(saved.teamAccess,undefined,'no member access without team files');
+ assert.equal(saved.personal.access_token,'sl.fred'); assert.equal(saved.personal.app_key,'fixtureappkey1'); assert.equal(saved.teamManage.access_token,'sl.team'); assert.equal(saved.teamAccess.access_token,'sl.team');
  const a=l.registry.get(login.account_id); assert.equal(a.email,'fred@example.com'); assert.equal(a.provider_id,'dbid:fred');
- assert.deepEqual(accessSummary(a).items,['View and change files',"Permanently delete files (can't be recovered)",'See shared links and folders','See team details','See team members']);
- const inv=await l.invocation(a.id); assert.deepEqual(inv.environment,{DBXCLI_AUTH_FILE:file(a.id)}); assert.deepEqual(inv.team_granted_scopes,['team_info.read','members.read']);
+ assert.deepEqual(accessSummary(a).items,['View and change files','See shared links and folders','See team details','See team members']);
+ const inv=await l.invocation(a.id); assert.deepEqual(inv.environment,{DBXCLI_AUTH_FILE:file(a.id)}); assert.deepEqual(inv.team_granted_scopes,['team_info.read','team_data.member','members.read']);
  assert.equal(JSON.parse(execFileSync('sh',['-c',inv.command_prefix+' account --output=json'],{encoding:'utf8'})).results[0].result.email,'fred@example.com','the prefix selects this account despite the host token');
  assert.equal(JSON.parse(execFileSync('sh',['-c',inv.command_prefix+' team info --output=json'],{encoding:'utf8'})).results[0].result.team_id,'dbtid:one');
  assert.doesNotMatch(JSON.stringify([inv,l.accounts(),fs.readFileSync(path.join(dir,'accounts.json'),'utf8')]),/private-refresh|sl\\.fred/);
