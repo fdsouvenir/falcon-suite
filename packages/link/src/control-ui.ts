@@ -12,6 +12,7 @@ import {
 	requestedScopes
 } from './model.js';
 import './control-ui.css';
+import { accessSummary } from './access-summary.js';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) {
 	const n = document.createElement(tag);
@@ -60,7 +61,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	const title = el('h1', 'Falcon Link');
 	title.append(el('span', ` v${version}`, 'fl-version'));
 	const heading = el('div');
-	heading.append(title, el('p', 'Google and Microsoft accounts', 'fl-page-description'));
+	heading.append(
+		title,
+		el('p', "Control your Agents' access to third party accounts.", 'fl-page-description')
+	);
 	header.append(heading);
 	const notification = el('p', undefined, 'fl-notice');
 	notification.setAttribute('role', 'status');
@@ -578,7 +582,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const accountTitle = el('div');
 		accountTitle.append(
 			el('h3', 'Accounts'),
-			el('p', 'Keep each account’s owner and purpose clear.', 'fl-muted')
+			el('p', 'Connected accounts and their access.', 'fl-muted')
 		);
 		accountHeading.append(accountTitle);
 		if (list.length && ready) {
@@ -608,46 +612,96 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			detail.append(empty);
 		}
 		for (const a of list) {
-			const card = el('section', undefined, 'fl-card');
-			card.append(
-				el('h4', a.email ?? 'Incomplete sign-in'),
-				el(
-					'p',
-					`${a.owner?.name ?? 'Owner unassigned'} · ${a.purpose ? (a.purpose.kind === 'other' ? a.purpose.label : a.purpose.kind) : 'Purpose unassigned'}`
-				),
-				el('p', a.state.replaceAll('_', ' '), 'fl-state')
+			const card = el('section', undefined, 'fl-card fl-account');
+			const identity = el('div', undefined, 'fl-account-identity');
+			const avatar = el(
+				'span',
+				(a.email ?? a.owner?.name ?? '?').slice(0, 1).toUpperCase(),
+				'fl-account-avatar'
 			);
-			if (a.connection_error) card.append(el('p', a.connection_error.message, 'fl-error'));
-			else if (a.state === 'failed')
-				card.append(
+			avatar.setAttribute('aria-hidden', 'true');
+			const accountName = el('div', undefined, 'fl-account-name');
+			accountName.append(el('h4', a.email ?? 'Finish connecting your account'));
+			const meta = el('div', undefined, 'fl-account-meta');
+			meta.append(el('span', a.owner ? `Owner: ${a.owner.name}` : 'Choose an account owner'));
+			if (a.purpose)
+				meta.append(
 					el(
-						'p',
-						'Sign-in did not complete. Reconnect to try again; no verified connection is available.',
-						'fl-error'
+						'span',
+						a.purpose.kind === 'other'
+							? a.purpose.label
+							: a.purpose.kind === 'work'
+								? 'Work'
+								: 'Personal',
+						'fl-account-purpose'
 					)
 				);
-			card.append(
-				el(
-					'p',
-					`Requested: ${a.requested.map((id) => status!.permissions[a.provider].find((p) => p.id === id)?.label ?? id).join('; ')}`,
-					'fl-muted'
-				),
-				el('p', 'Granted scopes: unknown — no independent provider readback.', 'fl-muted')
+			accountName.append(meta);
+			const healthy = a.state === 'connected';
+			const state = el(
+				'span',
+				{
+					connected: 'Connected',
+					discovered: 'Not checked',
+					check_failed: 'Needs attention',
+					disconnected: 'Not connected',
+					pending: 'Finish sign-in',
+					failed: 'Sign-in incomplete'
+				}[a.state],
+				`fl-account-status${healthy ? ' fl-account-status-ok' : ''}`
 			);
-			if (a.checked_at)
-				card.append(
-					el('p', `Identity last checked: ${new Date(a.checked_at).toLocaleString()}`, 'fl-muted')
+			identity.append(avatar, accountName, state);
+			card.append(identity);
+			const access = accessSummary(a);
+			const body = el('div', undefined, 'fl-account-access');
+			if (access) {
+				body.append(el('h5', access.title));
+				if (access.items.length) {
+					const capabilities = el('ul', undefined, 'fl-access-list');
+					for (const capability of access.items) capabilities.append(el('li', capability));
+					body.append(capabilities);
+				}
+				if (access.note) body.append(el('p', access.note, 'fl-muted'));
+			} else
+				body.append(
+					el(
+						'p',
+						a.state === 'disconnected'
+							? 'This account is no longer connected.'
+							: 'Complete sign-in to connect this account.',
+						'fl-muted'
+					)
 				);
+			card.append(body);
+			if (a.connection_error)
+				card.append(el('p', a.connection_error.message, 'fl-error fl-account-error'));
+			else if (a.state === 'failed')
+				card.append(
+					el('p', 'Sign-in did not complete. Try connecting again.', 'fl-error fl-account-error')
+				);
+			const footer = el('div', undefined, 'fl-account-footer');
 			const actions = el('div', undefined, 'fl-actions');
 			const edit = button('Edit details', () => accountForm(a, true));
 			edit.disabled = !canWrite();
 			actions.append(edit);
-			const reconnect = button('Reconnect / permissions', () => accountForm(a));
+			const reconnect = button(
+				a.state === 'connected'
+					? 'Change access'
+					: a.state === 'failed' || a.state === 'pending'
+						? 'Finish sign-in'
+						: 'Reconnect',
+				() => accountForm(a),
+				a.state !== 'connected'
+			);
 			reconnect.disabled = !canWrite() || integration.setup.state !== 'ready';
-			if (!a.external) actions.append(reconnect);
+			if (!a.external) footer.append(reconnect);
 			else
 				card.append(
-					el('p', 'Discovered in the existing CLI. Credentials remain managed there.', 'fl-muted')
+					el(
+						'p',
+						'This account was connected outside Link. Sign-in changes aren’t available here yet.',
+						'fl-muted'
+					)
 				);
 			const check = button('Check connection', async () => {
 				await act(
@@ -656,7 +710,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 						await client.invoke('check', { account_id: a.id });
 						await load();
 					},
-					'Connection check passed. Service permissions were not tested.'
+					'Sign-in is working.'
 				);
 			});
 			check.disabled = !canWrite() || !a.email || a.state === 'disconnected';
@@ -690,7 +744,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				disconnect.disabled = !canWrite();
 				actions.append(disconnect);
 			}
-			card.append(actions);
+			const manage = el('details', undefined, 'fl-account-manage');
+			manage.append(el('summary', 'Manage account'), actions);
+			footer.append(manage);
+			card.append(footer);
 			detail.append(card);
 		}
 		if (activeLogin?.provider === selected) {

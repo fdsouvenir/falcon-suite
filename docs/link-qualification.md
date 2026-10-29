@@ -134,3 +134,23 @@ three saved Google accounts (19, 12 and 33 recorded scopes). It did not import t
 the installed plugin, change credentials, perform refresh or assign owner/purpose.
 Microsoft discovery was exercised with its published schema in an isolated CLI fixture;
 this host has no m365cli executable. Live customer sign-in remains unverified.
+
+## Account access cards — 2026-10-26
+
+The account card is organized around account identity, owner/purpose, connection status
+and one plain-English capability list. Scope IDs, requested/granted duplicate rows and
+identity-check timestamps are removed from the card. Change access (or finish sign-in)
+is the main action; edit, check and disconnect are under a collapsed Manage account.
+
+The CLI currently saves requested Google scopes, not independently verified Google
+grants. The card calls those Selected access and says current permissions are not
+confirmed. Only independently verified grants may appear as Allowed access. Known
+empty grants never fall back to a broader sign-in request. Inactive accounts do not show
+stale permission lists. Unknown permissions are not silently translated into known access.
+This change does not implement provider grant verification.
+
+An extended existing rendered-UI regression failed before the redesign, then passed.
+Local Chrome fixtures checked desktop and phone layouts, active/incomplete/disconnected/
+unverified states, saved vs verified permissions, collapsed management and working edit,
+no horizontal phone overflow and zero page errors. These are local fixture checks, not
+hosted customer acceptance. No release or installation is part of this change.

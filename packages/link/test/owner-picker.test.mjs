@@ -37,6 +37,15 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		requested: ['gmail-read'],
 		granted_scopes: null
 	};
+	const connectedAccount = {
+		...failedAccount,
+		id: 'acct_connected',
+		email: 'work@example.com',
+		state: 'connected',
+		requested: ['gmail-send'],
+		recorded_scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+		checked_at: '2026-10-26T18:38:13Z'
+	};
 	const host = {
 		pluginId: manifest.id,
 		signal: new AbortController().signal,
@@ -55,7 +64,18 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 				ok: true,
 				result:
 					payload.actionId === 'accounts'
-						? { accounts: [failedAccount] }
+						? {
+								accounts: [
+									failedAccount,
+									connectedAccount,
+									{
+										...connectedAccount,
+										id: 'acct_empty',
+										email: 'empty@example.com',
+										granted_scopes: []
+									}
+								]
+							}
 						: {
 								permissions: PERMISSIONS,
 								baseline_scopes: BASE_SCOPES,
@@ -78,6 +98,34 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 	try {
 		plugin.activate(host);
 		await setImmediate();
+		const account = [...document.querySelectorAll('.fl-account')].find((card) =>
+			card.textContent.includes('work@example.com')
+		);
+		assert.ok(account, 'an account gets a structured, readable card');
+		assert.match(account.textContent, /Read email/);
+		assert.doesNotMatch(
+			account.textContent,
+			/Send email|Requested:|Granted scopes|Identity last checked|2026/
+		);
+		assert.match(
+			account.textContent,
+			/Selected access/,
+			'saved scopes must not be promoted to confirmed access'
+		);
+		assert.equal(
+			account.querySelector('.fl-account-manage').hasAttribute('open'),
+			false,
+			'routine actions start collapsed'
+		);
+		const empty = [...document.querySelectorAll('.fl-account')].find((card) =>
+			card.textContent.includes('empty@example.com')
+		);
+		assert.match(empty.textContent, /No account service access/);
+		assert.doesNotMatch(
+			empty.textContent,
+			/Send email|Read email/,
+			'known empty grants never fall back to sign-in choices'
+		);
 		const connect = [...document.querySelectorAll('button')].find(
 			(b) => b.textContent === 'Connect account'
 		);
@@ -91,7 +139,7 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		);
 		[...document.querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
 		[...document.querySelectorAll('button')]
-			.find((b) => b.textContent === 'Reconnect / permissions')
+			.find((b) => b.textContent === 'Finish sign-in')
 			.click();
 		const email = document.querySelector('input[type=email]');
 		assert.equal(email.readOnly, false, 'an unverified empty address must remain editable');
