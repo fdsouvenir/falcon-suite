@@ -224,3 +224,49 @@ style hosts are accepted), the Connected apps link
 (`app.hubspot.com/integrations-settings/<portal>/installed`), telemetry opt-out, the
 `openclaw` command being on the Gateway's PATH, agents loading the shared skills in a real
 Gateway, and arm64.
+
+## HubSpot on Alpha — 2026-10-29
+
+Alpha (Office `bldg006-office-4`, OpenClaw 2026.10.4), HubSpot free developer portal
+`247833836` (verl@fredbot.link, na2 data centre). Plugin installed only from ClawHub with
+`openclaw plugins install clawhub:@fdsouvenir/falcon-link-preview@<version> --force --no-enable --accept-capabilities`.
+Container start time unchanged throughout; Gateway configuration, Google and Microsoft account
+files and the gog/m365cli binaries byte-identical before and after. Evidence:
+`~/repos/artifacts/link-hubspot-alpha-20261029/`.
+
+| Version          | Source             | Registry SHA-256                           | Scan  |
+| ---------------- | ------------------ | ------------------------------------------ | ----- |
+| 0.1.0-preview.11 | `923588d` (PR #24) | `0b6c01d5…99ff3` (downloaded copy matches) | clean |
+| 0.1.0-preview.12 | `7e3affd` (PR #25) | `14a1df99…c2b1`                            | clean |
+
+Verified on Alpha:
+
+- Link installed `hubspot` 0.16.0 into `~/.local/bin` after checking HubSpot's checksum; the
+  page reports it as self-updating and managed.
+- Skills: all 19 official skills from `HubSpot/agent-cli-skills@b310eb5` installed once in the
+  shared managed skills folder as `hubspot-*`; `openclaw skills check --agent main` lists them
+  as eligible.
+- Sign-in: HubSpot's consent page let the person choose an account and permissions (chose
+  View-only: 42 scopes). The pasted code exchanged; `whoami` confirmed verl@fredbot.link on
+  portal 247833836 and Link shows the account Connected with 42 granted scopes.
+- **Two defects found and fixed (PR #25, preview.12):** 0.16.0 returns `whoami` data as a
+  one-element list, not the object its help shows, so preview.11 marked a good sign-in as
+  failed; and `finish` returned an undefined field the Gateway rejects ("Feature output must
+  be bounded JSON").
+- Service key: a portal key limited to `crm.objects.contacts.read` connected through the second
+  button. Verified `service_key` on portal 247833836. The key is only in that account's
+  `.config/hubspot/.env` (0600); it is not in `accounts.json`, the tool output or the command
+  prefix (which reads the file at run time).
+- Agent use: both accounts' `command_prefix` listed contacts. A real `main` agent turn
+  (session `link-hubspot-qual-20261029`) called `falcon_link_accounts`, read
+  `hubspot-crm-lookup` and `hubspot-bulk-operations`, and ran
+  `hubspot objects count --type contacts` through the OAuth account: 2 contacts, read only.
+
+Observed: HubSpot stores the OAuth sign-in as plain JSON (`accounts/<portal>/auth.json`, mode 0600) with access and refresh tokens; it does not use an encrypted keyring like gog and m365cli.
+
+- Token refresh: the first access token (30-minute life) expired at 06:35Z; the 13:11Z check
+  succeeded and `auth.json` holds a token issued about seven hours later, with no new sign-in.
+
+Still unverified: the exact App
+Governance / wrong-portal / no-permission texts, non-US portals, the Connected apps link,
+telemetry opt-out, Remove on a real account, arm64.
