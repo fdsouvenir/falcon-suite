@@ -32,17 +32,26 @@ export type ProviderUi = Permissions & {
 	};
 };
 
-// A CLI published as GitHub release archives, or as a vendor-hosted single binary with a
-// published SHA-256 file that may update itself.
+// A CLI published as GitHub release archives (optionally with a release SHA-256 sums file that
+// must also list the archive), or as a vendor-hosted single binary with a published SHA-256
+// file that may update itself.
 export type ToolSource =
-	| { kind: 'github'; repo: string; archive: string }
+	| { kind: 'github'; repo: string; archive: string; checksums?: string }
 	| {
 			kind: 'vendor';
 			binary(arch: 'x64' | 'arm64'): string;
 			checksum(arch: 'x64' | 'arm64'): string;
 			upgrade: string[];
 	  };
-export type Tool = { binary: string; minimum: string; source: ToolSource; version_prefix?: string };
+// `version_args` replaces `--version` for CLIs that report their version another way; their
+// version is read from the first line of that output.
+export type Tool = {
+	binary: string;
+	minimum: string;
+	source: ToolSource;
+	version_prefix?: string;
+	version_args?: string[];
+};
 export type SkillSource = { repo: string; branch: string; prefix: string };
 
 export type SignInMethod =
@@ -66,6 +75,8 @@ export type Login = {
 	// Set when the person pastes something back: a redirect address or a code.
 	paste?: { label: string; kind: 'url' | 'text' };
 	hosted?: boolean;
+	// Set when a sign-in takes more than one provider consent.
+	step?: { number: number; total: number };
 	// Private to the server.
 	email: string;
 	prepared?: unknown;
