@@ -8,6 +8,7 @@ export type Provision = {
 	microsoft_client_id?: string;
 	microsoft_tenant?: string;
 	microsoft_client_secret_file?: string;
+	dropbox_app_key?: string;
 	callback?: CallbackConfig;
 };
 export function provision(dir: string): Provision {

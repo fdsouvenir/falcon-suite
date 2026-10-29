@@ -25,6 +25,7 @@ try {
 		'microsoft_client_id',
 		'microsoft_tenant',
 		'microsoft_client_secret_file',
+		'dropbox_app_key',
 		'callback'
 	];
 	if (Object.keys(input).some((k) => !allowed.includes(k)))
@@ -49,6 +50,8 @@ try {
 		throw new Error('Invalid Microsoft application ID.');
 	if (next.microsoft_tenant && !/^[a-zA-Z0-9.-]{1,255}$/.test(next.microsoft_tenant))
 		throw new Error('Invalid Microsoft tenant.');
+	if (next.dropbox_app_key && !/^[a-z0-9]{8,32}$/.test(next.dropbox_app_key))
+		throw new Error('Invalid Dropbox app key.');
 
 	if (next.microsoft_client_secret_file) {
 		if (

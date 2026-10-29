@@ -249,6 +249,14 @@
 	width: 21px;
 	height: 21px;
 }
+.fl-provider-mark img.fl-logo-padded {
+	width: 30px;
+	height: 30px;
+}
+.fl-provider-mark-large img.fl-logo-padded {
+	width: 36px;
+	height: 36px;
+}
 .fl-provider-header,
 .fl-provider-identity {
 	display: flex;
@@ -426,6 +434,27 @@
 .fl-signin:disabled {
 	opacity: 0.5;
 	cursor: default;
+}
+.fl-btn-provider {
+	gap: var(--space-2);
+	min-height: 40px;
+	padding: 0 var(--space-4) 0 var(--space-2);
+	font-weight: 500;
+	color: var(--text-strong);
+}
+.fl-btn-provider img {
+	width: 28px;
+	height: 28px;
+}
+.fl-group-note {
+	margin: 0 0 var(--space-2);
+}
+.fl-group-chosen {
+	margin: var(--space-3) 0 0;
+	padding: var(--space-3);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--bg);
 }
 .fl-paste {
 	margin: var(--space-4) 0;

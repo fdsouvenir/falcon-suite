@@ -21,11 +21,20 @@ import googleSignIn from '../assets/brand/google-signin-light-square.svg' with {
 import microsoftSignIn from '../assets/brand/microsoft-signin-light.svg' with { type: 'text' };
 import microsoftLogo from '../assets/brand/microsoft-logo.svg' with { type: 'text' };
 import hubspotLogo from '../assets/brand/hubspot-logo.svg' with { type: 'text' };
+import dropboxGlyph from '../assets/brand/dropbox-glyph.svg' with { type: 'text' };
 
 const svg = (source: string) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
 // Provider artwork by integration ID. Integrations without artwork use a neutral initial.
-const LOGOS: Record<string, string> = { microsoft: microsoftLogo, hubspot: hubspotLogo };
+const LOGOS: Record<string, string> = {
+	microsoft: microsoftLogo,
+	hubspot: hubspotLogo,
+	dropbox: dropboxGlyph
+};
+// Artwork with built-in clear space is shown larger so the mark matches the others.
+const PADDED = new Set(['dropbox']);
 const SIGN_IN_ART: Record<string, string> = { google: googleSignIn, microsoft: microsoftSignIn };
+// Providers without an official sign-in button: their logo beside Link's own button text.
+const SIGN_IN_LOGO = new Set(['dropbox']);
 const name = (id: Provider) => uiOf(id).name;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) {
 	const n = document.createElement(tag);
@@ -66,7 +75,7 @@ function mark(provider: Provider, large = false) {
 	const cls = `fl-provider-mark${large ? ' fl-provider-mark-large' : ''}`;
 	const node = el('span', LOGOS[provider] ? undefined : name(provider).slice(0, 1), cls);
 	if (LOGOS[provider]) {
-		const logo = el('img');
+		const logo = el('img', undefined, PADDED.has(provider) ? 'fl-logo-padded' : undefined);
 		logo.src = svg(LOGOS[provider]);
 		logo.alt = '';
 		node.append(logo);
@@ -77,6 +86,14 @@ function mark(provider: Provider, large = false) {
 // The provider's sign-in artwork, where it has one, is the action that starts sign-in.
 function signInButton(provider: Provider) {
 	const text = uiOf(provider).connect;
+	if (SIGN_IN_LOGO.has(provider)) {
+		const b = el('button', undefined, 'fl-btn fl-btn-provider');
+		const logo = el('img');
+		logo.src = svg(LOGOS[provider]);
+		logo.alt = '';
+		b.append(logo, el('span', text));
+		return b;
+	}
 	if (!SIGN_IN_ART[provider]) return el('button', text, 'fl-btn fl-btn-primary');
 	const b = el('button', undefined, 'fl-signin');
 	b.type = 'submit';
@@ -106,6 +123,7 @@ type Login = {
 	expires_at: string;
 	hosted?: boolean;
 	paste?: { label: string; kind: 'url' | 'text' };
+	step?: { number: number; total: number };
 };
 type StartInput = {
 	provider: Provider;
@@ -332,8 +350,25 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		}
 		const technical = el('details', undefined, 'fl-technical');
 		const scopeList = el('p', undefined, 'fl-scopes');
-		technical.append(el('summary', 'Technical details'), scopeList);
+		technical.append(
+			el('summary', 'Technical details'),
+			...(catalog.technical ?? []).map((line) => el('p', line, 'fl-muted')),
+			scopeList
+		);
+		// Collapsed sections for rows outside the main group, with an optional note shown while
+		// any of their rows is on.
+		const sections = new Map<
+			string,
+			{
+				details: HTMLDetailsElement;
+				body: HTMLElement;
+				chosen: HTMLElement | null;
+				pickers: (() => string[])[];
+			}
+		>();
 		const update = () => {
+			for (const s of sections.values())
+				if (s.chosen) s.chosen.hidden = !s.pickers.some((p) => p().length);
 			try {
 				scopeList.textContent = selectionScopes(
 					uiOf(provider),
@@ -345,7 +380,6 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			}
 		};
 		const initial = new Set(offeredSelection(uiOf(provider), catalog, saved));
-		let more: HTMLElement | null = null;
 		for (const row of catalog.rows) {
 			const line = el('div', undefined, 'fl-permission');
 			const copy = el('div', undefined, 'fl-permission-copy');
@@ -355,9 +389,12 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				row.levels.find((l) => initial.has(l.id))?.id ?? ''
 			);
 			const describe = () => {
-				description.textContent = row.levels.find((l) => l.id === choice.value)?.description ?? '';
+				description.textContent =
+					row.levels.find((l) => l.id === choice.value)?.description ?? row.description ?? '';
 			};
+			let syncAddon = () => {};
 			choice.addEventListener('change', () => {
+				syncAddon();
 				describe();
 				update();
 			});
@@ -387,25 +424,46 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				const label = el('label', undefined, 'fl-check');
 				label.append(addon, el('span', row.addon.label));
 				controls.append(label);
+				const box = addon;
+				// An addon that depends on a level is offered only while that level is chosen.
+				if (row.addon_requires) {
+					syncAddon = () => {
+						label.hidden = choice.value !== row.addon_requires;
+						if (label.hidden) box.checked = false;
+					};
+					syncAddon();
+				}
 			}
 			const level = row.levels.length ? choice : null;
 			const extra = row.addon ? { id: row.addon.id, input: addon! } : null;
-			pickers.push(() => [
+			const picker = () => [
 				...(level?.value ? [level.value] : []),
 				...(extra?.input.checked ? [extra.id] : [])
-			]);
+			];
+			pickers.push(picker);
 			line.append(copy, controls);
-			if (row.group === 'more') {
-				if (!more) {
-					const group = el('details', undefined, 'fl-more');
-					group.append(el('summary', `More ${name(provider)} services`));
-					more = el('div');
-					group.append(more);
-					node.append(group);
-				}
-				more.append(line);
-			} else node.append(line);
+			if (row.group === 'main') {
+				node.append(line);
+				continue;
+			}
+			let section = sections.get(row.group);
+			if (!section) {
+				const info = catalog.groups?.[row.group];
+				const details = el('details', undefined, 'fl-more');
+				const body = el('div');
+				details.append(el('summary', info?.title ?? `More ${name(provider)} services`), body);
+				if (info?.note) body.append(el('p', info.note, 'fl-muted fl-group-note'));
+				const chosen = info?.chosen_note ? el('p', info.chosen_note, 'fl-group-chosen') : null;
+				node.append(details);
+				section = { details, body, chosen, pickers: [] };
+				sections.set(row.group, section);
+			}
+			section.body.append(line);
+			section.pickers.push(picker);
+			// Changing access opens a section that already has choices.
+			if (picker().length) section.details.open = true;
 		}
+		for (const s of sections.values()) if (s.chosen) s.body.append(s.chosen);
 		node.append(technical);
 		update();
 		return { node, selected: () => pickers.flatMap((p) => p()) };
@@ -603,19 +661,25 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		});
 		retry.disabled = !canWrite() || !lastStart;
 		if (ACTIVE.includes(login.state)) {
-			card.append(el('h3', 'Signing in…'), el('p', login.message));
+			card.append(el('h3', 'Signing in…'));
+			if (login.step)
+				card.append(el('p', `Step ${login.step.number} of ${login.step.total}`, 'fl-muted'));
+			card.append(el('p', login.message));
+			// A later step needs the person to open the provider again themselves.
+			const later = (login.step?.number ?? 1) > 1;
 			if (login.url) {
-				card.append(
-					el(
-						'p',
-						signInOpened
-							? 'Sign-in opened in a new tab.'
-							: 'Your browser may have blocked the sign-in tab. Open sign-in to continue.',
-						'fl-muted'
-					)
-				);
-				const a = link(signInOpened ? 'Reopen sign-in' : 'Open sign-in', login.url);
-				a.className = 'fl-btn';
+				if (!later)
+					card.append(
+						el(
+							'p',
+							signInOpened
+								? 'Sign-in opened in a new tab.'
+								: 'Your browser may have blocked the sign-in tab. Open sign-in to continue.',
+							'fl-muted'
+						)
+					);
+				const a = link(!later && signInOpened ? 'Reopen sign-in' : 'Open sign-in', login.url);
+				a.className = later ? 'fl-btn fl-btn-primary' : 'fl-btn';
 				card.append(a);
 			}
 			if (login.code) card.append(el('p', login.code, 'fl-device-code'));
@@ -961,7 +1025,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			render();
 		});
 		check.disabled =
-			!canWrite() || !(a.email || a.provider_id) || a.state === 'disconnected' || !!checked?.busy;
+			!canWrite() ||
+			!(a.email || a.provider_id || a.external) ||
+			a.state === 'disconnected' ||
+			!!checked?.busy;
 		if (checked?.busy) check.setAttribute('aria-busy', 'true');
 		actions.append(check);
 		if (a.state !== 'disconnected') actions.append(remove);

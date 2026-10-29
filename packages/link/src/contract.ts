@@ -34,7 +34,7 @@ export const contract = defineFeatureContract({
 		accounts: {
 			kind: 'query',
 			description:
-				'Read account identity, human/agent owner, purpose, connection state and selected, recorded or granted scopes. With account_id, returns the CLI arguments and storage environment for that account (for hubspot also a command_prefix that selects the account); the CLIs are on the normal PATH and the keyring password variables are already present in the command environment.',
+				'Read account identity, human/agent owner, purpose, connection state and selected, recorded or granted scopes. With account_id, returns the CLI arguments and storage environment for that account (for hubspot and dropbox also a command_prefix that selects the account); the CLIs are on the normal PATH and the keyring password variables are already present in the command environment.',
 			input: obj({ account_id: Type.Optional(Type.String({ maxLength: 64 })) }),
 			output: Type.Unknown(),
 			tool: { name: 'falcon_link_accounts', label: 'Read account facts' }
@@ -71,7 +71,7 @@ export const contract = defineFeatureContract({
 		finish: {
 			kind: 'action',
 			description:
-				'Complete a sign-in with what the person pasted: the address shown after Google sign-in, or the code HubSpot showed.',
+				'Complete a sign-in with what the person pasted: the address shown after Google sign-in, or the code HubSpot or Dropbox showed.',
 			input: obj({
 				id: Type.String({ maxLength: 64 }),
 				redirect: Type.String({ maxLength: 8192 })
