@@ -1,0 +1,37 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "link-callback-worker",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-26",
+	"workers_dev": false,
+	"preview_urls": false,
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "SESSIONS",
+				"class_name": "CallbackSession"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v0.1.0",
+			"new_sqlite_classes": ["CallbackSession"]
+		}
+	],
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"invocation_logs": false
+		},
+		"traces": {
+			"enabled": true,
+			"head_sampling_rate": 0
+		},
+		"redact_query_string": true
+	},
+	"secrets": {
+		"required": ["OFFICE_KEYS_JSON"]
+	}
+}

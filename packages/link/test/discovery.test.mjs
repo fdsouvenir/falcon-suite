@@ -31,7 +31,7 @@ test('private brief includes human accounts with compact scopes and failures; pu
 	try {
 		for (const [provider, version, binary] of [
 			['google', '0.47.0', 'gog'],
-			['microsoft', '1.0.0', 'm365cli']
+			['microsoft', '2.0.0', 'm365cli']
 		]) {
 			const folder = path.join(stateDir, 'falcon-link', 'tools', provider, version);
 			await mkdir(folder, { recursive: true });
@@ -62,10 +62,9 @@ test('private brief includes human accounts with compact scopes and failures; pu
 			result.prependContext,
 			/fred@example.com \| Fred \| personal \| Gmail: read \(recorded\) — connection check failed/
 		);
-		assert.doesNotMatch(
-			result.prependContext,
-			/acct_fixture|falcon_link_accounts|agent_owned_accounts/
-		);
+		assert.doesNotMatch(result.prependContext, /acct_fixture|agent_owned_accounts/);
+		assert.match(result.prependContext, /falcon_link_accounts/);
+		assert.match(result.prependContext, /inherited.*keyring/i);
 		assert.equal(
 			result.prependSystemContext,
 			undefined,
@@ -113,7 +112,7 @@ const accounts=service.accounts();assert.equal(accounts.length,2);
 const google=accounts.find(a=>a.provider==='google'),microsoft=accounts.find(a=>a.provider==='microsoft');
 assert.equal(google.owner,null);assert.equal(google.purpose,null);assert.equal(google.state,'discovered');
 assert.equal(microsoft.recorded_scopes,null);assert.equal(google.granted_scopes,null);
-const invocation=service.invocation(google.id);assert.deepEqual(invocation.arguments,['--client','work','--account','fred@example.com']);assert.equal(invocation.environment.HOME,process.env.HOME);assert.deepEqual(invocation.credential_environment,{});
+const invocation=service.invocation(google.id);assert.deepEqual(invocation.arguments,['--client','work','--account','fred@example.com']);assert.ok(!('HOME' in invocation.environment));assert.ok(Object.keys(invocation.environment).every(k=>k.startsWith('GOG_')));assert.deepEqual(invocation.inherited_environment,[]);
 assert.deepEqual(service.invocation(microsoft.id).arguments,['--account','work']);
 await assert.rejects(()=>service.disconnect(google.id),/original CLI/);
 service.metadata(google.id,{kind:'human',id:'fred',name:'Fred'},{kind:'personal'});

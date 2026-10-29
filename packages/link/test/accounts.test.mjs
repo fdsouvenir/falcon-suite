@@ -19,7 +19,7 @@ async function scenario(body) {
 			path.join(dir, 'm365cli'),
 			`#!${process.execPath}
 import fs from 'node:fs';import path from 'node:path';const args=process.argv.slice(2);const send=v=>console.log(JSON.stringify(v));const home=process.env.HOME;
-if(args[0]==='--version'){console.log('m365cli version v1.0.0 (fixture)');process.exit();}
+if(args[0]==='--version'){console.log('m365cli version v2.0.0 (fixture)');process.exit();}
 if(args.includes('login')){
  console.error('private diagnostic never reflected');console.error('To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code ABCDEF123 to authenticate.');
  const id=args[args.indexOf('--profile')+1];fs.writeFileSync(path.join(home,'m365-profile.json'),JSON.stringify({id}));
@@ -61,10 +61,11 @@ test('two same-provider accounts retain distinct identities, purposes, encrypted
  const first=await l.start(input('fred@example.com'),'fred'); assert.equal(first.state,'awaiting_consent'); assert.equal((await finish(first)).state,'connected');
  const second=await l.start({...input('verl@example.com'),owner:{kind:'agent',id:'main',name:'Verl'},purpose:{kind:'other',label:'Operations'}},'fred'); assert.equal((await finish(second)).state,'connected');
  const a=l.invocation(first.account_id),b=l.invocation(second.account_id);
- for(const key of ['XDG_CONFIG_HOME','XDG_DATA_HOME','XDG_STATE_HOME','XDG_CACHE_HOME','GOG_CONFIG_DIR','GOG_DATA_DIR','GOG_STATE_DIR','GOG_CACHE_DIR']) { assert.ok(a.environment[key]?.startsWith(a.environment.HOME+'/'),key+' stays account-local'); assert.notEqual(a.environment[key],b.environment[key],key+' is isolated'); }
- assert.notEqual(a.environment.HOME,b.environment.HOME); assert.deepEqual(a.arguments,['--account','fred@example.com']); assert.deepEqual(b.arguments,['--account','verl@example.com']); assert.equal(b.account.owner.kind,'agent'); assert.equal(b.account.purpose.label,'Operations'); assert.equal(a.granted_scopes,null); assert.deepEqual(a.account.recorded_scopes,['recorded-only']); assert.doesNotMatch(JSON.stringify(a),/fixture-only/);
+ for(const inv of [a,b]) { assert.ok(Object.keys(inv.environment).every(k=>k.startsWith('GOG_')), 'only CLI-specific settings may be passed to normal exec'); }
+ for(const key of ['GOG_CONFIG_DIR','GOG_DATA_DIR','GOG_STATE_DIR','GOG_CACHE_DIR']) { assert.ok(a.environment[key]?.startsWith(path.join(dir,'accounts',first.account_id)+'/'),key+' stays account-local'); assert.notEqual(a.environment[key],b.environment[key],key+' is isolated'); }
+ assert.notEqual(a.environment.GOG_CONFIG_DIR,b.environment.GOG_CONFIG_DIR); assert.deepEqual(a.arguments,['--account','fred@example.com']); assert.deepEqual(b.arguments,['--account','verl@example.com']); assert.equal(b.account.owner.kind,'agent'); assert.equal(b.account.purpose.label,'Operations'); assert.equal(a.granted_scopes,null); assert.deepEqual(a.account.recorded_scopes,['recorded-only']); assert.doesNotMatch(JSON.stringify(a),/fixture-only/);
  const incomplete = l.registry.get(first.account_id); incomplete.email=null; incomplete.state='check_failed'; l.registry.save(incomplete);
- await l.disconnect(first.account_id); assert.equal(fs.existsSync(path.join(a.environment.HOME,'fixture-account.json')),false); assert.equal(l.registry.get(first.account_id).state,'disconnected'); assert.equal((await l.check(second.account_id)).state,'connected');
+ await l.disconnect(first.account_id); assert.equal(fs.existsSync(path.join(dir,'accounts',first.account_id,'fixture-account.json')),false); assert.equal(l.registry.get(first.account_id).state,'disconnected'); assert.equal((await l.check(second.account_id)).state,'connected');
  await assert.rejects(()=>l.check(first.account_id),/disconnected/);
 `));
 test('wrong callback state and another operator cannot finish a login; cancellation cannot be completed later', async () =>
@@ -78,7 +79,7 @@ test('wrong callback state and another operator cannot finish a login; cancellat
 test('revoked or changed identity fails without falling back to another account', async () =>
 	scenario(`
  const login=await l.start(input('fred@example.com'),'fred'); await finish(login); const invocation=l.invocation(login.account_id);
- fs.writeFileSync(path.join(invocation.environment.HOME,'fixture-account.json'),JSON.stringify({email:'fred@example.com',subject:'changed',valid:true}));
+ fs.writeFileSync(path.join(dir,'accounts',login.account_id,'fixture-account.json'),JSON.stringify({email:'fred@example.com',subject:'changed',valid:true}));
  await assert.rejects(()=>l.check(login.account_id),/identity check failed/); assert.equal(l.registry.get(login.account_id).state,'check_failed'); assert.throws(()=>l.invocation(login.account_id),/not connected/);
 `));
 test('reconnect keeps stable identity; unsupported permissions and invalid custom purpose are rejected', async () =>
@@ -97,7 +98,7 @@ test('Microsoft device code is person-bound, private stderr stays hidden, and su
  assert.equal(next.url,'https://microsoft.com/devicelogin');assert.equal(next.code,'ABCDEF123');assert.doesNotMatch(JSON.stringify(next),/private diagnostic/);
  assert.throws(()=>l.login(login.id,'other'),/not found/);
  for(let i=0;i<60;i++){await new Promise(r=>setTimeout(r,30));next=l.login(login.id,'fred');if(next.state==='connected')break;}
- assert.equal(next.state,'connected');const selected=l.invocation(login.account_id);assert.deepEqual(selected.arguments,['--account',login.account_id]);assert.equal(selected.account.email,'microsoft@example.com');assert.equal(selected.granted_scopes,null);const incomplete=l.registry.get(login.account_id);incomplete.email=null;incomplete.state='check_failed';l.registry.save(incomplete);await l.disconnect(login.account_id);assert.equal(fs.existsSync(path.join(selected.environment.HOME,'m365-profile.json')),false);assert.equal(l.registry.get(login.account_id).state,'disconnected');
+ assert.equal(next.state,'connected');const selected=l.invocation(login.account_id);assert.deepEqual(selected.arguments,['--account',login.account_id]);assert.equal(selected.account.email,'microsoft@example.com');assert.deepEqual(selected.environment,{M365CLI_CONFIG_DIR:path.join(dir,'accounts',login.account_id,'.config','m365cli'),M365CLI_KEYRING_BACKEND:'file'});assert.equal(selected.granted_scopes,null);const incomplete=l.registry.get(login.account_id);incomplete.email=null;incomplete.state='check_failed';l.registry.save(incomplete);await l.disconnect(login.account_id);assert.equal(fs.existsSync(path.join(dir,'accounts',login.account_id,'m365-profile.json')),false);assert.equal(l.registry.get(login.account_id).state,'disconnected');
 `));
 test('cancelled Microsoft consent cannot become connected after the child exits', async () =>
 	scenario(`

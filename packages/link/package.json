@@ -18,7 +18,8 @@
     "dist",
     "openclaw.plugin.json",
     "README.md",
-    "scripts"
+    "scripts",
+    "scripts/provision.mjs"
   ],
   "peerDependencies": {
     "openclaw": ">=2026.9.6"

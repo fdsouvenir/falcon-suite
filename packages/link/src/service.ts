@@ -1,4 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes, createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { CallbackHandoff, callbackConfig, callbackURI, microsoftAuthority } from './callback.js';
 import type { ChildProcess } from 'node:child_process';
 import { Registry } from './store.js';
 import { existingAccounts } from './discover.js';
@@ -45,6 +47,10 @@ type Login = {
 	child?: ChildProcess;
 	args?: string[];
 	actor: string;
+	callback?: CallbackHandoff;
+	verifier?: string;
+	consuming?: boolean;
+	hosted?: boolean;
 };
 export class LinkService {
 	readonly registry: Registry;
@@ -133,7 +139,17 @@ export class LinkService {
 		}
 	}
 	private publicLogin(l: Login) {
-		const { child: _c, args: _a, actor: _actor, email: _e, audience: _u, ...result } = l;
+		const {
+			child: _c,
+			args: _a,
+			actor: _actor,
+			email: _e,
+			audience: _u,
+			callback: _cb,
+			verifier: _v,
+			consuming: _p,
+			...result
+		} = l;
 		return result;
 	}
 	login(id: string, actor: string) {
@@ -147,6 +163,7 @@ export class LinkService {
 			l.url = null;
 			l.code = null;
 			l.child?.kill();
+			void l.callback?.cancel().catch(() => {});
 			l.message = 'Sign-in expired. Start again.';
 			const a = this.registry.get(l.account_id);
 			a.state = 'failed';
@@ -236,6 +253,7 @@ export class LinkService {
 			actor
 		};
 		this.logins.set(l.id, l);
+		const callback = callbackConfig(this.dir);
 		const tool = this.tool(a);
 		const env = this.env(a);
 		let failure = {
@@ -300,6 +318,7 @@ export class LinkService {
 					args.push('--gmail-scope', gmailScope);
 					if (extra.length) args.push('--extra-scopes', extra.join(','));
 				} else args.push('--readonly');
+				if (callback) args.push('--redirect-uri', callbackURI(callback, 'google'));
 				l.args = args;
 				failure = {
 					code: 'google_authorization_start',
@@ -324,10 +343,56 @@ export class LinkService {
 				};
 				if (actual.size !== wanted.size || [...actual].some((s) => !wanted.has(s)))
 					throw new Error('Provider permission request differs from the selection.');
+				if (callback) {
+					l.callback = await CallbackHandoff.create(
+						callback,
+						'google',
+						url.searchParams.get('state')!
+					);
+					if (l.state !== 'starting') {
+						await l.callback.cancel();
+						return this.publicLogin(l);
+					}
+					l.hosted = true;
+					l.expires_at = new Date(Date.now() + 10 * 60000).toISOString();
+				}
+				l.url = url.href;
+				l.state = 'awaiting_consent';
+				l.message = callback
+					? 'Sign in with Google, then return here. Your account will connect automatically.'
+					: 'Sign in with Google. After consent, paste the full redirect URL below; a localhost error in your browser is expected for this remote flow.';
+			} else if (callback) {
+				failure = {
+					code: 'microsoft_authorization_start',
+					message:
+						'Microsoft sign-in could not start. Check callback service and application setup.'
+				};
+				const p = provision(this.dir);
+				const state = randomBytes(32).toString('base64url');
+				l.verifier = randomBytes(32).toString('base64url');
+				const url = new URL(microsoftAuthority(p, audience) + '/authorize');
+				url.search = new URLSearchParams({
+					client_id: p.microsoft_client_id!,
+					response_type: 'code',
+					response_mode: 'query',
+					redirect_uri: callbackURI(callback, 'microsoft'),
+					scope: requestedScopes('microsoft', a.requested).join(' '),
+					state,
+					code_challenge: createHash('sha256').update(l.verifier).digest('base64url'),
+					code_challenge_method: 'S256',
+					prompt: 'select_account'
+				}).toString();
+				l.callback = await CallbackHandoff.create(callback, 'microsoft', state);
+				if (l.state !== 'starting') {
+					await l.callback.cancel();
+					return this.publicLogin(l);
+				}
+				l.hosted = true;
+				l.expires_at = new Date(Date.now() + 10 * 60000).toISOString();
 				l.url = url.href;
 				l.state = 'awaiting_consent';
 				l.message =
-					'Sign in with Google. After consent, paste the full redirect URL below; a localhost error in your browser is expected for this remote flow.';
+					'Sign in with Microsoft, then return here. Your account will connect automatically.';
 			} else {
 				failure = {
 					code: 'microsoft_authorization_start',
@@ -409,11 +474,12 @@ export class LinkService {
 		a.connection_error = { code, message };
 		this.registry.save(a);
 	}
-	async finish(id: string, redirect: string, actor: string) {
+	async finish(id: string, redirect: string, actor: string, fromCallback = false) {
 		this.login(id, actor);
 		const l = this.logins.get(id)!;
 		if (l.state !== 'awaiting_consent' || !l.args)
 			throw new Error('This sign-in is not waiting for a Google redirect.');
+		if (l.hosted && !fromCallback) throw new Error('This sign-in completes automatically.');
 		const callback = new URL(redirect);
 		const expected = new URL(l.url!);
 		const target = new URL(expected.searchParams.get('redirect_uri')!);
@@ -468,6 +534,98 @@ export class LinkService {
 		}
 		return this.publicLogin(l);
 	}
+	async poll(id: string, actor: string) {
+		this.login(id, actor);
+		const l = this.logins.get(id)!;
+		if (!l.callback || l.state !== 'awaiting_consent' || l.consuming) return this.publicLogin(l);
+		l.consuming = true;
+		try {
+			const result = await l.callback.consume();
+			if (l.state !== 'awaiting_consent' || !result) return this.publicLogin(l);
+			if (Date.now() >= Date.parse(l.expires_at)) {
+				this.login(id, actor);
+				return this.publicLogin(l);
+			}
+			if (result.error || !result.code) throw new Error('consent');
+			if (l.provider === 'google') {
+				const redirect = new URL(callbackURI(l.callback.config, 'google'));
+				redirect.search = new URLSearchParams({
+					state: l.callback.state,
+					code: result.code
+				}).toString();
+				return await this.finish(id, redirect.href, actor, true);
+			}
+			l.state = 'verifying';
+			l.url = null;
+			const a = this.registry.get(l.account_id);
+			const p = provision(this.dir);
+			const secret = p.microsoft_client_secret_file
+				? readFileSync(p.microsoft_client_secret_file, 'utf8').trim()
+				: '';
+			const body = new URLSearchParams({
+				client_id: p.microsoft_client_id!,
+				grant_type: 'authorization_code',
+				code: result.code,
+				redirect_uri: callbackURI(l.callback.config, 'microsoft'),
+				code_verifier: l.verifier!,
+				scope: requestedScopes('microsoft', a.requested).join(' ')
+			});
+			if (secret) body.set('client_secret', secret);
+			const response = await fetch(microsoftAuthority(p, l.audience) + '/token', {
+				method: 'POST',
+				body,
+				redirect: 'error',
+				signal: AbortSignal.timeout(20000)
+			});
+			const token = (await response.json()) as { refresh_token?: string };
+			if (!response.ok || !token.refresh_token) throw new Error('exchange');
+			const args = [
+				'auth',
+				'login',
+				'--profile',
+				a.id,
+				'--audience',
+				l.audience,
+				'--scope-workloads',
+				a.requested.join(','),
+				'--refresh-token-env',
+				'FALCON_LINK_LOGIN_REFRESH',
+				'--no-input',
+				'--json'
+			];
+			if (secret) args.push('--client-secret-env', 'FALCON_LINK_LOGIN_SECRET');
+			if (p.microsoft_tenant && l.audience === 'enterprise')
+				args.push('--tenant', p.microsoft_tenant);
+			await json(
+				this.tool(a),
+				args,
+				{
+					...this.env(a),
+					FALCON_LINK_LOGIN_REFRESH: token.refresh_token,
+					FALCON_LINK_LOGIN_SECRET: secret
+				},
+				60000
+			);
+			await this.check(a.id, true);
+			l.state = 'connected';
+			l.message = 'Account connected.';
+		} catch {
+			if (['awaiting_consent', 'verifying'].includes(l.state))
+				this.fail(
+					l,
+					'Sign-in did not complete. Start again, or contact your administrator to check the callback and provider application setup.',
+					'callback_completion_failed'
+				);
+		} finally {
+			l.consuming = false;
+			if (l.state !== 'awaiting_consent') {
+				l.callback = undefined;
+				l.verifier = undefined;
+			}
+		}
+		return this.publicLogin(l);
+	}
+
 	cancel(id: string, actor: string) {
 		this.login(id, actor);
 		const l = this.logins.get(id)!;
@@ -475,6 +633,7 @@ export class LinkService {
 		if (['starting', 'awaiting_consent'].includes(l.state)) {
 			l.state = 'cancelled';
 			l.child?.kill();
+			void l.callback?.cancel().catch(() => {});
 			l.url = null;
 			l.code = null;
 			l.message = 'Sign-in cancelled. No provider revocation was performed.';
@@ -636,11 +795,6 @@ export class LinkService {
 				],
 				environment: Object.fromEntries(
 					[
-						'HOME',
-						'XDG_CONFIG_HOME',
-						'XDG_DATA_HOME',
-						'XDG_STATE_HOME',
-						'XDG_CACHE_HOME',
 						...(a.provider === 'google'
 							? [
 									'GOG_CONFIG_DIR',
@@ -649,29 +803,28 @@ export class LinkService {
 									'GOG_CACHE_DIR',
 									'GOG_KEYRING_BACKEND'
 								]
-							: ['M365CLI_KEYRING_BACKEND'])
+							: ['M365CLI_CONFIG_DIR', 'M365CLI_KEYRING_BACKEND'])
 					]
 						.filter((key) => process.env[key] !== undefined)
 						.map((key) => [key, process.env[key]])
 				),
-				credential_environment: {},
+				inherited_environment: [],
 				requested_scopes: [],
 				granted_scopes: a.granted_scopes
 			};
 		const env = this.env(a);
-		const names = [
-			'HOME',
-			'XDG_CONFIG_HOME',
-			'XDG_DATA_HOME',
-			'XDG_STATE_HOME',
-			'XDG_CACHE_HOME',
-			'GOG_CONFIG_DIR',
-			'GOG_DATA_DIR',
-			'GOG_STATE_DIR',
-			'GOG_CACHE_DIR',
-			'GOG_KEYRING_BACKEND',
-			'M365CLI_KEYRING_BACKEND'
-		];
+		// Normal exec protects HOME/XDG launch context. Select the existing store through
+		// each CLI's own supported settings, without changing the process home.
+		const names =
+			a.provider === 'google'
+				? [
+						'GOG_CONFIG_DIR',
+						'GOG_DATA_DIR',
+						'GOG_STATE_DIR',
+						'GOG_CACHE_DIR',
+						'GOG_KEYRING_BACKEND'
+					]
+				: ['M365CLI_CONFIG_DIR', 'M365CLI_KEYRING_BACKEND'];
 		return {
 			account: a,
 			executable: this.tool(a),
@@ -681,10 +834,9 @@ export class LinkService {
 					.filter((k) => a.provider === 'google' || !k.startsWith('GOG_'))
 					.map((k) => [k, env[k]])
 			),
-			credential_environment: {
-				[a.provider === 'google' ? 'GOG_KEYRING_PASSWORD' : 'M365CLI_KEYRING_PASSWORD']:
-					'FALCON_LINK_KEYRING_PASSWORD'
-			},
+			inherited_environment: [
+				a.provider === 'google' ? 'GOG_KEYRING_PASSWORD' : 'M365CLI_KEYRING_PASSWORD'
+			],
 			requested_scopes: requestedScopes(a.provider, a.requested),
 			granted_scopes: a.granted_scopes
 		};

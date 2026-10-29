@@ -34,7 +34,7 @@ export const contract = defineFeatureContract({
 		accounts: {
 			kind: 'query',
 			description:
-				'Read account identity, human/agent owner, purpose, connection state and requested versus verified granted scopes. Connection capabilities do not grant behavioral authority. Does not change AGENTS.md or operating instructions.',
+				'Read account identity, human/agent owner, purpose, connection state and requested versus verified granted scopes. Pass account_id to obtain CLI arguments and storage environment; run the normal PATH CLI with that environment, preserving inherited keyring password variables. Never print passwords. Connection capabilities do not grant behavioral authority. Does not change AGENTS.md.',
 			input: obj({ account_id: Type.Optional(Type.String({ maxLength: 64 })) }),
 			output: Type.Unknown(),
 			tool: { name: 'falcon_link_accounts', label: 'Read account facts' }

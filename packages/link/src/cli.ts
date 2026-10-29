@@ -1,15 +1,19 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, accessSync, constants } from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
+import type { CallbackConfig } from './callback.js';
 import type { Provider } from './model.js';
 export const TOOLS = {
 	google: { binary: 'gog', repo: 'openclaw/gogcli', version: '0.47.0', archive: 'gogcli' },
-	microsoft: { binary: 'm365cli', repo: 'fdsouvenir/m365cli', version: '1.0.0', archive: 'm365cli' }
+	microsoft: { binary: 'm365cli', repo: 'fdsouvenir/m365cli', version: '2.0.0', archive: 'm365cli' }
 } as const;
 export type Provision = {
 	google_credentials_file?: string;
 	microsoft_client_id?: string;
 	microsoft_tenant?: string;
+	microsoft_client_secret_file?: string;
+	callback?: CallbackConfig;
 };
 export function provision(dir: string): Provision {
 	try {
@@ -24,7 +28,8 @@ export function readiness(dir: string, provider: Provider) {
 	let ready = !!process.env.FALCON_LINK_KEYRING_PASSWORD && process.platform === 'linux';
 	if (provider === 'google') {
 		try {
-			const c = JSON.parse(readFileSync(p.google_credentials_file ?? '', 'utf8')).installed;
+			const raw = JSON.parse(readFileSync(p.google_credentials_file ?? '', 'utf8'));
+			const c = p.callback ? raw.web : raw.installed;
 			ready = ready && !!c?.client_id && !!c?.client_secret;
 		} catch {
 			ready = false;
@@ -43,6 +48,13 @@ export function readiness(dir: string, provider: Provider) {
 }
 export function executable(dir: string, provider: Provider): string {
 	const tool = TOOLS[provider];
+	const normal = path.join(homedir(), '.local', 'bin', tool.binary);
+	if ((process.env.PATH ?? '').split(path.delimiter).includes(path.dirname(normal))) {
+		try {
+			accessSync(normal, constants.X_OK);
+			return normal;
+		} catch {}
+	}
 	let version: string = tool.version;
 	try {
 		const current = JSON.parse(
@@ -51,7 +63,19 @@ export function executable(dir: string, provider: Provider): string {
 		if (/^\d+\.\d+\.\d+$/.test(current.version)) version = current.version;
 	} catch {}
 	const managed = path.join(dir, 'tools', provider, version, tool.binary);
-	return existsSync(managed) ? managed : tool.binary;
+	// After migration, removing the normal command must not reactivate a private copy.
+	const migrated = existsSync(path.join(dir, 'tools', provider, 'path-install.json'));
+	if (!migrated && existsSync(managed)) return managed;
+	// Prefer normal CLI installations. Private preview paths are legacy fallback only.
+	for (const folder of (process.env.PATH ?? '').split(path.delimiter)) {
+		if (!path.isAbsolute(folder)) continue;
+		const candidate = path.join(folder, tool.binary);
+		try {
+			accessSync(candidate, constants.X_OK);
+			return candidate;
+		} catch {}
+	}
+	return tool.binary;
 }
 export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 	if (!/^acct_[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid account identifier.');
@@ -72,6 +96,7 @@ export function accountEnvironment(dir: string, id: string): NodeJS.ProcessEnv {
 		GOG_CACHE_DIR: path.join(home, 'gog-cache'),
 		GOG_KEYRING_BACKEND: 'file',
 		GOG_KEYRING_PASSWORD: process.env.FALCON_LINK_KEYRING_PASSWORD,
+		M365CLI_CONFIG_DIR: path.join(home, '.config', 'm365cli'),
 		M365CLI_KEYRING_BACKEND: 'file',
 		M365CLI_KEYRING_PASSWORD: process.env.FALCON_LINK_KEYRING_PASSWORD,
 		M365CLI_CLIENT_ID: provision(dir).microsoft_client_id

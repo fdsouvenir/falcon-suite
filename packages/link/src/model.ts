@@ -45,7 +45,11 @@ export const PERMISSIONS: Record<Provider, Permission[]> = {
 	],
 	microsoft: [
 		graph('mail-read', 'Mail — read', 'Mail.Read'),
-		graph('mail-write', 'Mail — create and manage drafts', 'Mail.ReadWrite'),
+		graph(
+			'mail-write',
+			'Mail — read, create, modify and delete email (including drafts)',
+			'Mail.ReadWrite'
+		),
 		graph('mail-send', 'Mail — send', 'Mail.Send'),
 		graph('calendar', 'Calendar — read and write', 'Calendars.Read', 'Calendars.ReadWrite'),
 		graph('contacts', 'Contacts — read and write', 'Contacts.Read', 'Contacts.ReadWrite'),
