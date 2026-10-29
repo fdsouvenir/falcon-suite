@@ -198,7 +198,10 @@ test('hosted Google, Microsoft and Dropbox complete automatically in exact local
 			await assert.rejects(() => l.poll(login.id, 'other'), /not found/);
 			assert.equal((await l.poll(login.id, 'fred')).state, 'awaiting_consent');
 			await deliver(login);
-			const done = await l.poll(login.id, 'fred');
+			// Completes on the server without the page polling (the page may have been reloaded).
+			for (let i = 0; i < 50 && l.registry.get(login.account_id).state !== 'connected'; i++)
+				await new Promise((r) => setTimeout(r, 100));
+			const done = l.login(login.id, 'fred');
 			assert.equal(done.state, 'connected');
 			assert.equal(l.registry.get(login.account_id).state, 'connected');
 			assert.equal(l.registry.get(login.account_id).provider_id, provider + '-subject');
