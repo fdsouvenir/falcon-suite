@@ -1,12 +1,12 @@
 # Falcon Link
 
-A separately installable native OpenClaw page for connecting Google, Microsoft and HubSpot
-accounts.
+A separately installable native OpenClaw page for connecting Google, Microsoft, HubSpot and
+Dropbox accounts.
 Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 
 ## What it does
 
-- Lists each person's and agent's Google, Microsoft and HubSpot accounts with their owner, purpose and
+- Lists each person's and agent's Google, Microsoft, HubSpot and Dropbox accounts with their owner, purpose and
   access in plain words. A connected account shows no status; otherwise it shows Needs
   attention, Signing in… or Not connected.
 - Adds accounts, changes their access, checks them and removes them — including accounts
@@ -15,8 +15,9 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 - Uses the existing command-line tools for everything provider-specific:
   [gog](https://github.com/openclaw/gogcli) for Google and
   [m365cli](https://github.com/fdsouvenir/m365cli) for Microsoft (not the unrelated PnP CLI)
-  and HubSpot's Agent CLI `hubspot` for HubSpot. Link does not implement a second mail,
-  calendar or CRM client.
+  HubSpot's Agent CLI `hubspot` for HubSpot and Dropbox's
+  [dbxcli](https://github.com/dropbox/dbxcli) for Dropbox. Link does not implement a second
+  mail, calendar, CRM or file client.
 - Installs HubSpot's official Agent CLI skills for every agent (see below).
 
 ## Permissions
@@ -36,6 +37,8 @@ CLIs themselves, so they follow the installed version:
   when they are for work or school accounts only, or need approval from the organization's
   administrator. Accounts saved with bundle workloads keep working; changing their access
   preselects the equivalent rows.
+- **Dropbox** — Link's own rows (see Dropbox below): Files, Sharing, File requests, Contacts and
+  Account, plus a collapsed team administration section for team admins.
 
 Provider scope strings appear only under the form's collapsed Technical details. After
 Microsoft sign-in and on Check connection, Link reads `m365cli auth check`'s grant report.
@@ -103,10 +106,56 @@ someone removed them. Link records the installed commit in `skills/hubspot.json`
 skills dropped upstream, and removes only skills whose OpenClaw source record points at
 Link's own staging copy. The `openclaw` command must be on the Gateway's PATH.
 
+## Dropbox
+
+Dropbox uses Dropbox's official CLI, [dbxcli](https://github.com/dropbox/dbxcli) (3.5.0 or
+later), not the Dropbox desktop sync app. The operator provisions only the Falcon Link Dropbox
+app key (`dropbox_app_key`); the app is a public (PKCE) client with no secret.
+
+- **Permissions.** One row per area, each a single choice in plain words:
+  - Files: Off / View files (`files.metadata.read`, `files.content.read`) / View and change
+    files (adds `files.metadata.write`, `files.content.write`). With View and change, a
+    separate checkbox "Permanently delete files (can't be recovered)" adds
+    `files.permanent_delete`.
+  - Sharing: Off / See shared links and folders (`sharing.read`) / Share files and manage links
+    (adds `sharing.write`).
+  - File requests and Contacts: Off / See / Create and manage (or Manage).
+  - Account: `account_info.read` is always included so Link can confirm the account; a checkbox
+    adds `account_info.write`.
+  - **Dropbox team administration — for team admins**, collapsed: Team info, Members (plus
+    "Remove members from the team" with Manage), Groups, Team files and folders, Sharing and
+    governance policies, Sign-in sessions and Activity log, each Off / See / Manage.
+- **Why team administration is a second sign-in.** Dropbox links any authorization that asks
+  for a team scope to the whole team rather than the person, and such a token reaches a person's
+  files only on their behalf (`Dropbox-API-Select-User`, dbxcli `--as-member`). So Link asks
+  for the person's choices in one sign-in and the team choices in a second one that a team admin
+  approves, and says so on the form. The team sign-in always includes `team_info.read` so Link
+  can confirm the team; Team files includes `team_data.member`, which Dropbox requires for
+  acting as a member. The approving team must be the account's own team.
+- **Sign-in.** Link builds Dropbox's authorize address itself (PKCE S256,
+  `token_access_type=offline`, `scope` = the chosen scopes) because `dbxcli login` sends no
+  scope and would get every scope the app allows. With the hosted callback configured, sign-in
+  returns automatically (`/oauth2/callback/dropbox`); otherwise Dropbox shows a code to paste.
+  Link exchanges the code at `https://api.dropboxapi.com/oauth2/token` and requires the granted
+  `scope` to include every chosen scope. Nothing is saved until every sign-in has finished.
+- **Storage.** Link writes the account's own dbxcli auth file
+  (`accounts/<id>/.config/dbxcli/auth.json`, 0600, in dbxcli's format): the person's credential
+  under `personal`, the team credential under `teamManage` (`dbxcli team …`) and, with Team
+  files, `teamAccess` (`--as-member`), each with its refresh token and the app key dbxcli
+  refreshes with. dbxcli keeps this file unencrypted; it is readable only by the Office user.
+- **Checks.** `dbxcli account --output=json` confirms the account (and that a reconnect is the
+  same account); with team administration, `dbxcli team info --output=json` confirms it is the
+  account's team. The card lists the access Dropbox granted at sign-in in plain words.
+- **Existing sign-ins.** An account in dbxcli's own store (`DBXCLI_AUTH_FILE`, otherwise
+  `~/.config/dbxcli/auth.json`) is listed, can be checked, reconnected and removed. Removing an
+  account deletes its dbxcli auth file; Link doesn't revoke the token at Dropbox, and the page
+  links to Dropbox's connected apps page.
+
 ## Command-line tools
 
-Link needs gog 0.44.0 or later, m365cli 2.1.0 or later and hubspot 0.16.0 or later. On Linux
-x64/arm64 Link installs the latest GitHub release of gog and m365cli, and HubSpot's published
+Link needs gog 0.44.0 or later, m365cli 2.1.0 or later, hubspot 0.16.0 or later and dbxcli
+3.5.0 or later. On Linux x64/arm64 Link installs the latest GitHub release of gog, m365cli and
+dbxcli (whose archive must also be listed in the release's `SHA256SUMS`), and HubSpot's published
 `hubspot-linux-<arch>.bin` checked against its `hubspot-linux-<arch>.sha256`, as ordinary
 commands in `~/.local/bin` (which must be on the Office PATH). Link never runs HubSpot's
 `install.sh`, which edits shell startup files. Installation checks the known repository, the expected asset name,
@@ -141,17 +190,19 @@ The input JSON supports (placeholders shown):
 	"microsoft_client_id": "00000000-0000-0000-0000-000000000000",
 	"microsoft_tenant": "optional-tenant.example",
 	"microsoft_client_secret_file": "/private/microsoft-secret",
+	"dropbox_app_key": "dropboxappkey",
 	"callback": {
 		"url": "https://link-callback.example",
 		"office": "office-id",
 		"token_file": "/private/callback-token",
-		"version": "0.1.1"
+		"version": "0.1.2"
 	}
 }
 ```
 
 Google needs the provider's client JSON (0600): a web client when the hosted callback is
 configured, otherwise a desktop client. Microsoft needs an Entra application registration.
+Dropbox needs its app key.
 The script validates and merges existing provisioning atomically.
 
 Keyring passwords: gog stores use `GOG_KEYRING_PASSWORD` and m365cli stores use
@@ -166,9 +217,9 @@ Restart the Gateway afterwards.
 ## Hosted sign-in callbacks
 
 An operator can deploy the self-hostable
-[Link Callback Worker](../../workers/link-callback/README.md) (version 0.1.1, protocol 1) and
-set `callback` in provisioning; `callback.version` must match the deployed Worker. Hosted
-sign-in is used first when it is configured. Microsoft authorization uses the `common`
+[Link Callback Worker](../../workers/link-callback/README.md) (version 0.1.2, protocol 1) and
+set `callback` in provisioning; `callback.version` must match the deployed Worker. Dropbox
+callbacks need Worker 0.1.2. Hosted sign-in is used first when it is configured. Microsoft authorization uses the `common`
 authority unless `microsoft_tenant` is provisioned. Each Office keeps its CLI account
 stores, tokens and refreshes; the Worker only relays short-lived, encrypted authorization
 codes.
@@ -186,6 +237,11 @@ For a HubSpot account it returns `HUBSPOT_PORTAL_ID` and the account's own
 because OpenClaw's exec refuses XDG overrides in its `env` parameter. A service-key account's
 prefix reads the key from its file when the command runs, so the key never appears in the
 conversation.
+
+For a Dropbox account it returns `DBXCLI_AUTH_FILE` and a `command_prefix`
+(`env -u DBXCLI_ACCESS_TOKEN DBXCLI_AUTH_FILE='…' '/home/…/dbxcli'`), because a
+`DBXCLI_ACCESS_TOKEN` in the environment would override the file, plus the requested and granted
+scopes for the person and, separately, for team administration.
 
 A compact `before_prompt_build` brief lists the same accounts. Account facts are omitted in
 group, channel and room conversations and provided in every other session.

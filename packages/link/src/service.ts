@@ -116,7 +116,11 @@ export class LinkService implements Host {
 	// A missing CLI, or one older than the version Link relies on, stops sign-in.
 	private async cliProblem(id: string) {
 		const p = provider(id);
-		const version = await toolStatus(executable(this.dir, id), p.tool.version_prefix);
+		const version = await toolStatus(
+			executable(this.dir, id),
+			p.tool.version_prefix,
+			p.tool.version_args
+		);
 		if (version.state === 'not_installed')
 			return `Install ${p.tool.binary} on this computer to connect ${p.ui.name} accounts.`;
 		if (

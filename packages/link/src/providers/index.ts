@@ -2,9 +2,10 @@
 import google from './google/index.js';
 import microsoft from './microsoft/index.js';
 import hubspot from './hubspot/index.js';
+import dropbox from './dropbox/index.js';
 import type { ProviderModule } from './types.js';
 
-export const PROVIDERS: ProviderModule[] = [google, microsoft, hubspot];
+export const PROVIDERS: ProviderModule[] = [google, microsoft, hubspot, dropbox];
 export function provider(id: string): ProviderModule {
 	const p = PROVIDERS.find((p) => p.ui.id === id);
 	if (!p) throw new Error('Unknown integration.');

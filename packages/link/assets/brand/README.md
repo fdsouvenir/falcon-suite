@@ -13,3 +13,10 @@ These files are the providers' official sign-in artwork, copied unmodified.
   https://www.hubspot.com/style-guide). HubSpot is a trademark of HubSpot, Inc.; the mark only
   identifies the integration. HubSpot publishes no sign-in button artwork, so the page keeps a
   plain "Connect to HubSpot" button.
+- `dropbox-glyph.svg` — the Dropbox glyph in Dropbox blue (#0061FE), unmodified
+  `Logos/Dropbox/Glyph/Glyph_128.svg` from Dropbox's Brand Partner Toolkit, linked as the approved
+  logos from https://brand.dropbox.com/ (the developer branding guide,
+  https://docs.dropboxapi.com/dropbox-api/docs/developer-resources/branding-guide, points there).
+  Dropbox is a trademark of Dropbox, Inc.; the glyph only identifies the integration and doesn't
+  imply that Dropbox endorses Falcon Link. Dropbox publishes no sign-in button kit, so the page
+  shows the glyph next to its own "Sign in with Dropbox" button.

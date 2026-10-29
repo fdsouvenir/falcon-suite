@@ -30,14 +30,16 @@ export type IntegrationStatus = {
 };
 export type Overview = { checked_at: string; integrations: IntegrationStatus[] };
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-export function toolStatus(binary: string, prefix = ''): Promise<ToolStatus> {
+// A tool's version command and output prefix. CLIs with their own version command print the
+// version on the first line, followed by other build details.
+export function toolStatus(binary: string, prefix = '', args?: string[]): Promise<ToolStatus> {
 	const pattern = new RegExp(
 		`^(?:${escape(prefix)})?(v?\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?)(?: \\([^\\r\\n]*\\))?$`
 	);
 	return new Promise((resolve) =>
 		execFile(
 			binary,
-			['--version'],
+			args ?? ['--version'],
 			{ timeout: 5000, maxBuffer: 16384, encoding: 'utf8', windowsHide: true },
 			(error, stdout) => {
 				if (error) {
@@ -48,7 +50,8 @@ export function toolStatus(binary: string, prefix = ''): Promise<ToolStatus> {
 					});
 					return;
 				}
-				const match = stdout.trim().match(pattern);
+				const output = stdout.trim();
+				const match = (args ? output.split('\n')[0].trim() : output).match(pattern);
 				resolve(
 					match
 						? { state: 'installed', version: match[1] }
@@ -92,7 +95,7 @@ export async function overview(dir = ''): Promise<Overview> {
 			const binary = executable(dir, id);
 			const selfUpdating = p.tool.source.kind === 'vendor';
 			const [tool, release, digest] = await Promise.all([
-				toolStatus(binary, p.tool.version_prefix),
+				toolStatus(binary, p.tool.version_prefix, p.tool.version_args),
 				latestRelease(id),
 				latestDigest(id)
 			]);

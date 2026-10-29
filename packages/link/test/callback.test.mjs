@@ -31,6 +31,7 @@ async function scenario(run) {
 			JSON.stringify({
 				google_credentials_file: credentials,
 				microsoft_client_id: '00000000-0000-0000-0000-000000000001',
+				dropbox_app_key: 'fixtureappkey1',
 				callback: {
 					url: 'https://callback.example',
 					office: 'bravo',
@@ -41,7 +42,8 @@ async function scenario(run) {
 		);
 		for (const [provider, version, binary] of [
 			['google', '0.47.0', 'gog'],
-			['microsoft', '2.2.0', 'm365cli']
+			['microsoft', '2.2.0', 'm365cli'],
+			['dropbox', '3.7.4', 'dbxcli']
 		]) {
 			const folder = path.join(dir, 'tools', provider, version);
 			await mkdir(folder, { recursive: true });
@@ -50,8 +52,9 @@ async function scenario(run) {
 				path.join(folder, binary),
 				`#!${process.execPath}
 import fs from 'node:fs';import path from 'node:path';const a=process.argv.slice(2),send=v=>console.log(JSON.stringify(v));
-if(a[0]==='--version'){console.log('${version}');process.exit();}
-if(a.includes('services'))send(${JSON.stringify({ services })});
+if(a[0]==='--version'||a[0]==='version'){console.log('${version}');process.exit();}
+if(a[0]==='account')send({ok:true,results:[{result:{account_id:JSON.parse(fs.readFileSync(process.env.DBXCLI_AUTH_FILE))[''].personal.access_token,email:'dbx@example.com'}}]});
+else if(a.includes('services'))send(${JSON.stringify({ services })});
 else if(a.includes('workloads'))send(${JSON.stringify({ workloads })});
 else if(a.includes('credentials'))send({saved:true});
 else if(a.includes('--step')&&a[a.indexOf('--step')+1]==='1'){
@@ -74,6 +77,19 @@ else process.exit(9);`,
 				assert.equal(p.get('redirect_uri'), 'https://callback.example/oauth2/callback/microsoft');
 				assert.ok(p.get('code_verifier'));
 				return Response.json({ refresh_token: 'private-refresh-fixture' });
+			}
+			if (u.hostname === 'api.dropboxapi.com') {
+				const p = new URLSearchParams(options.body);
+				assert.equal(p.get('code'), 'private-code-fixture');
+				assert.equal(p.get('redirect_uri'), 'https://callback.example/oauth2/callback/dropbox');
+				assert.ok(p.get('code_verifier'));
+				return Response.json({
+					access_token: 'dropbox-subject',
+					refresh_token: 'private-refresh-fixture',
+					expires_in: 14400,
+					scope: 'account_info.read files.metadata.read files.content.read',
+					account_id: 'dropbox-subject'
+				});
 			}
 			assert.equal(u.origin, 'https://callback.example');
 			assert.equal(options.redirect, 'error');
@@ -149,15 +165,20 @@ else process.exit(9);`,
 		await rm(dir, { recursive: true, force: true });
 	}
 }
-test('hosted Google and Microsoft complete automatically in exact local CLI stores without disclosing handoff secrets', () =>
+test('hosted Google, Microsoft and Dropbox complete automatically in exact local CLI stores without disclosing handoff secrets', () =>
 	scenario(async ({ l, owner, deliver, attempts }) => {
-		for (const provider of ['google', 'microsoft']) {
+		const permissions = {
+			google: ['gmail-read'],
+			microsoft: ['mail-read'],
+			dropbox: ['files:view']
+		};
+		for (const provider of ['google', 'microsoft', 'dropbox']) {
 			const login = await l.start(
 				{
 					provider,
 					owner,
 					purpose: { kind: 'work' },
-					permissions: provider === 'google' ? ['gmail-read'] : ['mail-read'],
+					permissions: permissions[provider],
 					email: 'google@example.com'
 				},
 				'fred'
@@ -172,7 +193,7 @@ test('hosted Google and Microsoft complete automatically in exact local CLI stor
 				new URL(login.url).searchParams.get('redirect_uri'),
 				`https://callback.example/oauth2/callback/${provider}`
 			);
-			if (provider === 'microsoft')
+			if (provider !== 'google')
 				assert.equal(new URL(login.url).searchParams.get('code_challenge_method'), 'S256');
 			await assert.rejects(() => l.poll(login.id, 'other'), /not found/);
 			assert.equal((await l.poll(login.id, 'fred')).state, 'awaiting_consent');

@@ -270,3 +270,35 @@ Observed: HubSpot stores the OAuth sign-in as plain JSON (`accounts/<portal>/aut
 Still unverified: the exact App
 Governance / wrong-portal / no-permission texts, non-US portals, the Connected apps link,
 telemetry opt-out, Remove on a real account, arm64.
+
+## Dropbox dbxcli contract — 2026-10-29
+
+Checked against dbxcli **3.7.4** (`dbxcli_3.7.4_linux_amd64.tar.gz`, SHA-256
+`eb9624bbe2c89287caa5b02ba120bc486d9f4c5ffb5f51d884fc7c40620da730`, matching the release's
+`SHA256SUMS` and GitHub's asset digest) and its source at tag v3.7.4, run only with throwaway
+HOME and Link state directories. **No Dropbox sign-in or consent; tokens were fixtures.**
+
+- The archive keeps the binary in `dbxcli_<version>_linux_<arch>/dbxcli`; there is no
+  `--version` flag (exit 7). `dbxcli version` prints `dbxcli version: 3.7.4` on its first
+  line; Link parses it.
+- `cmd/auth.go`: the auth file is `DBXCLI_AUTH_FILE`, else `~/.config/dbxcli/auth.json`, shaped
+  `{"<domain>": {"personal"|"teamAccess"|"teamManage": {access_token, refresh_token, token_type,
+expiry, app_key}}}` with domain `""` for Dropbox. `cmd/root.go`: `team` commands use
+  `teamManage`, `--as-member` uses `teamAccess`, everything else `personal`;
+  `DBXCLI_ACCESS_TOKEN` overrides the file. A credential is refreshed with its own `app_key`
+  within five minutes of `expiry`.
+- `dbxcli login` (`cmd/login.go`) sends no `scope` or `redirect_uri`, so Link never uses it.
+- A file written by Link's sign-in was read by the real binary: `account`, `team info` and
+  `--as-member … ls` each called the Dropbox API with the fixture token and failed with
+  `auth_required` (`invalid_access_token`). With the access token's `expiry` in the past,
+  `account` refreshed with the saved refresh token and app key and Dropbox answered
+  `invalid_grant` (`auth_refresh_failed`). A malformed file fails differently
+  (`command_failed`, "read auth file").
+- For every row level and checkbox (25 choices), the authorize address asked for exactly
+  `account_info.read` plus the chosen personal scopes, and team choices in a second address.
+
+Dropbox documentation: an authorization with team scopes yields a team-linked token whose user
+scopes apply only with `Dropbox-API-Select-User`, which needs `team_data.member`
+(OAuth guide, "Using User and Team Tokens"; Authentication Types). `team/get_info` needs
+`team_info.read`; `users/get_current_account` needs `account_info.read`. Dropbox documents no
+other scope dependencies; Link accepts any extra scopes Dropbox adds and shows what was granted.

@@ -188,9 +188,12 @@ async function installVendor(provider: string, base: string) {
 	const tool = providerOf(provider).tool;
 	const s = source(provider, 'vendor');
 	const receipt = await readReceipt(path.join(base, 'path-install.json'));
-	if (receipt?.self_updating && (await toolStatus(receipt.path, tool.version_prefix)).version) {
+	if (
+		receipt?.self_updating &&
+		(await toolStatus(receipt.path, tool.version_prefix, tool.version_args)).version
+	) {
 		const upgraded = await runRaw(receipt.path, s.upgrade, process.env, 180000);
-		const after = await toolStatus(receipt.path, tool.version_prefix);
+		const after = await toolStatus(receipt.path, tool.version_prefix, tool.version_args);
 		if (!upgraded.ok || after.state !== 'installed')
 			throw new Error('The update did not finish. The existing tool was kept; try again later.');
 		const next = {
@@ -217,7 +220,7 @@ async function installVendor(provider: string, base: string) {
 		const file = path.join(stage, tool.binary);
 		await writeFile(file, bytes, { mode: 0o700 });
 		await chmod(file, 0o700);
-		const status = await toolStatus(file, tool.version_prefix);
+		const status = await toolStatus(file, tool.version_prefix, tool.version_args);
 		if (status.state !== 'installed')
 			throw new Error('Downloaded tool version could not be verified.');
 		const version = status.version.replace(/^v/, '');
@@ -241,10 +244,40 @@ async function installVendor(provider: string, base: string) {
 		if (stage) await rm(stage, { recursive: true, force: true });
 	}
 }
+// The release's own SHA-256 sums file (itself checked against GitHub's digest) must list the
+// archive with the same digest.
+async function checkSums(
+	release: Release,
+	repo: string,
+	file: string,
+	name: string,
+	archive: Buffer
+) {
+	const sums = release.assets.find((a) => a.name === file);
+	if (
+		!sums ||
+		!/^sha256:[a-f0-9]{64}$/.test(sums.digest ?? '') ||
+		sums.browser_download_url !==
+			`https://github.com/${repo}/releases/download/${release.tag_name}/${file}`
+	)
+		throw new Error('Release checksum or source is unavailable.');
+	const text = await download(sums.browser_download_url, 1024 * 1024);
+	if (`sha256:${sha256(text)}` !== sums.digest)
+		throw new Error('Release checksum mismatch. Existing tool retained.');
+	const listed = text
+		.toString('utf8')
+		.split('\n')
+		.map((line) => /^([a-f0-9]{64}) [ *](\S+)$/.exec(line.trim()))
+		.find((m) => m?.[2] === name);
+	if (listed?.[1] !== sha256(archive))
+		throw new Error('Release checksum mismatch. Existing tool retained.');
+}
 async function installRelease(provider: string, base: string) {
 	let stage: string | undefined;
 	try {
-		const t = { ...source(provider, 'github'), binary: providerOf(provider).tool.binary };
+		const tool = providerOf(provider).tool;
+		const t = { ...source(provider, 'github'), binary: tool.binary };
+		const versionArgs = tool.version_args ?? ['--version'];
 		const release = await latestRelease(provider, true);
 		if (!release) throw new Error('Release lookup failed. Try again later.');
 		const version = release.tag_name.slice(1);
@@ -260,12 +293,13 @@ async function installRelease(provider: string, base: string) {
 		const bytes = await download(asset.browser_download_url, 64 * 1024 * 1024);
 		if (`sha256:${sha256(bytes)}` !== asset.digest)
 			throw new Error('Release checksum mismatch. Existing tool retained.');
+		if (t.checksums) await checkSums(release, t.repo, t.checksums, name, bytes);
 		const destination = path.join(base, version);
 		// Already installed versions are immutable; no in-place overwrite of a working binary.
 		try {
 			const receipt = JSON.parse(await readFile(path.join(destination, 'receipt.json'), 'utf8'));
 			if (receipt.digest === asset.digest) {
-				const output = await run(path.join(destination, t.binary), ['--version']);
+				const output = await run(path.join(destination, t.binary), versionArgs);
 				if (!output.includes(version)) throw new Error('Installed executable failed validation.');
 				await activate(provider, base, path.join(destination, t.binary), version);
 				return receipt;
@@ -279,7 +313,11 @@ async function installRelease(provider: string, base: string) {
 		await writeFile(archive, bytes, { mode: 0o600 });
 		const entries = (await run('tar', ['-tzf', archive])).trim().split('\n');
 		// Extract only the exact executable to stdout, never archive paths, links or bundled files.
-		const entry = entries.find((e) => e === t.binary || e === `./${t.binary}`);
+		// Some releases keep it in a folder named after the archive.
+		const folder = name.replace(/\.tar\.gz$/, '');
+		const entry = entries.find((e) =>
+			[t.binary, `./${t.binary}`, `${folder}/${t.binary}`].includes(e)
+		);
 		if (!entry) throw new Error('Executable missing from archive.');
 		// execFile's normal string runner is unsuitable for binary data.
 		const { execFile } = await import('node:child_process');
@@ -294,7 +332,7 @@ async function installRelease(provider: string, base: string) {
 		const binaryPath = path.join(stage, t.binary);
 		await writeFile(binaryPath, binary, { mode: 0o700 });
 		await chmod(binaryPath, 0o700);
-		const output = await run(binaryPath, ['--version']);
+		const output = await run(binaryPath, versionArgs);
 		if (!output.includes(version))
 			throw new Error('Downloaded tool version could not be verified.');
 		const receipt = {

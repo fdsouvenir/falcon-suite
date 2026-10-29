@@ -23,20 +23,32 @@ export type Account = {
 	connection_error?: { code: string; message: string };
 };
 // One permission row per service. Levels are a single choice (Off is implicit); an addon
-// is an independent choice in the same row (Microsoft sends email separately).
+// is an independent choice in the same row (Microsoft sends email separately). An addon with
+// `addon_requires` is offered only while that level is chosen.
 export type Level = { id: string; label: string; description: string; scopes: string[] };
 export type Row = {
 	id: string;
 	label: string;
-	group: 'main' | 'more';
+	// 'main' rows are always shown; other groups are collapsed sections.
+	group: string;
 	levels: Level[];
 	addon?: Level;
+	addon_requires?: string;
+	// What the row covers, shown while no level is chosen.
+	description?: string;
 	note?: string;
 	work_only?: boolean;
 	admin_consent?: boolean;
 };
 // `saved` lists selection IDs from earlier versions that existing accounts keep using.
-export type Catalog = { rows: Row[]; saved: Record<string, { label: string; scopes: string[] }> };
+// `groups` titles collapsed sections (default "More <provider> services"); `chosen_note` shows
+// while any of the section's rows is on. `technical` adds lines to Technical details.
+export type Catalog = {
+	rows: Row[];
+	saved: Record<string, { label: string; scopes: string[] }>;
+	groups?: Record<string, { title: string; note?: string; chosen_note?: string }>;
+	technical?: string[];
+};
 // How a provider's permission choices map to scopes. `normalize` translates selections
 // saved by earlier versions; `offer` maps saved selections to the current form's choices.
 export type Permissions = {
@@ -64,6 +76,8 @@ export function selectionScopes(p: Permissions, catalog: Catalog, selected: stri
 			if (rows.has(found.row.id)) throw new Error('Select one level per service.');
 			rows.add(found.row.id);
 		}
+		if (found?.addon && found.row.addon_requires && !ids.includes(found.row.addon_requires))
+			throw new Error('Select supported permissions.');
 		const values = found?.level.scopes ?? catalog.saved[id]?.scopes;
 		if (!values) throw new Error('Select supported permissions.');
 		scopes.push(...values);
