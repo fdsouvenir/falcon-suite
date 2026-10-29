@@ -44,11 +44,12 @@ export function accessSummary(a: Account, catalog?: Catalog | null) {
 	if (Array.isArray(a.granted_scopes)) {
 		const missing =
 			catalog && ui ? describeSelection(ui, catalog, a.grant?.selected_not_granted ?? []) : [];
+		const items = scopeItems(a, a.granted_scopes);
 		return {
 			title: 'Access',
-			items: scopeItems(a, a.granted_scopes),
+			items,
 			note: [
-				a.granted_scopes.length ? '' : 'No account service access.',
+				items.length ? '' : 'No account service access.',
 				missing.length ? `${ui?.name} didn't grant: ${missing.join(', ')}.` : ''
 			]
 				.filter(Boolean)

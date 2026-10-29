@@ -143,5 +143,10 @@ export interface ProviderModule {
 	remove(host: Host, a: Account): Promise<void>;
 	invocation(host: Host, a: Account): Promise<Record<string, unknown>>;
 	identified?(a: Account): boolean;
-	brief: { heading: string; identity?(a: Account): string; scopes(a: Account): string };
+	brief: {
+		heading: string;
+		note?: string;
+		identity?(a: Account): string;
+		scopes(a: Account): string;
+	};
 }

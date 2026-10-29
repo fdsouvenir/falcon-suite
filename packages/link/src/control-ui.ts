@@ -130,7 +130,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				.replace(
 					/, ([^,]*)$/,
 					' and $1'
-				)} accounts so your assistant can help with email, calendar and files.`,
+				)} accounts so your assistant can help with your email, calendar, files and customer records.`,
 			'fl-page-description'
 		)
 	);
@@ -527,6 +527,58 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		title.tabIndex = -1;
 		title.focus();
 	}
+	// Connects with a pasted service key instead of a sign-in; the key is sent once and never shown again.
+	function keyForm(account?: Account) {
+		if (!selected || !status) return;
+		closeForm();
+		const provider = selected;
+		const ui = uiOf(provider);
+		if (!ui.key) return;
+		const form = el('form', undefined, account ? 'fl-form fl-card-form' : 'fl-form');
+		const title = el(account ? 'h5' : 'h3', account ? 'Replace service key' : ui.key.action);
+		form.append(title, el('p', ui.key.help, 'fl-muted'));
+		const meta = metadataFields(account?.owner ?? undefined, account?.purpose ?? undefined);
+		form.append(...meta.nodes);
+		const key = el('input');
+		key.type = 'password';
+		key.required = true;
+		key.maxLength = 1024;
+		key.autocomplete = 'off';
+		key.spellcheck = false;
+		form.append(field(ui.key.field, key), el('p', ui.key.note, 'fl-muted'));
+		const submit = el('button', 'Connect', 'fl-btn fl-btn-primary');
+		submit.type = 'submit';
+		submit.disabled = !canWrite();
+		const actions = el('div', undefined, 'fl-actions');
+		actions.append(submit, button('Cancel', closeForm));
+		form.append(actions);
+		form.addEventListener('submit', (event) => {
+			event.preventDefault();
+			if (!form.reportValidity()) return;
+			void act(
+				submit,
+				async () => {
+					const values = meta.values();
+					if (!values.owner) throw new Error('Choose an owner.');
+					const value = key.value;
+					key.value = '';
+					await client.invoke('connect_key', {
+						provider,
+						...values,
+						key: value,
+						...(account ? { account_id: account.id } : {})
+					});
+					closeForm();
+					await load();
+				},
+				'Account connected.'
+			);
+		});
+		if (account) return openInCard(account, form, title);
+		formHost.append(form);
+		title.tabIndex = -1;
+		title.focus();
+	}
 	function scheduleLogin() {
 		clearTimeout(poll);
 		if (disposed || !activeLogin || !ACTIVE.includes(activeLogin.state)) return;
@@ -701,7 +753,15 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 						? 'Not installed'
 						: 'Unknown'
 			],
-			['Latest version', i.latest_version ?? 'Unknown'],
+			[
+				'Latest version',
+				i.latest_version ??
+					(i.self_updating && i.checked_at && i.tool.state === 'installed'
+						? i.update_available
+							? 'A newer build is available'
+							: 'Same as installed'
+						: 'Unknown')
+			],
 			['Last checked', i.checked_at ? new Date(i.checked_at).toLocaleString() : 'Not checked'],
 			['Falcon Link version', PLUGIN_VERSION]
 		]) {
@@ -720,7 +780,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		);
 		avatar.setAttribute('aria-hidden', 'true');
 		const accountName = el('div', undefined, 'fl-account-name');
-		accountName.append(el('h4', a.email ?? `${name(a.provider)} account`));
+		const ui = uiOf(a.provider);
+		accountName.append(el('h4', ui.title?.(a) ?? a.email ?? `${ui.name} account`));
 		const meta = el('div', undefined, 'fl-account-meta');
 		meta.append(el('span', a.owner ? `Owner: ${a.owner.name}` : 'No owner chosen'));
 		if (a.purpose)
@@ -735,6 +796,11 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					'fl-account-purpose'
 				)
 			);
+		for (const tag of ui.tags?.(a) ?? []) {
+			const t = el('span', tag.label, 'fl-account-purpose');
+			t.title = tag.note;
+			meta.append(t);
+		}
 		accountName.append(meta);
 		const word = accountWord(a);
 		identity.append(avatar, accountName);
@@ -748,6 +814,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			);
 		card.append(identity);
 		const access = accessSummary(a, status!.catalogs[a.provider]);
+		const notes = (ui.tags?.(a) ?? []).map((t) => el('p', t.note, 'fl-muted'));
 		const body = el('div', undefined, 'fl-account-access');
 		if (access) {
 			body.append(el('h5', access.title));
@@ -757,6 +824,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				body.append(capabilities);
 			}
 			if (access.note) body.append(el('p', access.note, 'fl-muted'));
+			body.append(...notes);
 			card.append(body);
 		}
 		const checked = checks.get(a.id);
@@ -783,8 +851,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					'p',
 					'This removes this account’s saved sign-in from this computer and removes it from this list. Other accounts are unchanged.'
 				),
-				revokeSentence(uiOf(a.provider).revoke(a))
+				revokeSentence(ui.revoke(a))
 			);
+			const note = ui.remove_note?.(a);
+			if (note) confirm.append(el('p', note, 'fl-muted'));
 			const yes = button('Remove account', async () => {
 				await act(yes, async () => {
 					await client.invoke('remove', { account_id: a.id });
@@ -803,6 +873,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			const retry = button(
 				'Try again',
 				async () => {
+					if (a.auth === 'service_key') return keyForm(a);
 					if (!retryWith) return accountForm(a);
 					await act(retry, async () => startSignIn(retryWith));
 				},
@@ -811,7 +882,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			retry.disabled = !canWrite() || !ready(integration) || signingIn(a);
 			primary.append(retry);
 		}
-		const change = button('Change access', () => accountForm(a));
+		const change = button(a.auth === 'service_key' ? 'Replace key' : 'Change access', () =>
+			a.auth === 'service_key' ? keyForm(a) : accountForm(a)
+		);
 		change.disabled = !canWrite() || !ready(integration) || signingIn(a);
 		primary.append(change);
 		// Records left disconnected by an earlier version show Remove next to Try again.
@@ -837,7 +910,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			await load();
 			render();
 		});
-		check.disabled = !canWrite() || !a.email || a.state === 'disconnected' || !!checked?.busy;
+		check.disabled =
+			!canWrite() || !(a.email || a.provider_id) || a.state === 'disconnected' || !!checked?.busy;
 		if (checked?.busy) check.setAttribute('aria-busy', 'true');
 		actions.append(check);
 		if (a.state !== 'disconnected') actions.append(remove);
@@ -912,10 +986,16 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const list = accounts.filter((a) => a.provider === selected);
 		const accountHeading = el('div', undefined, 'fl-section-heading');
 		accountHeading.append(el('h3', 'Accounts'));
+		// Ways to add an account: sign-in, and a pasted key where the provider offers one.
 		const add = () => {
-			const b = button('Add account', () => accountForm());
-			b.disabled = !canWrite() || !ready(integration);
-			return b;
+			const ui = uiOf(integration.id);
+			const ways = ui.key
+				? [button(ui.connect, () => accountForm(), true), button(ui.key.action, () => keyForm())]
+				: [button('Add account', () => accountForm())];
+			for (const b of ways) b.disabled = !canWrite() || !ready(integration);
+			const group = el('div', undefined, 'fl-actions');
+			group.append(...ways);
+			return ways.length > 1 ? group : ways[0];
 		};
 		if (list.length) accountHeading.append(add());
 		detail.append(accountHeading);

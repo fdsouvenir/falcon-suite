@@ -7,7 +7,8 @@ export function accountBrief(accounts: Account[], unavailable: string[] = []): s
 	const clis = PROVIDERS.map((p) => p.tool.binary);
 	const lines = [
 		'Falcon Link integrations and configured accounts',
-		`falcon_link_accounts lists accounts; with account_id it returns the CLI account arguments and storage environment for that account. ${clis.slice(0, -1).join(', ')} and ${clis.at(-1)} are on the normal PATH. The keyring password variables are already present in the command environment.`
+		`falcon_link_accounts lists accounts; with account_id it returns the CLI account arguments and storage environment for that account. ${clis.slice(0, -1).join(', ')} and ${clis.at(-1)} are on the normal PATH. The keyring password variables are already present in the command environment.`,
+		...PROVIDERS.flatMap((p) => (p.brief.note ? [p.brief.note] : []))
 	];
 	for (const p of PROVIDERS) {
 		const provider = p.ui.id;

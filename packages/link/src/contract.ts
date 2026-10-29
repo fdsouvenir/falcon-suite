@@ -34,7 +34,7 @@ export const contract = defineFeatureContract({
 		accounts: {
 			kind: 'query',
 			description:
-				'Read account identity, human/agent owner, purpose, connection state and selected, recorded or granted scopes. With account_id, returns the CLI arguments and storage environment for that account; the CLIs are on the normal PATH and the keyring password variables are already present in the command environment.',
+				'Read account identity, human/agent owner, purpose, connection state and selected, recorded or granted scopes. With account_id, returns the CLI arguments and storage environment for that account (for hubspot also a command_prefix that selects the account); the CLIs are on the normal PATH and the keyring password variables are already present in the command environment.',
 			input: obj({ account_id: Type.Optional(Type.String({ maxLength: 64 })) }),
 			output: Type.Unknown(),
 			tool: { name: 'falcon_link_accounts', label: 'Read account facts' }
@@ -48,7 +48,7 @@ export const contract = defineFeatureContract({
 				owner,
 				purpose,
 				permissions: Type.Array(Type.String({ maxLength: 64 }), {
-					minItems: 1,
+					minItems: 0,
 					maxItems: 64,
 					uniqueItems: true
 				}),
@@ -70,10 +70,24 @@ export const contract = defineFeatureContract({
 		},
 		finish: {
 			kind: 'action',
-			description: 'Complete the Google CLI remote sign-in.',
+			description:
+				'Complete a sign-in with what the person pasted: the address shown after Google sign-in, or the code HubSpot showed.',
 			input: obj({
 				id: Type.String({ maxLength: 64 }),
 				redirect: Type.String({ maxLength: 8192 })
+			}),
+			output: Type.Unknown()
+		},
+		connect_key: {
+			kind: 'action',
+			description:
+				'Connect an account with a pasted service key, verified with the provider. The key is kept only in that account’s own CLI settings and never returned.',
+			input: obj({
+				account_id: Type.Optional(Type.String({ maxLength: 64 })),
+				provider,
+				owner,
+				purpose,
+				key: Type.String({ minLength: 1, maxLength: 1024 })
 			}),
 			output: Type.Unknown()
 		},
@@ -105,7 +119,7 @@ export const contract = defineFeatureContract({
 		install: {
 			kind: 'action',
 			description:
-				'Install or update the CLI from its latest GitHub release with checksum verification; preserve existing tools and credentials.',
+				'Install or update the CLI from its published source with checksum verification (a self-updating CLI updates itself); preserve existing tools and credentials.',
 			input: obj({ provider }),
 			output: Type.Unknown()
 		}

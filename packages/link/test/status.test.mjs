@@ -41,7 +41,11 @@ test('reports the documented version and newer releases, without exposing build 
 	assert.equal(result.integrations[0].below_minimum, true);
 	assert.equal(result.integrations[1].update_available, false);
 	assert.equal(result.integrations[1].tool.state, 'not_installed');
-	assert.ok(result.integrations.every((i) => i.setup.state === 'setup_required'));
+	const [google, microsoft, hubspot] = result.integrations;
+	assert.ok([google, microsoft].every((i) => i.setup.state === 'setup_required'));
+	// HubSpot signs in through HubSpot's own app and code page; nothing is provisioned.
+	assert.equal(hubspot.setup.state, 'ready');
+	assert.equal(hubspot.update_available, false, 'an unreadable checksum is not an update');
 });
 
 test('an absent executable is not installed', async () => {

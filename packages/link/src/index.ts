@@ -92,6 +92,10 @@ export default defineFeaturePlugin({
 			finish(input, context) {
 				return ready().finish(input.id, input.redirect, person(context));
 			},
+			connect_key(input, context) {
+				person(context);
+				return ready().connectKey(input);
+			},
 			cancel(input, context) {
 				return ready().cancel(input.id, person(context));
 			},
