@@ -1,66 +1,32 @@
-import { randomUUID, randomBytes, createHash } from 'node:crypto';
-import { readFileSync, rmSync } from 'node:fs';
-import path from 'node:path';
-import { CallbackHandoff, callbackConfig, callbackURI, microsoftAuthority } from './callback.js';
-import type { ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { rmSync } from 'node:fs';
 import { Registry } from './store.js';
-import { existingAccounts } from './discover.js';
 import {
 	type Account,
 	type Catalog,
 	type Owner,
-	type Provider,
 	type Purpose,
 	selectionScopes,
 	validateMetadata
 } from './model.js';
-import { googleCatalog, googleCommand, microsoftCatalog, workOnly } from './catalog.js';
-import {
-	accountEnvironment,
-	executable,
-	json,
-	provision,
-	readiness,
-	deviceLogin,
-	GoogleCompletionError,
-	TOOLS
-} from './cli.js';
+import { accountHome } from './cli.js';
+import { executable } from './tools.js';
 import { install } from './install.js';
+import { followTool, installSkills, removeSkills } from './skills.js';
 import { toolStatus } from './status.js';
 import { compareVersions } from './versions.js';
+import { PROVIDERS, provider } from './providers/index.js';
+import {
+	PublicError,
+	type Host,
+	type KeyInput,
+	type Login,
+	type StartInput,
+	type Stage
+} from './providers/types.js';
 
-// Microsoft's "administrator approval required" errors.
-const ADMIN_APPROVAL = /AADSTS(?:65001|90094)\b/;
-const ADMIN_MESSAGE =
-	'Your organization needs an administrator to approve Falcon Link before this account can connect.';
-type Login = {
-	provider: Provider;
-	id: string;
-	account_id: string;
-	state:
-		| 'starting'
-		| 'awaiting_consent'
-		| 'verifying'
-		| 'connected'
-		| 'failed'
-		| 'cancelled'
-		| 'expired';
-	expires_at: string;
-	url: string | null;
-	code: string | null;
-	message: string;
-	audience: string[];
-	email: string;
-	child?: ChildProcess;
-	args?: string[];
-	actor: string;
-	callback?: CallbackHandoff;
-	verifier?: string;
-	consuming?: boolean;
-	hosted?: boolean;
-	prior: Account | null;
-};
-export class LinkService {
+const ACTIVE = ['starting', 'awaiting_consent', 'verifying'];
+export class LinkService implements Host {
 	readonly registry: Registry;
 	private logins = new Map<string, Login>();
 	private locks = new Set<string>();
@@ -80,26 +46,19 @@ export class LinkService {
 		return this.registry.list();
 	}
 	// Permission rows come from each CLI's own catalog, cached until the CLI changes.
-	private catalogs = new Map<Provider, Promise<Catalog>>();
-	catalog(provider: Provider): Promise<Catalog> {
-		let catalog = this.catalogs.get(provider);
+	private catalogs = new Map<string, Promise<Catalog>>();
+	catalog(id: string): Promise<Catalog> {
+		let catalog = this.catalogs.get(id);
 		if (!catalog) {
-			catalog = json(
-				executable(this.dir, provider),
-				provider === 'google'
-					? ['auth', 'services', '--json', '--no-input']
-					: ['auth', 'workloads', '--json', '--no-input'],
-				process.env,
-				5000
-			).then((out) =>
-				provider === 'google' ? googleCatalog(out?.services) : microsoftCatalog(out?.workloads)
-			);
-			this.catalogs.set(provider, catalog);
-			catalog.catch(() => this.catalogs.delete(provider));
+			const p = provider(id);
+			if (!p.catalog) return Promise.reject(new Error('This integration has no permission list.'));
+			catalog = p.catalog(executable(this.dir, id));
+			this.catalogs.set(id, catalog);
+			catalog.catch(() => this.catalogs.delete(id));
 		}
 		return catalog;
 	}
-	discoveryUnavailable: Provider[] = [];
+	discoveryUnavailable: string[] = [];
 	private discoveryAt = 0;
 	private discovery?: Promise<void>;
 	async discover() {
@@ -108,9 +67,10 @@ export class LinkService {
 		this.discovery = (async () => {
 			this.discoveryUnavailable = [];
 			await Promise.all(
-				(['google', 'microsoft'] as Provider[]).map(async (provider) => {
+				PROVIDERS.map(async (p) => {
+					const id = p.ui.id;
 					try {
-						const found = await existingAccounts(this.dir, provider);
+						const found = await p.discover(executable(this.dir, id));
 						for (const account of found) {
 							const prior = this.accounts().find((a) => a.id === account.id);
 							this.registry.save(
@@ -126,9 +86,7 @@ export class LinkService {
 									: account
 							);
 						}
-						for (const prior of this.accounts().filter(
-							(a) => a.provider === provider && a.external
-						))
+						for (const prior of this.accounts().filter((a) => a.provider === id && a.external))
 							if (!found.some((a) => a.id === prior.id))
 								this.registry.save({
 									...prior,
@@ -137,7 +95,7 @@ export class LinkService {
 									granted_scopes: null
 								});
 					} catch {
-						this.discoveryUnavailable.push(provider);
+						this.discoveryUnavailable.push(id);
 					}
 				})
 			);
@@ -149,57 +107,23 @@ export class LinkService {
 			this.discovery = undefined;
 		}
 	}
-	private selection(a: Account) {
-		return a.external?.selection ?? (a.provider === 'google' ? a.email! : a.id);
-	}
-	private tool(a: Account) {
+	tool(a: Account) {
 		return executable(this.dir, a.provider);
 	}
-	private env(a: Account) {
-		if (a.external)
-			return {
-				...process.env,
-				...(a.provider === 'google' && a.external.client ? { GOG_CLIENT: a.external.client } : {}),
-				...(a.provider === 'microsoft' && a.external.client_id
-					? { M365CLI_CLIENT_ID: a.external.client_id }
-					: {})
-			};
-		return accountEnvironment(this.dir, a.id);
-	}
-	// Providers accept the hosted redirect only for the provisioned Link client. Accounts in a
-	// CLI's own store with another client use that CLI's manual or device-code sign-in.
-	private async hostedCallback(a: Account) {
-		const callback = callbackConfig(this.dir);
-		if (!callback || !a.external) return callback;
-		try {
-			const p = provision(this.dir);
-			if (a.provider === 'microsoft')
-				return a.external.client_id === p.microsoft_client_id ? callback : undefined;
-			const out = await json(
-				this.tool(a),
-				['auth', 'credentials', 'list', '--json', '--no-input'],
-				this.env(a)
-			);
-			const entry = out?.clients?.find((c: any) => c?.client === (a.external!.client ?? 'default'));
-			const stored = JSON.parse(readFileSync(entry.path, 'utf8'));
-			const link = JSON.parse(readFileSync(p.google_credentials_file!, 'utf8')).web?.client_id;
-			const id = stored.client_id ?? stored.web?.client_id ?? stored.installed?.client_id;
-			return link && id === link ? callback : undefined;
-		} catch {
-			return undefined;
-		}
+	env(a: Account) {
+		return provider(a.provider).environment(this.dir, a);
 	}
 	// A missing CLI, or one older than the version Link relies on, stops sign-in.
-	private async cliProblem(provider: Provider) {
-		const name = provider === 'google' ? 'Google' : 'Microsoft';
-		const version = await toolStatus(executable(this.dir, provider));
+	private async cliProblem(id: string) {
+		const p = provider(id);
+		const version = await toolStatus(executable(this.dir, id), p.tool.version_prefix);
 		if (version.state === 'not_installed')
-			return `Install ${TOOLS[provider].binary} on this computer to connect ${name} accounts.`;
+			return `Install ${p.tool.binary} on this computer to connect ${p.ui.name} accounts.`;
 		if (
 			version.state === 'installed' &&
-			(compareVersions(version.version, TOOLS[provider].minimum) ?? 0) < 0
+			(compareVersions(version.version, p.tool.minimum) ?? 0) < 0
 		)
-			return `Update needed to connect ${name} accounts.`;
+			return `Update needed to connect ${p.ui.name} accounts.`;
 		return null;
 	}
 	private async locked<T>(id: string, fn: () => Promise<T>): Promise<T> {
@@ -217,14 +141,17 @@ export class LinkService {
 			args: _a,
 			actor: _actor,
 			email: _e,
-			audience: _u,
+			prepared: _p,
 			callback: _cb,
 			verifier: _v,
-			consuming: _p,
+			consuming: _consuming,
 			prior: _prior,
 			...result
 		} = l;
 		return result;
+	}
+	private active(id: string) {
+		return [...this.logins.values()].some((l) => l.account_id === id && ACTIVE.includes(l.state));
 	}
 	login(id: string, actor: string) {
 		const l = this.logins.get(id);
@@ -246,62 +173,44 @@ export class LinkService {
 		}
 		return this.publicLogin(l);
 	}
-	async start(
-		input: {
-			account_id?: string;
-			provider: Provider;
-			owner: Owner;
-			purpose: Purpose;
-			permissions: string[];
-			email?: string;
-		},
-		actor: string
-	) {
-		validateMetadata(input.owner, input.purpose);
-		const setup = readiness(this.dir, input.provider);
-		if (setup.state !== 'ready') throw new Error(setup.message);
-		if (input.provider === 'google' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email ?? ''))
-			throw new Error('Enter the Google email address you intend to connect.');
-		const catalog = await this.catalog(input.provider).catch(async () => {
-			throw new Error(
-				(await this.cliProblem(input.provider)) ??
-					'Permission choices could not be read from the CLI. Try again.'
-			);
-		});
-		const scopes = selectionScopes(input.provider, catalog, input.permissions);
-		// m365cli detects the account type itself, except where only work or school accounts
-		// qualify or the operator provisioned a tenant.
-		const tenant = provision(this.dir).microsoft_tenant;
-		const audience =
-			tenant || workOnly(catalog, input.permissions)
-				? ['--audience', 'enterprise', ...(tenant ? ['--tenant', tenant] : [])]
-				: ['--audience', 'auto'];
+	// Checks shared by every way of connecting; returns the account being reconnected, if any.
+	private claim(providerId: string, accountId: string | undefined) {
 		// Consent is serialized per provider. Google remote state reuse must not bind a second
 		// pending account to the first account's callback.
 		for (const l of this.logins.values()) {
 			this.login(l.id, l.actor);
-			if (
-				l.provider === input.provider &&
-				['starting', 'awaiting_consent', 'verifying'].includes(l.state)
-			)
+			if (l.provider === providerId && ACTIVE.includes(l.state))
 				throw new Error('Finish or cancel the current sign-in for this integration first.');
 		}
 		if (this.logins.size >= 100) {
-			for (const [id, l] of this.logins)
-				if (!['starting', 'awaiting_consent', 'verifying'].includes(l.state))
-					this.logins.delete(id);
+			for (const [id, l] of this.logins) if (!ACTIVE.includes(l.state)) this.logins.delete(id);
 		}
-		const prior = input.account_id ? this.registry.get(input.account_id) : null;
+		const prior = accountId ? this.registry.get(accountId) : null;
 		if (prior && this.locks.has(prior.id))
 			throw new Error('An account operation is already running.');
-		if (prior && prior.provider !== input.provider)
+		if (prior && prior.provider !== providerId)
 			throw new Error('Integration does not match the account.');
-		if (
-			prior?.email &&
-			input.provider === 'google' &&
-			prior.email.toLowerCase() !== input.email?.toLowerCase()
-		)
-			throw new Error('Reconnect must use the same account address.');
+		return prior;
+	}
+	async start(input: StartInput, actor: string) {
+		validateMetadata(input.owner, input.purpose);
+		const p = provider(input.provider);
+		const setup = p.readiness(this.dir);
+		if (setup.state !== 'ready') throw new Error(setup.message);
+		p.validate?.(input, null);
+		let catalog: Catalog | null = null;
+		if (p.catalog) {
+			catalog = await this.catalog(input.provider).catch(async () => {
+				throw new Error(
+					(await this.cliProblem(input.provider)) ??
+						'Permission choices could not be read from the CLI. Try again.'
+				);
+			});
+			selectionScopes(p.ui, catalog, input.permissions);
+		} else if (input.permissions.length) throw new Error('Select supported permissions.');
+		const prepared = p.prepare?.(this.dir, input, catalog);
+		const prior = this.claim(input.provider, input.account_id);
+		if (prior) p.validate?.(input, prior);
 		const a: Account = {
 			id: prior?.id ?? `acct_${randomUUID()}`,
 			provider: input.provider,
@@ -312,6 +221,7 @@ export class LinkService {
 			requested: input.permissions,
 			granted_scopes: null,
 			...(prior?.audience ? { audience: prior.audience } : {}),
+			...(prior?.auth ? { auth: 'oauth' as const } : {}),
 			...(prior?.external ? { external: prior.external } : {}),
 			state: 'pending',
 			checked_at: null,
@@ -327,265 +237,50 @@ export class LinkService {
 			url: null,
 			code: null,
 			message: 'Starting sign-in…',
-			audience,
+			prepared,
 			email: input.email ?? '',
 			actor,
 			prior
 		};
 		this.logins.set(l.id, l);
-		const callback = await this.hostedCallback(a);
-		const tool = this.tool(a);
-		const env = this.env(a);
-		let failure = { code: 'cli_unavailable', message: '' };
+		const stage: Stage = { code: 'cli_unavailable', message: '' };
 		try {
 			const problem = await this.cliProblem(a.provider);
 			if (problem) {
-				failure = {
+				Object.assign(stage, {
 					code: problem.startsWith('Update') ? 'cli_update_needed' : 'cli_unavailable',
 					message: problem
-				};
+				});
 				throw new Error(problem);
 			}
 			if (l.state !== 'starting') return this.publicLogin(l);
-			if (a.provider === 'google') {
-				failure = {
-					code: 'google_client_setup',
-					message:
-						'Google client configuration could not be loaded into the account store. Contact your administrator.'
-				};
-				// Accounts found in gog's own store keep that store's OAuth client.
-				if (!a.external)
-					await json(
-						tool,
-						[
-							'auth',
-							'credentials',
-							'set',
-							provision(this.dir).google_credentials_file!,
-							'--json',
-							'--no-input'
-						],
-						env
-					);
-				const command = googleCommand(catalog, a.requested);
-				const args = [
-					'auth',
-					'add',
-					l.email,
-					...command.args,
-					'--remote',
-					'--force-consent',
-					'--json',
-					'--no-input'
-				];
-				if (callback) args.push('--redirect-uri', callbackURI(callback, 'google'));
-				l.args = args;
-				failure = {
-					code: 'google_authorization_start',
-					message:
-						'Google sign-in could not create an authorization URL. Check connection setup and try again.'
-				};
-				const result = await json(tool, [...args, '--step', '1'], env);
-				if (l.state !== 'starting') return this.publicLogin(l);
-				const url = new URL(result.auth_url);
-				if (
-					url.protocol !== 'https:' ||
-					url.hostname !== 'accounts.google.com' ||
-					!url.searchParams.get('state')
-				)
-					throw new Error('Provider authorization URL could not be verified.');
-				const actual = new Set((url.searchParams.get('scope') ?? '').split(' '));
-				const wanted = new Set(command.scopes);
-				failure = {
-					code: 'google_permission_mismatch',
-					message:
-						'The Google permission request did not match your selection. No sign-in link was offered.'
-				};
-				if (actual.size !== wanted.size || [...actual].some((s) => !wanted.has(s)))
-					throw new Error('Provider permission request differs from the selection.');
-				if (callback) {
-					l.callback = await CallbackHandoff.create(
-						callback,
-						'google',
-						url.searchParams.get('state')!
-					);
-					if (l.state !== 'starting') {
-						await l.callback.cancel();
-						return this.publicLogin(l);
-					}
-					l.hosted = true;
-					l.expires_at = new Date(Date.now() + 10 * 60000).toISOString();
-				}
-				l.url = url.href;
-				l.state = 'awaiting_consent';
-				l.message = callback
-					? 'Sign in with Google, then return here. Your account will connect automatically.'
-					: 'Sign in with Google. After consent, paste the full redirect URL below; a localhost error in your browser is expected for this remote flow.';
-			} else if (callback) {
-				failure = {
-					code: 'microsoft_authorization_start',
-					message:
-						'Microsoft sign-in could not start. Check callback service and application setup.'
-				};
-				const p = provision(this.dir);
-				const state = randomBytes(32).toString('base64url');
-				l.verifier = randomBytes(32).toString('base64url');
-				const url = new URL(microsoftAuthority(p) + '/authorize');
-				url.search = new URLSearchParams({
-					client_id: p.microsoft_client_id!,
-					response_type: 'code',
-					response_mode: 'query',
-					redirect_uri: callbackURI(callback, 'microsoft'),
-					scope: scopes.join(' '),
-					state,
-					code_challenge: createHash('sha256').update(l.verifier).digest('base64url'),
-					code_challenge_method: 'S256',
-					prompt: 'select_account'
-				}).toString();
-				l.callback = await CallbackHandoff.create(callback, 'microsoft', state);
-				if (l.state !== 'starting') {
-					await l.callback.cancel();
-					return this.publicLogin(l);
-				}
-				l.hosted = true;
-				l.expires_at = new Date(Date.now() + 10 * 60000).toISOString();
-				l.url = url.href;
-				l.state = 'awaiting_consent';
-				l.message =
-					'Sign in with Microsoft, then return here. Your account will connect automatically.';
-			} else {
-				failure = {
-					code: 'microsoft_authorization_start',
-					message: 'Microsoft sign-in could not start. Check connection setup and try again.'
-				};
-				const args = [
-					'auth',
-					'login',
-					'--profile',
-					this.selection(a),
-					...audience,
-					'--scope-workloads',
-					a.requested.join(','),
-					'--no-input',
-					'--json'
-				];
-				let stderr = '';
-				l.child = deviceLogin(
-					tool,
-					args,
-					env,
-					(chunk) => {
-						if (!['starting', 'awaiting_consent'].includes(l.state)) return;
-						stderr = (stderr + chunk).slice(-8192);
-						const url = stderr.match(
-							/https:\/\/(?:www\.)?microsoft\.com\/devicelogin\b|https:\/\/microsoft\.com\/link\b/
-						);
-						const code = stderr.match(/(?:code\s+)([A-Z0-9-]{6,16})\b/i);
-						if (url && code) {
-							l.url = url[0];
-							l.code = code[1];
-							l.state = 'awaiting_consent';
-							l.message = 'Open Microsoft sign-in and enter this code.';
-						}
-					},
-					(success) => {
-						if (!['starting', 'awaiting_consent'].includes(l.state)) return;
-						if (!success) {
-							if (ADMIN_APPROVAL.test(stderr))
-								this.fail(l, ADMIN_MESSAGE, 'admin_approval_required');
-							else this.fail(l, 'Sign-in did not complete. Try again.');
-							return;
-						}
-						l.state = 'verifying';
-						l.url = null;
-						l.code = null;
-						void this.check(a.id, true)
-							.then(() => {
-								l.state = 'connected';
-								l.message = 'Account connected.';
-							})
-							.catch(() =>
-								this.fail(
-									l,
-									'Sign-in completed but live identity could not be verified. Check the account and reconnect.'
-								)
-							);
-					}
-				);
-			}
-		} catch {
-			this.fail(l, failure.message, failure.code);
+			await p.start(this, l, a, stage);
+		} catch (e) {
+			if (e instanceof PublicError) this.fail(l, e.message, e.code);
+			else this.fail(l, stage.message, stage.code);
 		}
 		return this.publicLogin(l);
 	}
-	private fail(l: Login, message: string, code = 'signin_failed') {
+	fail(l: Login, message: string, code = 'signin_failed') {
 		if (l.state === 'cancelled') return;
 		l.state = 'failed';
 		l.url = null;
 		l.code = null;
+		l.paste = undefined;
 		l.message = message;
 		const a = this.registry.get(l.account_id);
 		a.state = 'failed';
 		a.connection_error = { code, message };
 		this.registry.save(a);
 	}
-	async finish(id: string, redirect: string, actor: string, fromCallback = false) {
+	async finish(id: string, value: string, actor: string, fromCallback = false) {
 		this.login(id, actor);
 		const l = this.logins.get(id)!;
-		if (l.state !== 'awaiting_consent' || !l.args)
-			throw new Error('This sign-in is not waiting for a Google redirect.');
-		if (l.hosted && !fromCallback) throw new Error('This sign-in completes automatically.');
-		const callback = new URL(redirect);
-		const expected = new URL(l.url!);
-		const target = new URL(expected.searchParams.get('redirect_uri')!);
-		if (
-			callback.origin !== target.origin ||
-			callback.pathname !== target.pathname ||
-			callback.searchParams.get('state') !== expected.searchParams.get('state') ||
-			!callback.searchParams.get('code')
-		)
-			throw new Error('Redirect URL or sign-in state does not match.');
-		l.state = 'verifying';
-		let failure = {
-			code: 'google_completion_failed',
-			message:
-				'Google sign-in could not complete authorization, identity confirmation or credential storage. Reconnect to start a new sign-in.'
-		};
-		try {
-			const a = this.registry.get(l.account_id);
-			const result = await json(
-				executable(this.dir, 'google'),
-				[...l.args, '--step', '2', '--auth-url', callback.href],
-				this.env(a),
-				60000
-			);
-			failure = {
-				code: 'google_account_mismatch',
-				message:
-					'Google did not confirm the intended account address. Reconnect using that account.'
-			};
-			if (
-				result.stored !== true ||
-				typeof result.email !== 'string' ||
-				result.email.toLowerCase() !== l.email.toLowerCase()
-			)
-				throw new Error('Provider returned a different account.');
-			a.email = result.email;
-			this.registry.save(a);
-			failure = {
-				code: 'google_identity_check',
-				message:
-					'Google credentials were saved, but the live identity and refresh check failed. Check the connection or reconnect.'
-			};
-			await this.check(a.id, true);
-			l.state = 'connected';
-			l.url = null;
-			l.code = null;
-			l.message = 'Account connected.';
-		} catch (e) {
-			if (e instanceof GoogleCompletionError) failure = { code: e.code, message: e.message };
-			this.fail(l, failure.message, failure.code);
-		}
+		const p = provider(l.provider);
+		if (!p.finish || l.state !== 'awaiting_consent')
+			throw new Error('This sign-in is not waiting for a pasted address or code.');
+		await p.finish(this, l, value, fromCallback);
+		if (l.state !== 'awaiting_consent') l.paste = undefined;
 		return this.publicLogin(l);
 	}
 	async poll(id: string, actor: string) {
@@ -601,79 +296,10 @@ export class LinkService {
 				return this.publicLogin(l);
 			}
 			if (result.error || !result.code) throw new Error('consent');
-			if (l.provider === 'google') {
-				const redirect = new URL(callbackURI(l.callback.config, 'google'));
-				redirect.search = new URLSearchParams({
-					state: l.callback.state,
-					code: result.code
-				}).toString();
-				return await this.finish(id, redirect.href, actor, true);
-			}
-			l.state = 'verifying';
-			l.url = null;
-			const a = this.registry.get(l.account_id);
-			const p = provision(this.dir);
-			const secret = p.microsoft_client_secret_file
-				? readFileSync(p.microsoft_client_secret_file, 'utf8').trim()
-				: '';
-			const body = new URLSearchParams({
-				client_id: p.microsoft_client_id!,
-				grant_type: 'authorization_code',
-				code: result.code,
-				redirect_uri: callbackURI(l.callback.config, 'microsoft'),
-				code_verifier: l.verifier!,
-				scope: selectionScopes('microsoft', await this.catalog('microsoft'), a.requested).join(' ')
-			});
-			if (secret) body.set('client_secret', secret);
-			const response = await fetch(microsoftAuthority(p) + '/token', {
-				method: 'POST',
-				body,
-				redirect: 'error',
-				signal: AbortSignal.timeout(20000)
-			});
-			const token = (await response.json()) as {
-				refresh_token?: string;
-				error_codes?: unknown;
-				error_description?: unknown;
-			};
-			if (
-				ADMIN_APPROVAL.test(String(token.error_description)) ||
-				(Array.isArray(token.error_codes) &&
-					token.error_codes.some((c) => c === 65001 || c === 90094))
-			)
-				throw new Error(ADMIN_MESSAGE);
-			if (!response.ok || !token.refresh_token) throw new Error('exchange');
-			const args = [
-				'auth',
-				'login',
-				'--profile',
-				this.selection(a),
-				...l.audience,
-				'--scope-workloads',
-				a.requested.join(','),
-				'--refresh-token-env',
-				'FALCON_LINK_LOGIN_REFRESH',
-				'--no-input',
-				'--json'
-			];
-			if (secret) args.push('--client-secret-env', 'FALCON_LINK_LOGIN_SECRET');
-			await json(
-				this.tool(a),
-				args,
-				{
-					...this.env(a),
-					FALCON_LINK_LOGIN_REFRESH: token.refresh_token,
-					FALCON_LINK_LOGIN_SECRET: secret
-				},
-				60000
-			);
-			await this.check(a.id, true);
-			l.state = 'connected';
-			l.message = 'Account connected.';
+			await provider(l.provider).complete!(this, l, result.code);
 		} catch (e) {
 			if (['awaiting_consent', 'verifying'].includes(l.state))
-				if ((e as Error).message === ADMIN_MESSAGE)
-					this.fail(l, ADMIN_MESSAGE, 'admin_approval_required');
+				if (e instanceof PublicError) this.fail(l, e.message, e.code);
 				else
 					this.fail(
 						l,
@@ -689,7 +315,54 @@ export class LinkService {
 		}
 		return this.publicLogin(l);
 	}
-
+	// Connects with a pasted key instead of a sign-in. The key goes only to the account's own
+	// CLI store; it is never saved in the account list, returned or logged.
+	async connectKey(input: KeyInput) {
+		validateMetadata(input.owner, input.purpose);
+		const p = provider(input.provider);
+		if (!p.connectKey) throw new Error('This integration does not connect with a key.');
+		const setup = p.readiness(this.dir);
+		if (setup.state !== 'ready') throw new Error(setup.message);
+		const prior = this.claim(input.provider, input.account_id);
+		if (prior && prior.auth !== 'service_key')
+			throw new Error('This account signs in with the provider; reconnect it instead.');
+		const problem = await this.cliProblem(input.provider);
+		if (problem) throw new Error(problem);
+		const id = prior?.id ?? `acct_${randomUUID()}`;
+		return this.locked(id, async () => {
+			const a: Account = {
+				id,
+				provider: input.provider,
+				owner: input.owner,
+				purpose: input.purpose,
+				email: null,
+				provider_id: prior?.provider_id ?? null,
+				requested: [],
+				granted_scopes: null,
+				auth: 'service_key',
+				state: 'pending',
+				checked_at: null,
+				created_at: prior?.created_at ?? new Date().toISOString()
+			};
+			try {
+				await p.connectKey!(this, a, input.key, prior);
+			} catch (e) {
+				if (prior) this.registry.save(prior);
+				else {
+					this.registry.remove(id);
+					rmSync(accountHome(this.dir, id), { recursive: true, force: true });
+				}
+				throw e instanceof PublicError
+					? e
+					: new Error('The key could not be checked with the provider. Try again.');
+			}
+			a.state = 'connected';
+			a.checked_at = new Date().toISOString();
+			delete a.connection_error;
+			this.registry.save(a);
+			return a;
+		});
+	}
 	cancel(id: string, actor: string) {
 		this.login(id, actor);
 		const l = this.logins.get(id)!;
@@ -700,92 +373,26 @@ export class LinkService {
 			void l.callback?.cancel().catch(() => {});
 			l.url = null;
 			l.code = null;
+			l.paste = undefined;
 			l.message = 'You cancelled sign-in. Nothing changed.';
 			// The account returns to exactly what it was; a new account is not kept.
 			if (l.prior) this.registry.save(l.prior);
 			else {
 				this.registry.remove(l.account_id);
 				if (/^acct_[a-f0-9-]{36}$/.test(l.account_id))
-					rmSync(path.join(this.dir, 'accounts', l.account_id), { recursive: true, force: true });
+					rmSync(accountHome(this.dir, l.account_id), { recursive: true, force: true });
 			}
 		}
 		return this.publicLogin(l);
 	}
 	async check(id: string, completingLogin = false) {
-		if (
-			!completingLogin &&
-			[...this.logins.values()].some(
-				(l) =>
-					l.account_id === id && ['starting', 'awaiting_consent', 'verifying'].includes(l.state)
-			)
-		)
+		if (!completingLogin && this.active(id))
 			throw new Error('Finish or cancel sign-in before checking this connection.');
 		return this.locked(id, async () => {
 			const a = this.registry.get(id);
 			if (a.state === 'disconnected') throw new Error('Account is disconnected.');
 			try {
-				if (a.provider === 'google') {
-					const out = await json(
-						this.tool(a),
-						['auth', 'list', '--check', '--json', '--no-input'],
-						this.env(a)
-					);
-					const entry = out.accounts?.find(
-						(e: any) =>
-							e.email?.toLowerCase() === a.email?.toLowerCase() &&
-							(!a.external || (e.client ?? 'default') === (a.external.client ?? 'default'))
-					);
-					if (!entry || entry.valid !== true || !entry.subject)
-						throw new Error('Identity not verified.');
-					if (a.provider_id && a.provider_id !== entry.subject)
-						throw new Error('Account identity changed.');
-					a.provider_id = entry.subject;
-					a.granted_scopes = null;
-					a.recorded_scopes = Array.isArray(entry.scopes)
-						? entry.scopes.filter((s: unknown) => typeof s === 'string')
-						: null;
-					// gog reports scopes from stored token metadata; do not promote them to verified grants.
-				} else {
-					// m365cli replaces a profile's account on sign-in; a reconnected profile found in
-					// the CLI's own store must still belong to the account it held before.
-					const previous =
-						completingLogin && a.external && !a.provider_id ? a.email?.toLowerCase() : null;
-					const out = await json(
-						this.tool(a),
-						['--account', this.selection(a), 'auth', 'check', '--json', '--no-input'],
-						this.env(a)
-					);
-					if (out.verified !== true || out.profile !== this.selection(a) || !out.identity?.id)
-						throw new Error('Identity not verified.');
-					if (a.provider_id && a.provider_id !== out.identity.id)
-						throw new Error('Account identity changed.');
-					if (
-						previous &&
-						![out.identity.mail, out.identity.userPrincipalName].some(
-							(v) => typeof v === 'string' && v.toLowerCase() === previous
-						)
-					)
-						throw new Error('Account identity changed.');
-					a.provider_id = out.identity.id;
-					a.email = out.identity.mail || out.identity.userPrincipalName || null;
-					if (a.external && Array.isArray(out.selected_workloads))
-						a.requested = out.selected_workloads.filter((w: unknown) => typeof w === 'string');
-					if (!a.email) throw new Error('Provider did not return an account address.');
-					if (['consumer', 'enterprise'].includes(out.audience)) a.audience = out.audience;
-					// m365cli reads the current Graph grant; `unknown` is never shown as granted.
-					const known = out.grant?.status === 'known' && Array.isArray(out.grant.scopes);
-					a.granted_scopes = known
-						? out.grant.scopes.filter((s: unknown) => typeof s === 'string')
-						: null;
-					a.grant = {
-						status: known ? 'known' : 'unknown',
-						selected_not_granted:
-							known && Array.isArray(out.grant.selected_not_granted)
-								? out.grant.selected_not_granted.filter((s: unknown) => typeof s === 'string')
-								: null
-					};
-					a.recorded_scopes = null;
-				}
+				await provider(a.provider).verify(this, a, completingLogin);
 				a.owner = this.registry.get(id).owner;
 				a.purpose = this.registry.get(id).purpose;
 				a.state = 'connected';
@@ -793,17 +400,21 @@ export class LinkService {
 				a.checked_at = new Date().toISOString();
 				this.registry.save(a);
 				return a;
-			} catch {
+			} catch (e) {
+				const known = e instanceof PublicError;
 				a.owner = this.registry.get(id).owner;
 				a.purpose = this.registry.get(id).purpose;
 				a.state = 'check_failed';
-				a.connection_error = {
-					code: 'identity_check_failed',
-					message:
-						'The live identity and refresh check failed. Reconnect if consent has expired or been revoked.'
-				};
+				a.connection_error = known
+					? { code: e.code, message: e.message }
+					: {
+							code: 'identity_check_failed',
+							message:
+								'The live identity and refresh check failed. Reconnect if consent has expired or been revoked.'
+						};
 				a.checked_at = new Date().toISOString();
 				this.registry.save(a);
+				if (known) throw e;
 				throw new Error(
 					'Live identity check failed. Reconnect if consent has expired or been revoked.'
 				);
@@ -816,59 +427,15 @@ export class LinkService {
 			const forget = () => {
 				this.registry.remove(id);
 				if (!a.external && /^acct_[a-f0-9-]{36}$/.test(id))
-					rmSync(path.join(this.dir, 'accounts', id), { recursive: true, force: true });
+					rmSync(accountHome(this.dir, id), { recursive: true, force: true });
 				return { account_id: id, removed: true };
 			};
 			// Records from earlier versions in state 'disconnected' no longer hold saved credentials.
 			if (a.state === 'disconnected') return forget();
-			if (
-				[...this.logins.values()].some(
-					(l) =>
-						l.account_id === id && ['starting', 'awaiting_consent', 'verifying'].includes(l.state)
-				)
-			)
+			if (this.active(id))
 				throw new Error('Finish or cancel sign-in before removing this account.');
-			// Only this account's CLI-native encrypted credentials are removed. Never revoke provider-wide consent.
-			const tool = this.tool(a);
-			const env = this.env(a);
-			// A CLI's own store keeps every other account; Link's isolated store holds only this one.
-			const same = (e: any) =>
-				typeof e?.email === 'string' &&
-				e.email.toLowerCase() === a.email?.toLowerCase() &&
-				(e.client ?? 'default') === (a.external?.client ?? 'default');
-			if (a.provider === 'google') {
-				const stored = await json(tool, ['auth', 'list', '--json', '--no-input'], env);
-				if (!Array.isArray(stored.accounts))
-					throw new Error('Local credential inventory could not be verified.');
-				for (const entry of a.external ? stored.accounts.filter(same) : stored.accounts) {
-					if (typeof entry.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry.email))
-						throw new Error('Local account identity is unavailable.');
-					await json(tool, ['auth', 'remove', entry.email, '--force', '--json', '--no-input'], env);
-				}
-			} else {
-				const stored = await json(tool, ['auth', 'status', '--json', '--no-input'], env);
-				if (!Array.isArray(stored.profiles))
-					throw new Error('Local credential inventory could not be verified.');
-				const profile = this.selection(a);
-				if (stored.profiles.some((p: any) => p.name === profile))
-					await json(tool, ['auth', 'logout', '--profile', profile, '--json', '--no-input'], env);
-			}
-
-			const after = await json(
-				tool,
-				a.provider === 'google'
-					? ['auth', 'list', '--json', '--no-input']
-					: ['auth', 'status', '--json', '--no-input'],
-				env
-			);
-			if (
-				a.provider === 'google'
-					? !Array.isArray(after.accounts) ||
-						(a.external ? after.accounts.some(same) : after.accounts.length !== 0)
-					: !Array.isArray(after.profiles) ||
-						after.profiles.some((p: any) => p.name === this.selection(a))
-			)
-				throw new Error('Local credential removal could not be verified.');
+			// Only this account's saved sign-in is removed. Never revoke provider-wide consent.
+			await provider(a.provider).remove(this, a);
 			return forget();
 		});
 	}
@@ -882,80 +449,40 @@ export class LinkService {
 	}
 	async invocation(id: string) {
 		const a = this.registry.get(id);
-		if (!['connected', 'discovered'].includes(a.state) || !a.email)
-			throw new Error('Account is not connected.');
-		if (a.external)
-			return {
-				account: a,
-				executable: this.tool(a),
-				arguments: [
-					...(a.external.client ? ['--client', a.external.client] : []),
-					'--account',
-					this.selection(a)
-				],
-				environment: Object.fromEntries(
-					[
-						...(a.provider === 'google'
-							? [
-									'GOG_CONFIG_DIR',
-									'GOG_DATA_DIR',
-									'GOG_STATE_DIR',
-									'GOG_CACHE_DIR',
-									'GOG_KEYRING_BACKEND'
-								]
-							: ['M365CLI_CONFIG_DIR', 'M365CLI_KEYRING_BACKEND'])
-					]
-						.filter((key) => process.env[key] !== undefined)
-						.map((key) => [key, process.env[key]])
-				),
-				inherited_environment: [],
-				requested_scopes: [],
-				granted_scopes: a.granted_scopes
-			};
-		const env = this.env(a);
-		// Normal exec protects HOME/XDG launch context. Select the existing store through
-		// each CLI's own supported settings, without changing the process home.
-		const names =
-			a.provider === 'google'
-				? [
-						'GOG_CONFIG_DIR',
-						'GOG_DATA_DIR',
-						'GOG_STATE_DIR',
-						'GOG_CACHE_DIR',
-						'GOG_KEYRING_BACKEND'
-					]
-				: ['M365CLI_CONFIG_DIR', 'M365CLI_KEYRING_BACKEND'];
-		return {
-			account: a,
-			executable: this.tool(a),
-			arguments: ['--account', a.provider === 'google' ? a.email : a.id],
-			environment: Object.fromEntries(
-				names
-					.filter((k) => a.provider === 'google' || !k.startsWith('GOG_'))
-					.map((k) => [k, env[k]])
-			),
-			inherited_environment: [
-				a.provider === 'google' ? 'GOG_KEYRING_PASSWORD' : 'M365CLI_KEYRING_PASSWORD'
-			],
-			requested_scopes: await this.catalog(a.provider)
-				.then((c) => selectionScopes(a.provider, c, a.requested))
-				.catch(() => null),
-			granted_scopes: a.granted_scopes
-		};
-	}
-	async install(provider: Provider) {
+		const p = provider(a.provider);
 		if (
-			[...this.logins.values()].some(
-				(l) =>
-					l.provider === provider && ['starting', 'awaiting_consent', 'verifying'].includes(l.state)
-			)
+			!['connected', 'discovered'].includes(a.state) ||
+			!(p.identified ? p.identified(a) : !!a.email)
 		)
+			throw new Error('Account is not connected.');
+		const result = await p.invocation(this, a);
+		if (!('requested_scopes' in result) && p.catalog) {
+			const { granted_scopes, ...rest } = result;
+			return {
+				...rest,
+				requested_scopes: await this.catalog(a.provider)
+					.then((c) => selectionScopes(p.ui, c, a.requested))
+					.catch(() => null),
+				granted_scopes
+			};
+		}
+		return result;
+	}
+	async install(id: string) {
+		if ([...this.logins.values()].some((l) => l.provider === id && ACTIVE.includes(l.state)))
 			throw new Error('Finish or cancel sign-in before changing the CLI.');
 		try {
-			return await install(this.dir, provider);
+			const result = await install(this.dir, id);
+			// The provider's skills follow the CLI; a skills failure leaves the tool installed
+			// and shows on the skills row.
+			await followTool(this.dir, id).catch(() => {});
+			return result;
 		} finally {
-			this.catalogs.delete(provider);
+			this.catalogs.delete(id);
 		}
+	}
+	skills(id: string, action: 'install' | 'remove') {
+		return action === 'install' ? installSkills(this.dir, id) : removeSkills(this.dir, id);
 	}
 	stop() {
 		for (const l of this.logins.values()) {

@@ -9,7 +9,8 @@ import { contract } from './contract.js';
 import { overview } from './status.js';
 import { LinkService } from './service.js';
 import { PLUGIN_ID } from './identity.js';
-import { BASE_SCOPES, type Provider } from './model.js';
+import { PROVIDERS } from './providers/index.js';
+import { BASE_SCOPES } from './providers/ui.js';
 
 // Account facts are omitted in group, channel and room conversations and provided elsewhere.
 const shared = (sessionKey: string) =>
@@ -61,11 +62,11 @@ export default defineFeaturePlugin({
 				const l = ready();
 				const [status, ...catalogs] = await Promise.all([
 					overview(l.dir),
-					...(['google', 'microsoft'] as Provider[]).map((p) => l.catalog(p).catch(() => null))
+					...PROVIDERS.map((p) => (p.catalog ? l.catalog(p.ui.id).catch(() => null) : null))
 				]);
 				return {
 					...status,
-					catalogs: { google: catalogs[0], microsoft: catalogs[1] },
+					catalogs: Object.fromEntries(PROVIDERS.map((p, i) => [p.ui.id, catalogs[i]])),
 					baseline_scopes: BASE_SCOPES
 				};
 			},
@@ -91,6 +92,10 @@ export default defineFeaturePlugin({
 			finish(input, context) {
 				return ready().finish(input.id, input.redirect, person(context));
 			},
+			connect_key(input, context) {
+				person(context);
+				return ready().connectKey(input);
+			},
 			cancel(input, context) {
 				return ready().cancel(input.id, person(context));
 			},
@@ -105,6 +110,10 @@ export default defineFeaturePlugin({
 			metadata(input, context) {
 				person(context);
 				return ready().metadata(input.account_id, input.owner, input.purpose);
+			},
+			skills(input, context) {
+				person(context);
+				return ready().skills(input.provider, input.action);
 			},
 			install(input, context) {
 				person(context);

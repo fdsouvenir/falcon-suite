@@ -6,6 +6,7 @@
 | --------- | ---------- | ------- | --------------------------- | -------------------- | ---------------- |
 | Google    | `gog`      | 0.44.0  | 0.47.1                      | `openclaw/gogcli`    | Linux x64/arm64  |
 | Microsoft | `m365cli`  | 2.1.0   | 2.2.0                       | `fdsouvenir/m365cli` | Linux x64/arm64  |
+| HubSpot   | `hubspot`  | 0.16.0  | 0.16.0 (2026-10-29)         | api.hubapi.com       | Linux x64/arm64  |
 
 Since preview.9 Link installs each CLI's latest GitHub release; the minimums above are the
 only version requirements. The archive checks below were recorded for the 2026-10-24 preview.
@@ -175,3 +176,51 @@ consent or code exchange was attempted.
 - Link's read-only scope set for each of the 15 services with a Read level equals the scopes
   gog 0.47.1 itself requests for that service with `--readonly`.
 - gog's global `--readonly` only affects the command it is passed to; Link does not use it.
+
+## HubSpot Agent CLI contract — 2026-10-29 (issue #23)
+
+Checked against HubSpot's published Linux x64 binary, `hubspot 0.16.0 (build 1582, commit
+unknown)`, SHA-256 `6ae34e91f33f232699accaf28412149107297a84ba2e625b7f20a7da85dd25f1`, run
+only with throwaway HOME and XDG directories. **No HubSpot sign-in, consent or real key was
+used.** Facts marked _help_ come from `--help` text only.
+
+Verified by running the binary:
+
+- The checksum file is `latest/hubspot-linux-<arch>.sha256` (hex digest first), not
+  `.bin.sha256` (that returns 404). Link's installer downloaded and verified the binary into
+  a temporary `~/.local/bin` and reported it Link-managed with no update available.
+- `--version` prints `hubspot 0.16.0 (build …, commit …)`; Link parses it.
+- `auth login url` prints an `app.hubspot.com/oauth/authorize/user` address with an S256
+  challenge and redirect `https://app.hubspot.com/cli-auth/code`, and saves
+  `pkce_state.json` (0600) under `$XDG_CONFIG_HOME/hubspot`, separate from `HOME`.
+- `auth list --format json` and `whoami --format json` wrap output as `{"ok":…}`; unknown
+  codes fail with `BAD_AUTH_CODE`, which Link reports as an expired code. Through Link's
+  service, a bogus code produced exactly that plain message and an unknown key produced the
+  rejected-key message (HubSpot answered 401).
+- 0.16.0 does **not** read `~/.hubspot/.env`, `~/.config/hubspot/.env`,
+  `$XDG_CONFIG_HOME/hubspot/.env` or `./.env`; only `HUBSPOT_ACCESS_TOKEN` selects a key.
+  Link therefore keeps the key in the account's `.env` file and passes it explicitly.
+- `hubspot upgrade` downloads, verifies its checksum and replaces the binary in place.
+- Auto-upgrade is skipped when stderr is not a terminal (_help_); Link's own runs never
+  have a terminal.
+
+From _help_ only: `whoami` success shape `{authType, user, portalId, scopes}` (service keys
+have no user or scopes), `auth list` entries, `auth logout` with `HUBSPOT_PORTAL_ID`, and
+that a login started for a set `HUBSPOT_PORTAL_ID` is rejected on another portal.
+
+Skills: `skills-sh:HubSpot/agent-cli-skills/crm-lookup` is not found on ClawHub. Link's
+installer ran against the real repository and OpenClaw 2026.9.6 in a temporary state
+directory: commit `b310eb544776345b512163e1db99badf712068d0` holds **19** skills (the issue
+counted 21), all installed as `hubspot-*` with matching names, reinstalled in place and
+removed, leaving an unrelated `hubspot-mine` untouched.
+
+Local tests: provider refactor kept all 21 existing Link tests; HubSpot adds process-boundary
+cases for sign-in/paste-a-code/errors/isolation/removal, discovery and service keys, the
+self-updating installer, and the skills installer (25 Link tests).
+
+Unverified, pending Alpha: real HubSpot consent and code exchange, the exact App Governance,
+wrong-portal and no-permission texts, token refresh after expiry, non-US portals (`app-eu1`
+style hosts are accepted), the Connected apps link
+(`app.hubspot.com/integrations-settings/<portal>/installed`), telemetry opt-out, the
+`openclaw` command being on the Gateway's PATH, agents loading the shared skills in a real
+Gateway, and arm64.

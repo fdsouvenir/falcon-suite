@@ -12,55 +12,239 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { homedir } from 'node:os';
-import { TOOLS, run } from './cli.js';
-import type { Provider } from './model.js';
+import { run, runRaw } from './cli.js';
+import { provider as providerOf } from './providers/index.js';
+import type { ToolSource } from './providers/types.js';
+import { toolStatus } from './status.js';
 
 type Release = {
 	tag_name: string;
 	assets: { name: string; browser_download_url: string; digest?: string }[];
 };
+const HOSTS = ['api.github.com', 'github.com', 'api.hubapi.com'];
 async function get(url: string): Promise<Response> {
 	const u = new URL(url);
-	if (u.protocol !== 'https:' || !['api.github.com', 'github.com'].includes(u.hostname))
+	if (u.protocol !== 'https:' || !HOSTS.includes(u.hostname))
 		throw new Error('Unsupported release source.');
 	const response = await fetch(url, {
 		signal: AbortSignal.timeout(30000),
-		headers: { Accept: 'application/vnd.github+json' }
+		headers: { Accept: u.hostname === 'api.github.com' ? 'application/vnd.github+json' : '*/*' }
 	});
 	if (!response.ok) throw new Error('Release lookup failed. Try again later.');
 	return response;
 }
+async function download(url: string, limit: number) {
+	const response = await get(url);
+	const reader = response.body!.getReader();
+	const chunks: Uint8Array[] = [];
+	let size = 0;
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		size += value.length;
+		if (size > limit) {
+			await reader.cancel();
+			throw new Error('Release archive is too large.');
+		}
+		chunks.push(value);
+	}
+	return Buffer.concat(chunks);
+}
+const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+const arch = () => (process.arch === 'x64' ? 'x64' : 'arm64');
+function source<K extends ToolSource['kind']>(provider: string, kind: K) {
+	const s = providerOf(provider).tool.source;
+	if (s.kind !== kind) throw new Error('Unsupported release source.');
+	return s as Extract<ToolSource, { kind: K }>;
+}
 // Release lookups are cached in memory to stay well inside GitHub's unauthenticated limit.
 const HOUR = 60 * 60 * 1000;
-const releases = new Map<Provider, { at: number; release: Release | null }>();
-export async function latestRelease(provider: Provider, retryFailure = false) {
+const releases = new Map<string, { at: number; release: Release | null }>();
+export async function latestRelease(provider: string, retryFailure = false) {
+	if (providerOf(provider).tool.source.kind !== 'github') return null;
 	const cached = releases.get(provider);
 	if (cached && Date.now() - cached.at < HOUR && (cached.release || !retryFailure))
 		return cached.release;
 	let release: Release | null = null;
 	try {
 		const r = (await (
-			await get(`https://api.github.com/repos/${TOOLS[provider].repo}/releases/latest`)
+			await get(`https://api.github.com/repos/${source(provider, 'github').repo}/releases/latest`)
 		).json()) as Release;
 		if (/^v\d+\.\d+\.\d+$/.test(r.tag_name) && Array.isArray(r.assets)) release = r;
 	} catch {}
 	releases.set(provider, { at: Date.now(), release });
 	return release;
 }
-export function releaseCheckedAt(provider: Provider) {
-	const at = releases.get(provider)?.at;
+// A vendor-hosted binary publishes only its SHA-256, not a version number. A different
+// digest from the installed binary means an update is available.
+const digests = new Map<string, { at: number; digest: string | null }>();
+// Installation always reads the current published digest.
+export async function latestDigest(provider: string, fresh = false) {
+	if (providerOf(provider).tool.source.kind !== 'vendor') return null;
+	const cached = digests.get(provider);
+	if (cached && Date.now() - cached.at < HOUR && !fresh) return cached.digest;
+	let digest: string | null = null;
+	try {
+		const text = await (await get(source(provider, 'vendor').checksum(arch()))).text();
+		const first = text.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+		if (/^[a-f0-9]{64}$/.test(first)) digest = first;
+	} catch {}
+	digests.set(provider, { at: Date.now(), digest });
+	return digest;
+}
+export function releaseCheckedAt(provider: string) {
+	const at = (releases.get(provider) ?? digests.get(provider))?.at;
 	return at ? new Date(at).toISOString() : null;
 }
+type Receipt = { path: string; version: string; binary_sha256: string; self_updating?: boolean };
+async function readReceipt(file: string): Promise<Receipt | undefined> {
+	try {
+		return JSON.parse(await readFile(file, 'utf8'));
+	} catch {
+		return undefined;
+	}
+}
+// Publishes a verified binary as an ordinary user-local command on the Office PATH.
+// Versioned download copies remain only for rollback, never required by the agent.
+async function activate(provider: string, base: string, file: string, version: string) {
+	const tool = providerOf(provider).tool;
+	const selfUpdating = tool.source.kind === 'vendor';
+	const bin = path.join(homedir(), '.local', 'bin');
+	if (!(process.env.PATH ?? '').split(path.delimiter).includes(bin))
+		throw new Error('Add ~/.local/bin to the Office command PATH before installation.');
+	await mkdir(bin, { recursive: true, mode: 0o755 });
+	const command = path.join(bin, tool.binary);
+	const receiptPath = path.join(base, 'path-install.json');
+	const nextDigest = sha256(await readFile(file));
+	try {
+		const stat = await lstat(command);
+		if (!stat.isFile())
+			throw new Error(
+				'Existing CLI is not a regular file; preserve it and ask your administrator.'
+			);
+		const currentDigest = sha256(await readFile(command));
+		if (currentDigest !== nextDigest) {
+			const previous = await readReceipt(receiptPath);
+			// A self-updating CLI that Link installed may have changed its own bytes since.
+			const ours =
+				previous?.binary_sha256 === currentDigest ||
+				(selfUpdating && previous?.self_updating === true && previous.path === command);
+			if (!ours)
+				throw new Error(
+					'Existing CLI was installed or changed outside Link; it has been preserved.'
+				);
+			await copyFile(command, path.join(base, `previous-${randomUUID()}`));
+		}
+	} catch (e) {
+		if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+	}
+	const pending = path.join(bin, `.${tool.binary}-${randomUUID()}`);
+	try {
+		await copyFile(file, pending);
+		await chmod(pending, 0o755);
+		await rename(pending, command);
+	} finally {
+		await rm(pending, { force: true });
+	}
+	await writeReceipt(base, {
+		path: command,
+		version,
+		binary_sha256: nextDigest,
+		...(selfUpdating ? { self_updating: true } : {})
+	});
+	let previous: string | null = null;
+	try {
+		previous = JSON.parse(await readFile(path.join(base, 'current.json'), 'utf8')).version;
+	} catch {}
+	const tmp = path.join(base, `.current-${randomUUID()}.json`);
+	await writeFile(tmp, JSON.stringify({ version, previous_version: previous }), { mode: 0o600 });
+	await rename(tmp, path.join(base, 'current.json'));
+}
+async function writeReceipt(base: string, receipt: Receipt) {
+	const pending = path.join(base, `.path-install-${randomUUID()}`);
+	await writeFile(pending, JSON.stringify(receipt), { mode: 0o600 });
+	await rename(pending, path.join(base, 'path-install.json'));
+}
 const busy = new Set<string>();
-export async function install(dir: string, provider: Provider) {
+export async function install(dir: string, provider: string) {
 	if (process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch))
 		throw new Error('Link installs CLIs on Linux x64 and arm64 only.');
 	const lock = `${dir}:${provider}`;
 	if (busy.has(lock)) throw new Error('Installation is already running.');
 	busy.add(lock);
+	try {
+		const base = path.join(dir, 'tools', provider);
+		await mkdir(base, { recursive: true, mode: 0o700 });
+		return providerOf(provider).tool.source.kind === 'vendor'
+			? await installVendor(provider, base)
+			: await installRelease(provider, base);
+	} finally {
+		busy.delete(lock);
+	}
+}
+// A self-updating CLI that Link installed updates itself with its own command. Otherwise
+// Link downloads the published binary and verifies its SHA-256.
+async function installVendor(provider: string, base: string) {
+	const tool = providerOf(provider).tool;
+	const s = source(provider, 'vendor');
+	const receipt = await readReceipt(path.join(base, 'path-install.json'));
+	if (receipt?.self_updating && (await toolStatus(receipt.path, tool.version_prefix)).version) {
+		const upgraded = await runRaw(receipt.path, s.upgrade, process.env, 180000);
+		const after = await toolStatus(receipt.path, tool.version_prefix);
+		if (!upgraded.ok || after.state !== 'installed')
+			throw new Error('The update did not finish. The existing tool was kept; try again later.');
+		const next = {
+			...receipt,
+			version: after.version,
+			binary_sha256: sha256(await readFile(receipt.path))
+		};
+		await writeReceipt(base, next);
+		return {
+			provider,
+			version: after.version,
+			digest: `sha256:${next.binary_sha256}`,
+			source: 'self-update'
+		};
+	}
+	const digest = await latestDigest(provider, true);
+	if (!digest) throw new Error('Release lookup failed. Try again later.');
+	const url = s.binary(arch());
+	const bytes = await download(url, 256 * 1024 * 1024);
+	if (sha256(bytes) !== digest)
+		throw new Error('Release checksum mismatch. Existing tool retained.');
+	let stage: string | undefined = await mkdtemp(path.join(base, '.stage-'));
+	try {
+		const file = path.join(stage, tool.binary);
+		await writeFile(file, bytes, { mode: 0o700 });
+		await chmod(file, 0o700);
+		const status = await toolStatus(file, tool.version_prefix);
+		if (status.state !== 'installed')
+			throw new Error('Downloaded tool version could not be verified.');
+		const version = status.version.replace(/^v/, '');
+		const receipt = {
+			provider,
+			version,
+			digest: `sha256:${digest}`,
+			source: url,
+			installed_at: new Date().toISOString(),
+			attempt: randomUUID()
+		};
+		await writeFile(path.join(stage, 'receipt.json'), JSON.stringify(receipt), { mode: 0o600 });
+		// One immutable folder per published build.
+		const destination = path.join(base, `${version}-${digest.slice(0, 12)}`);
+		await rm(destination, { recursive: true, force: true });
+		await rename(stage, destination);
+		stage = undefined;
+		await activate(provider, base, path.join(destination, tool.binary), version);
+		return receipt;
+	} finally {
+		if (stage) await rm(stage, { recursive: true, force: true });
+	}
+}
+async function installRelease(provider: string, base: string) {
 	let stage: string | undefined;
 	try {
-		const t = TOOLS[provider];
+		const t = { ...source(provider, 'github'), binary: providerOf(provider).tool.binary };
 		const release = await latestRelease(provider, true);
 		if (!release) throw new Error('Release lookup failed. Try again later.');
 		const version = release.tag_name.slice(1);
@@ -73,91 +257,17 @@ export async function install(dir: string, provider: Provider) {
 				`https://github.com/${t.repo}/releases/download/${release.tag_name}/${name}`
 		)
 			throw new Error('Release checksum or source is unavailable.');
-		const response = await get(asset.browser_download_url);
-		const reader = response.body!.getReader();
-		const chunks: Uint8Array[] = [];
-		let size = 0;
-		for (;;) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			size += value.length;
-			if (size > 64 * 1024 * 1024) {
-				await reader.cancel();
-				throw new Error('Release archive is too large.');
-			}
-			chunks.push(value);
-		}
-		const bytes = Buffer.concat(chunks);
-		if (`sha256:${createHash('sha256').update(bytes).digest('hex')}` !== asset.digest)
+		const bytes = await download(asset.browser_download_url, 64 * 1024 * 1024);
+		if (`sha256:${sha256(bytes)}` !== asset.digest)
 			throw new Error('Release checksum mismatch. Existing tool retained.');
-		const base = path.join(dir, 'tools', provider);
-		await mkdir(base, { recursive: true, mode: 0o700 });
 		const destination = path.join(base, version);
-		const activate = async () => {
-			// The installed command is an ordinary user-local executable on the Office PATH.
-			// Versioned download copies remain only for rollback, never required by the agent.
-			const bin = path.join(homedir(), '.local', 'bin');
-			if (!(process.env.PATH ?? '').split(path.delimiter).includes(bin))
-				throw new Error('Add ~/.local/bin to the Office command PATH before installation.');
-			await mkdir(bin, { recursive: true, mode: 0o755 });
-			const command = path.join(bin, t.binary);
-			const receiptPath = path.join(base, 'path-install.json');
-			const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
-			const nextDigest = digest(await readFile(path.join(destination, t.binary)));
-			try {
-				const stat = await lstat(command);
-				if (!stat.isFile())
-					throw new Error(
-						'Existing CLI is not a regular file; preserve it and ask your administrator.'
-					);
-				const currentDigest = digest(await readFile(command));
-				if (currentDigest !== nextDigest) {
-					let previousReceipt;
-					try {
-						previousReceipt = JSON.parse(await readFile(receiptPath, 'utf8'));
-					} catch {}
-					if (previousReceipt?.binary_sha256 !== currentDigest)
-						throw new Error(
-							'Existing CLI was installed or changed outside Link; it has been preserved.'
-						);
-					await copyFile(command, path.join(base, `previous-${randomUUID()}`));
-				}
-			} catch (e) {
-				if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
-			}
-			const pending = path.join(bin, `.${t.binary}-${randomUUID()}`);
-			try {
-				await copyFile(path.join(destination, t.binary), pending);
-				await chmod(pending, 0o755);
-				await rename(pending, command);
-			} finally {
-				await rm(pending, { force: true });
-			}
-			const pendingReceipt = path.join(base, `.path-install-${randomUUID()}`);
-			await writeFile(
-				pendingReceipt,
-				JSON.stringify({ path: command, version, binary_sha256: nextDigest }),
-				{ mode: 0o600 }
-			);
-			await rename(pendingReceipt, receiptPath);
-
-			let previous: string | null = null;
-			try {
-				previous = JSON.parse(await readFile(path.join(base, 'current.json'), 'utf8')).version;
-			} catch {}
-			const tmp = path.join(base, `.current-${randomUUID()}.json`);
-			await writeFile(tmp, JSON.stringify({ version, previous_version: previous }), {
-				mode: 0o600
-			});
-			await rename(tmp, path.join(base, 'current.json'));
-		};
 		// Already installed versions are immutable; no in-place overwrite of a working binary.
 		try {
 			const receipt = JSON.parse(await readFile(path.join(destination, 'receipt.json'), 'utf8'));
 			if (receipt.digest === asset.digest) {
 				const output = await run(path.join(destination, t.binary), ['--version']);
 				if (!output.includes(version)) throw new Error('Installed executable failed validation.');
-				await activate();
+				await activate(provider, base, path.join(destination, t.binary), version);
 				return receipt;
 			}
 			throw new Error('Installed version has a different receipt.');
@@ -199,10 +309,9 @@ export async function install(dir: string, provider: Provider) {
 		await rm(archive);
 		await rename(stage, destination);
 		stage = undefined;
-		await activate();
+		await activate(provider, base, path.join(destination, t.binary), version);
 		return receipt;
 	} finally {
 		if (stage) await rm(stage, { recursive: true, force: true });
-		busy.delete(lock);
 	}
 }

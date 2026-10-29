@@ -116,6 +116,19 @@ The exact operator-interface access model and storage contract need defining bef
 No customer installation, account authorization, client configuration changes or release is
 implied by approval of this specification.
 
+## HubSpot (approved by Fred 2026-10-28, issue #23)
+
+- Third integration, through HubSpot's Agent CLI (`hubspot`, minimum 0.16.0) and only
+  HubSpot's official Agent CLI skills.
+- Permissions are chosen on HubSpot's own consent page; Link reads back what was granted.
+- Two ways to connect: **Connect to HubSpot** (paste the code HubSpot shows) and **Use a
+  service key** (labelled Admin; no per-user audit trail).
+- The CLI keeps updating itself; Link doesn't pin or block it.
+- The official skills are installed once into OpenClaw's shared skills directory for every
+  agent. No per-agent picker and no limits on which agent uses the CLI.
+- Integrations are self-contained provider modules, so adding another is one new module.
+- Test on Alpha; contract checks so far are in `docs/link-qualification.md`.
+
 ## Delivery tracking
 
 Parent: [Google and Microsoft onboarding #7](https://github.com/fdsouvenir/falcon-suite/issues/7).
@@ -129,6 +142,7 @@ Parent: [Google and Microsoft onboarding #7](https://github.com/fdsouvenir/falco
 | [#12](https://github.com/fdsouvenir/falcon-suite/issues/12) | Microsoft multi-account consent and permissions   | #9, #10       |
 | [#13](https://github.com/fdsouvenir/falcon-suite/issues/13) | Qualified install and recoverable updates         | #9            |
 | [#14](https://github.com/fdsouvenir/falcon-suite/issues/14) | Hosted Office and package acceptance              | #11, #12, #13 |
+| [#23](https://github.com/fdsouvenir/falcon-suite/issues/23) | HubSpot integration and official skills           | —             |
 
 The preview extends the initial read-only foundation. See `docs/link-qualification.md` for
 qualified contracts and unverified hosted acceptance. Follow-up issues stay open until their

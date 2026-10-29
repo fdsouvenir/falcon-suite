@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { install } from '../dist/install.js';
-import { executable } from '../dist/cli.js';
+import { executable } from '../dist/tools.js';
 import { execFileSync } from 'node:child_process';
 
 test(
@@ -61,7 +61,7 @@ test('verified installation publishes a normal PATH binary without replacing unr
    import {createHash} from 'node:crypto';
    import {execFileSync} from 'node:child_process';
    import {install} from ${JSON.stringify(new URL('../dist/install.js', import.meta.url).href)};
-   import {executable} from ${JSON.stringify(new URL('../dist/cli.js', import.meta.url).href)};
+   import {executable} from ${JSON.stringify(new URL('../dist/tools.js', import.meta.url).href)};
    const home=process.env.HOME, dir=path.join(home,'.openclaw','falcon-link');
    const archive=fs.readFileSync(path.join(home,'release.tar.gz'));
    const asset={name:'gogcli_0.47.0_linux_'+(process.arch==='x64'?'amd64':'arm64')+'.tar.gz',digest:'sha256:'+createHash('sha256').update(archive).digest('hex')};
@@ -85,3 +85,52 @@ test('verified installation publishes a normal PATH binary without replacing unr
 		await rm(home, { recursive: true, force: true });
 	}
 });
+
+// HubSpot's CLI replaces its own binary. Link must still recognize the one it installed and
+// update it with the CLI's own upgrade, rather than call it foreign or download over it.
+test(
+	'a self-updating CLI stays Link-managed after it updates itself, and Update runs its own upgrade',
+	{ skip: process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch) },
+	async () => {
+		const home = await mkdtemp(path.join(tmpdir(), 'link-vendor-install-'));
+		try {
+			const bin = path.join(home, '.local', 'bin');
+			await mkdir(bin, { recursive: true });
+			const build = (version) =>
+				`#!/bin/sh\nif [ "$1" = upgrade ]; then echo x >> "$HOME/upgrades"; cp "$HOME/next" "$0"; exit 0; fi\necho "hubspot ${version} (build 1, commit fixture)"\n`;
+			await writeFile(path.join(home, 'first'), build('0.16.0'));
+			await writeFile(path.join(home, 'next'), build('0.17.0'));
+			const script = `
+   import fs from 'node:fs';
+   import path from 'node:path';
+   import assert from 'node:assert/strict';
+   import {createHash} from 'node:crypto';
+   import {execFileSync} from 'node:child_process';
+   import {install} from ${JSON.stringify(new URL('../dist/install.js', import.meta.url).href)};
+   import {overview} from ${JSON.stringify(new URL('../dist/status.js', import.meta.url).href)};
+   const home=process.env.HOME, dir=path.join(home,'.openclaw','falcon-link'), command=path.join(home,'.local/bin/hubspot');
+   const bytes=fs.readFileSync(path.join(home,'first'));
+   let published='0'.repeat(64), downloads=0;
+   globalThis.fetch=async url=>{ url=String(url); if(!url.startsWith('https://api.hubapi.com/'))return new Response('',{status:404}); if(url.endsWith('.sha256'))return new Response(published+'  hubspot.bin\\n'); downloads++; return new Response(bytes); };
+   await assert.rejects(()=>install(dir,'hubspot'),/checksum mismatch/);
+   assert.equal(fs.existsSync(command),false,'an unverified download is never installed');
+   published=createHash('sha256').update(bytes).digest('hex');
+   await install(dir,'hubspot');
+   assert.match(execFileSync('hubspot',['--version'],{encoding:'utf8'}),/0.16.0/);
+   execFileSync(command,['upgrade']);
+   const hubspot=(await overview(dir)).integrations.find(i=>i.id==='hubspot');
+   assert.equal(hubspot.tool.version,'0.17.0'); assert.equal(hubspot.managed,true,'its own update does not make it foreign');
+   const before=downloads; await install(dir,'hubspot');
+   assert.equal(downloads,before,'Update uses the CLI upgrade, not a download over it');
+   assert.equal(fs.readFileSync(path.join(home,'upgrades'),'utf8').trim().split('\\n').length,2);
+   assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'tools/hubspot/path-install.json'))).version,'0.17.0');
+  `;
+			execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+				env: { ...process.env, HOME: home, PATH: bin + path.delimiter + process.env.PATH },
+				stdio: 'pipe'
+			});
+		} finally {
+			await rm(home, { recursive: true, force: true });
+		}
+	}
+);

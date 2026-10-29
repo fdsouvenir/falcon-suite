@@ -14,13 +14,18 @@ import {
 } from './model.js';
 import './control-ui.css';
 import { accessSummary } from './access-summary.js';
+import { PROVIDER_UI, uiOf } from './providers/ui.js';
+import type { Revoke } from './providers/types.js';
 // Official provider artwork, unmodified (see assets/brand/README.md).
 import googleSignIn from '../assets/brand/google-signin-light-square.svg' with { type: 'text' };
 import microsoftSignIn from '../assets/brand/microsoft-signin-light.svg' with { type: 'text' };
 import microsoftLogo from '../assets/brand/microsoft-logo.svg' with { type: 'text' };
 
 const svg = (source: string) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
-const NAMES: Record<Provider, string> = { google: 'Google', microsoft: 'Microsoft' };
+// Provider artwork by integration ID. Integrations without artwork use a neutral initial.
+const LOGOS: Record<string, string> = { microsoft: microsoftLogo };
+const SIGN_IN_ART: Record<string, string> = { google: googleSignIn, microsoft: microsoftSignIn };
+const name = (id: Provider) => uiOf(id).name;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) {
 	const n = document.createElement(tag);
 	if (text !== undefined) n.textContent = text;
@@ -58,27 +63,36 @@ function select(options: { value: string; label: string }[], value?: string) {
 }
 function mark(provider: Provider, large = false) {
 	const cls = `fl-provider-mark${large ? ' fl-provider-mark-large' : ''}`;
-	const node = el('span', provider === 'google' ? 'G' : undefined, cls);
-	if (provider === 'microsoft') {
+	const node = el('span', LOGOS[provider] ? undefined : name(provider).slice(0, 1), cls);
+	if (LOGOS[provider]) {
 		const logo = el('img');
-		logo.src = svg(microsoftLogo);
+		logo.src = svg(LOGOS[provider]);
 		logo.alt = '';
 		node.append(logo);
 	}
 	node.setAttribute('aria-hidden', 'true');
 	return node;
 }
-// The provider's sign-in artwork is the action that starts sign-in.
+// The provider's sign-in artwork, where it has one, is the action that starts sign-in.
 function signInButton(provider: Provider) {
-	const text = `Sign in with ${NAMES[provider]}`;
+	const text = uiOf(provider).connect;
+	if (!SIGN_IN_ART[provider]) return el('button', text, 'fl-btn fl-btn-primary');
 	const b = el('button', undefined, 'fl-signin');
 	b.type = 'submit';
 	b.setAttribute('aria-label', text);
 	const art = el('img');
-	art.src = svg(provider === 'google' ? googleSignIn : microsoftSignIn);
+	art.src = svg(SIGN_IN_ART[provider]);
 	art.alt = '';
 	b.append(art);
 	return b;
+}
+// "To remove access you've already given, use <provider page>."
+function revokeSentence(r: Revoke) {
+	const p = el('p', "To remove access you've already given, use ", 'fl-muted');
+	p.append(r.lead);
+	r.links.forEach((l, i) => p.append(...(i ? [' or '] : []), link(l.label, l.href)));
+	p.append('.');
+	return p;
 }
 type Login = {
 	provider: Provider;
@@ -90,6 +104,7 @@ type Login = {
 	code: string | null;
 	expires_at: string;
 	hosted?: boolean;
+	paste?: { label: string; kind: 'url' | 'text' };
 };
 type StartInput = {
 	provider: Provider;
@@ -110,7 +125,12 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		el('h1', 'Falcon Link'),
 		el(
 			'p',
-			'Connect your Google and Microsoft accounts so your assistant can help with email, calendar and files.',
+			`Connect your ${PROVIDER_UI.map((p) => p.name)
+				.join(', ')
+				.replace(
+					/, ([^,]*)$/,
+					' and $1'
+				)} accounts so your assistant can help with your email, calendar, files and customer records.`,
 			'fl-page-description'
 		)
 	);
@@ -127,7 +147,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	container.append(root);
 	let selected: Provider | null =
 		(context.props.integration as Provider) ||
-		(window.matchMedia('(max-width: 700px)').matches ? null : 'google');
+		(window.matchMedia('(max-width: 700px)').matches ? null : PROVIDER_UI[0].id);
 	let status:
 		| (Overview & {
 				catalogs: Record<Provider, Catalog | null>;
@@ -324,7 +344,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const update = () => {
 			try {
 				scopeList.textContent = selectionScopes(
-					provider,
+					uiOf(provider),
 					catalog,
 					pickers.flatMap((p) => p())
 				).join('\n');
@@ -332,7 +352,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				scopeList.textContent = 'Choose access for at least one service.';
 			}
 		};
-		const initial = new Set(offeredSelection(provider, catalog, saved));
+		const initial = new Set(offeredSelection(uiOf(provider), catalog, saved));
 		let more: HTMLElement | null = null;
 		for (const row of catalog.rows) {
 			const line = el('div', undefined, 'fl-permission');
@@ -386,7 +406,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			if (row.group === 'more') {
 				if (!more) {
 					const group = el('details', undefined, 'fl-more');
-					group.append(el('summary', `More ${NAMES[provider]} services`));
+					group.append(el('summary', `More ${name(provider)} services`));
 					more = el('div');
 					group.append(more);
 					node.append(group);
@@ -397,25 +417,6 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		node.append(technical);
 		update();
 		return { node, selected: () => pickers.flatMap((p) => p()) };
-	}
-	// Where a person removes access they already gave, by provider and account type.
-	function revokeSentence(account: Account) {
-		const p = el('p', "To remove access you've already given, use ", 'fl-muted');
-		if (account.provider === 'google')
-			p.append(link("Google's app-access page", 'https://myaccount.google.com/connections'), '.');
-		else if (account.audience === 'consumer')
-			p.append(link("Microsoft's app-access page", 'https://account.live.com/consent/Manage'), '.');
-		else if (account.audience === 'enterprise')
-			p.append(link("Microsoft's app-access page", 'https://myapplications.microsoft.com/'), '.');
-		else
-			p.append(
-				"Microsoft's app-access page for ",
-				link('personal accounts', 'https://account.live.com/consent/Manage'),
-				' or ',
-				link('work or school accounts', 'https://myapplications.microsoft.com/'),
-				'.'
-			);
-		return p;
 	}
 	async function startSignIn(input: StartInput) {
 		closePendingTab();
@@ -447,52 +448,55 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	}
 	// Saved choices are enough to go straight back to the provider; otherwise open the form.
 	function retryInput(a: Account): StartInput | null {
-		if (!a.owner || !a.purpose || !a.requested.length) return null;
-		if (a.provider === 'google' && !a.email) return null;
+		const ui = uiOf(a.provider);
+		if (!a.owner || !a.purpose) return null;
+		if (ui.permissions === 'catalog' && !a.requested.length) return null;
+		if (ui.email_required && !a.email) return null;
+		if (a.auth === 'service_key') return null;
 		return {
 			provider: a.provider,
 			owner: a.owner,
 			purpose: a.purpose,
 			permissions: a.requested,
 			account_id: a.id,
-			...(a.provider === 'google' ? { email: a.email! } : {})
+			...(ui.email_required ? { email: a.email! } : {})
 		};
 	}
 	function accountForm(account?: Account, metadataOnly = false) {
 		if (!selected || !status) return;
 		closeForm();
 		const provider = selected;
+		const ui = uiOf(provider);
 		const form = el('form', undefined, account ? 'fl-form fl-card-form' : 'fl-form');
 		const title = el(
 			account ? 'h5' : 'h3',
-			metadataOnly
-				? 'Account details'
-				: account
-					? 'Change access'
-					: `Add a ${NAMES[provider]} account`
+			metadataOnly ? 'Account details' : account ? 'Change access' : `Add a ${ui.name} account`
 		);
 		form.append(title);
 		const meta = metadataFields(account?.owner ?? undefined, account?.purpose ?? undefined);
 		form.append(...meta.nodes);
-		const rows = metadataOnly ? null : permissionRows(provider, account?.requested ?? []);
+		const rows =
+			metadataOnly || ui.permissions !== 'catalog'
+				? null
+				: permissionRows(provider, account?.requested ?? []);
 		const email = el('input');
 		email.type = 'email';
 		email.maxLength = 254;
 		email.value = account?.email ?? '';
-		email.required = provider === 'google' && !metadataOnly;
-		email.readOnly = !!account?.email && provider === 'google';
+		email.required = !!ui.email_required && !metadataOnly;
+		email.readOnly = !!account?.email && !!ui.email_required;
 		email.autocomplete = 'email';
-		if (rows) {
-			form.append(rows.node);
-			if (account) form.append(revokeSentence(account));
-		}
+		if (rows) form.append(rows.node);
+		else if (!metadataOnly && ui.consent_note) form.append(el('p', ui.consent_note, 'fl-muted'));
+		if (!metadataOnly && account) form.append(revokeSentence(ui.revoke(account)));
 		const submit = metadataOnly
 			? el('button', 'Save', 'fl-btn fl-btn-primary')
 			: signInButton(provider);
 		submit.type = 'submit';
 		submit.disabled = !canWrite();
 		const actions = el('div', undefined, 'fl-actions fl-signin-row');
-		if (rows && provider === 'google') actions.append(field('Google account address', email));
+		if (!metadataOnly && ui.email_required)
+			actions.append(field(`${ui.name} account address`, email));
 		actions.append(submit, button('Cancel', closeForm));
 		form.append(actions);
 		form.addEventListener('submit', (event) => {
@@ -507,16 +511,68 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					await load();
 					return;
 				}
-				const permissions = rows!.selected();
-				if (!permissions.length) throw new Error('Choose access for at least one service.');
+				const permissions = rows ? rows.selected() : [];
+				if (rows && !permissions.length) throw new Error('Choose access for at least one service.');
 				await startSignIn({
 					provider,
 					...values,
 					permissions,
 					...(account ? { account_id: account.id } : {}),
-					...(provider === 'google' ? { email: email.value.trim() } : {})
+					...(ui.email_required ? { email: email.value.trim() } : {})
 				});
 			});
+		});
+		if (account) return openInCard(account, form, title);
+		formHost.append(form);
+		title.tabIndex = -1;
+		title.focus();
+	}
+	// Connects with a pasted service key instead of a sign-in; the key is sent once and never shown again.
+	function keyForm(account?: Account) {
+		if (!selected || !status) return;
+		closeForm();
+		const provider = selected;
+		const ui = uiOf(provider);
+		if (!ui.key) return;
+		const form = el('form', undefined, account ? 'fl-form fl-card-form' : 'fl-form');
+		const title = el(account ? 'h5' : 'h3', account ? 'Replace service key' : ui.key.action);
+		form.append(title, el('p', ui.key.help, 'fl-muted'));
+		const meta = metadataFields(account?.owner ?? undefined, account?.purpose ?? undefined);
+		form.append(...meta.nodes);
+		const key = el('input');
+		key.type = 'password';
+		key.required = true;
+		key.maxLength = 1024;
+		key.autocomplete = 'off';
+		key.spellcheck = false;
+		form.append(field(ui.key.field, key), el('p', ui.key.note, 'fl-muted'));
+		const submit = el('button', 'Connect', 'fl-btn fl-btn-primary');
+		submit.type = 'submit';
+		submit.disabled = !canWrite();
+		const actions = el('div', undefined, 'fl-actions');
+		actions.append(submit, button('Cancel', closeForm));
+		form.append(actions);
+		form.addEventListener('submit', (event) => {
+			event.preventDefault();
+			if (!form.reportValidity()) return;
+			void act(
+				submit,
+				async () => {
+					const values = meta.values();
+					if (!values.owner) throw new Error('Choose an owner.');
+					const value = key.value;
+					key.value = '';
+					await client.invoke('connect_key', {
+						provider,
+						...values,
+						key: value,
+						...(account ? { account_id: account.id } : {})
+					});
+					closeForm();
+					await load();
+				},
+				'Account connected.'
+			);
 		});
 		if (account) return openInCard(account, form, title);
 		formHost.append(form);
@@ -571,22 +627,17 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				card.append(a);
 			}
 			if (login.code) card.append(el('p', login.code, 'fl-device-code'));
-			if (
-				login.url &&
-				!login.hosted &&
-				login.provider === 'google' &&
-				login.state === 'awaiting_consent'
-			) {
+			if (login.url && login.paste && login.state === 'awaiting_consent') {
 				const form = el('form', undefined, 'fl-paste');
 				const input = el('input');
-				input.type = 'url';
+				input.type = login.paste.kind;
 				input.required = true;
 				input.maxLength = 8192;
 				input.autocomplete = 'off';
 				const finish = el('button', 'Continue', 'fl-btn fl-btn-primary');
 				finish.type = 'submit';
 				finish.disabled = !canWrite();
-				form.append(field('Address shown in your browser after signing in', input), finish);
+				form.append(field(login.paste.label, input), finish);
 				form.addEventListener('submit', (event) => {
 					event.preventDefault();
 					void act(finish, async () => {
@@ -687,6 +738,56 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			);
 		return list.childElementCount ? list : null;
 	}
+	// One row for the integration's official agent skills, shared by every agent.
+	function skillsRow(i: IntegrationStatus) {
+		const s = i.skills;
+		if (!s) return null;
+		const row = el('section', undefined, 'fl-banner fl-skills');
+		row.setAttribute('role', 'status');
+		const copy = el('div');
+		copy.append(
+			el('h3', 'Skills for your agents'),
+			el(
+				'p',
+				s.state === 'installed'
+					? `${i.name}'s official skills are installed for every agent on this Office.`
+					: s.state === 'update_available'
+						? `An update to ${i.name}'s official skills is available.`
+						: s.state === 'unavailable'
+							? s.message
+							: `Install ${i.name}'s official skills so every agent on this Office knows how to use ${i.name}.`,
+				'fl-muted'
+			)
+		);
+		row.append(copy);
+		const run = (label: string, action: 'install' | 'remove', primary: boolean, done: string) => {
+			const b = button(
+				label,
+				async () => {
+					await act(
+						b,
+						async () => {
+							await client.invoke('skills', { provider: i.id, action });
+							await load();
+						},
+						done
+					);
+				},
+				primary
+			);
+			b.disabled = !canWrite();
+			return b;
+		};
+		const actions = el('div', undefined, 'fl-actions');
+		if (s.state === 'not_installed')
+			actions.append(run('Install', 'install', true, 'Skills installed.'));
+		if (s.state === 'update_available')
+			actions.append(run('Update', 'install', true, 'Skills updated.'));
+		if (s.state === 'installed' || s.state === 'update_available')
+			actions.append(run('Remove', 'remove', false, 'Skills removed.'));
+		if (actions.childElementCount) row.append(actions);
+		return row;
+	}
 	function technicalDetails(i: IntegrationStatus) {
 		const details = el('details', undefined, 'fl-technical fl-tool');
 		details.append(el('summary', 'Technical details'));
@@ -702,8 +803,24 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 						? 'Not installed'
 						: 'Unknown'
 			],
-			['Latest version', i.latest_version ?? 'Unknown'],
+			[
+				'Latest version',
+				i.latest_version ??
+					(i.self_updating && i.checked_at && i.tool.state === 'installed'
+						? i.update_available
+							? 'A newer build is available'
+							: 'Same as installed'
+						: 'Unknown')
+			],
 			['Last checked', i.checked_at ? new Date(i.checked_at).toLocaleString() : 'Not checked'],
+			...(i.skills
+				? [
+						[
+							'Skills',
+							`${i.skills.source}${i.skills.commit ? ` @ ${i.skills.commit.slice(0, 7)} (${i.skills.count})` : ''}`
+						]
+					]
+				: []),
 			['Falcon Link version', PLUGIN_VERSION]
 		]) {
 			list.append(el('dt', term), el('dd', value));
@@ -721,7 +838,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		);
 		avatar.setAttribute('aria-hidden', 'true');
 		const accountName = el('div', undefined, 'fl-account-name');
-		accountName.append(el('h4', a.email ?? `${NAMES[a.provider]} account`));
+		const ui = uiOf(a.provider);
+		accountName.append(el('h4', ui.title?.(a) ?? a.email ?? `${ui.name} account`));
 		const meta = el('div', undefined, 'fl-account-meta');
 		meta.append(el('span', a.owner ? `Owner: ${a.owner.name}` : 'No owner chosen'));
 		if (a.purpose)
@@ -736,6 +854,11 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					'fl-account-purpose'
 				)
 			);
+		for (const tag of ui.tags?.(a) ?? []) {
+			const t = el('span', tag.label, 'fl-account-purpose');
+			t.title = tag.note;
+			meta.append(t);
+		}
 		accountName.append(meta);
 		const word = accountWord(a);
 		identity.append(avatar, accountName);
@@ -749,6 +872,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			);
 		card.append(identity);
 		const access = accessSummary(a, status!.catalogs[a.provider]);
+		const notes = (ui.tags?.(a) ?? []).map((t) => el('p', t.note, 'fl-muted'));
 		const body = el('div', undefined, 'fl-account-access');
 		if (access) {
 			body.append(el('h5', access.title));
@@ -758,6 +882,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				body.append(capabilities);
 			}
 			if (access.note) body.append(el('p', access.note, 'fl-muted'));
+			body.append(...notes);
 			card.append(body);
 		}
 		const checked = checks.get(a.id);
@@ -784,8 +909,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					'p',
 					'This removes this account’s saved sign-in from this computer and removes it from this list. Other accounts are unchanged.'
 				),
-				revokeSentence(a)
+				revokeSentence(ui.revoke(a))
 			);
+			const note = ui.remove_note?.(a);
+			if (note) confirm.append(el('p', note, 'fl-muted'));
 			const yes = button('Remove account', async () => {
 				await act(yes, async () => {
 					await client.invoke('remove', { account_id: a.id });
@@ -804,6 +931,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			const retry = button(
 				'Try again',
 				async () => {
+					if (a.auth === 'service_key') return keyForm(a);
 					if (!retryWith) return accountForm(a);
 					await act(retry, async () => startSignIn(retryWith));
 				},
@@ -812,7 +940,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			retry.disabled = !canWrite() || !ready(integration) || signingIn(a);
 			primary.append(retry);
 		}
-		const change = button('Change access', () => accountForm(a));
+		const change = button(a.auth === 'service_key' ? 'Replace key' : 'Change access', () =>
+			a.auth === 'service_key' ? keyForm(a) : accountForm(a)
+		);
 		change.disabled = !canWrite() || !ready(integration) || signingIn(a);
 		primary.append(change);
 		// Records left disconnected by an earlier version show Remove next to Try again.
@@ -838,7 +968,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			await load();
 			render();
 		});
-		check.disabled = !canWrite() || !a.email || a.state === 'disconnected' || !!checked?.busy;
+		check.disabled =
+			!canWrite() || !(a.email || a.provider_id) || a.state === 'disconnected' || !!checked?.busy;
 		if (checked?.busy) check.setAttribute('aria-busy', 'true');
 		actions.append(check);
 		if (a.state !== 'disconnected') actions.append(remove);
@@ -861,14 +992,14 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				: null;
 		layout.classList.toggle('fl-show-detail', selected !== null);
 		nav.replaceChildren(el('h2', 'Integrations', 'fl-nav-label'));
-		for (const id of ['google', 'microsoft'] as Provider[]) {
+		for (const { id, name } of PROVIDER_UI) {
 			const b = button('', () => navigate(id));
 			b.className = `fl-integration${selected === id ? ' fl-selected' : ''}`;
 			b.setAttribute('aria-current', selected === id ? 'page' : 'false');
 			const count = accounts.filter((a) => a.provider === id).length;
 			const label = el('span', undefined, 'fl-nav-copy');
 			label.append(
-				el('span', NAMES[id], 'fl-integration-name'),
+				el('span', name, 'fl-integration-name'),
 				el(
 					'span',
 					!status
@@ -896,7 +1027,11 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			if (!status) detail.append(el('p', 'Loading…'));
 			return;
 		}
-		const integration = status.integrations.find((i) => i.id === selected)!;
+		const integration = status.integrations.find((i) => i.id === selected);
+		if (!integration) {
+			detail.append(el('p', 'This integration is not available on this Office.'));
+			return;
+		}
 		const back = button('← Integrations', () => navigate(null));
 		back.classList.add('fl-back');
 		const providerHeader = el('header', undefined, 'fl-provider-header');
@@ -909,10 +1044,16 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const list = accounts.filter((a) => a.provider === selected);
 		const accountHeading = el('div', undefined, 'fl-section-heading');
 		accountHeading.append(el('h3', 'Accounts'));
+		// Ways to add an account: sign-in, and a pasted key where the provider offers one.
 		const add = () => {
-			const b = button('Add account', () => accountForm());
-			b.disabled = !canWrite() || !ready(integration);
-			return b;
+			const ui = uiOf(integration.id);
+			const ways = ui.key
+				? [button(ui.connect, () => accountForm(), true), button(ui.key.action, () => keyForm())]
+				: [button('Add account', () => accountForm())];
+			for (const b of ways) b.disabled = !canWrite() || !ready(integration);
+			const group = el('div', undefined, 'fl-actions');
+			group.append(...ways);
+			return ways.length > 1 ? group : ways[0];
 		};
 		if (list.length) accountHeading.append(add());
 		detail.append(accountHeading);
@@ -928,7 +1069,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			const login = loginCard();
 			if (login) detail.append(login);
 		}
-		detail.append(formHost, technicalDetails(integration));
+		const skills = skillsRow(integration);
+		detail.append(formHost, ...(skills ? [skills] : []), technicalDetails(integration));
 		if (focused) focused.focus({ preventScroll: true });
 	}
 	void loadOwners().then(() => {
@@ -938,7 +1080,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	return {
 		update(next: ControlUiViewContext) {
 			const id = next.props.integration;
-			selected = id === 'google' || id === 'microsoft' ? id : null;
+			selected = typeof id === 'string' && PROVIDER_UI.some((p) => p.id === id) ? id : null;
 			render();
 		},
 		dispose() {
