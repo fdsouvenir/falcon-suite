@@ -129,6 +129,27 @@ implied by approval of this specification.
 - Integrations are self-contained provider modules, so adding another is one new module.
 - Test on Alpha; contract checks so far are in `docs/link-qualification.md`.
 
+## Dropbox (requested by Fred 2026-10-29)
+
+Decisions (2026-10-29):
+
+- Fourth integration, through Dropbox's official CLI, dbxcli, not the Dropbox desktop sync app.
+  Customers create a Dropbox user for their agent.
+- The Falcon Link Dropbox app allows every scope; Link decides which scopes each account
+  requests. Link signs in itself, because `dbxcli login` requests every scope the app allows.
+- The permission form is for non-technical people: one row per area with a single choice in
+  plain words, a collapsed team administration section for team admins, and scope names only
+  under Technical details. No preset bundles.
+- The official Dropbox logo appears on the tile and next to Link's own "Sign in with Dropbox"
+  button, without implying that Dropbox endorses Falcon Link.
+- Removing an account deletes its dbxcli auth file; Link doesn't revoke tokens, matching the
+  other integrations.
+
+Dropbox fact that shapes the form: an authorization that includes any team scope is linked to
+the team, not the person, and reaches a person's files only on their behalf. Team
+administration is therefore a second sign-in that a team admin approves, saved in dbxcli's team
+slots of the same account file.
+
 ## Delivery tracking
 
 Parent: [Google and Microsoft onboarding #7](https://github.com/fdsouvenir/falcon-suite/issues/7).
