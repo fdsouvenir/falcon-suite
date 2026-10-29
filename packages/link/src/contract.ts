@@ -91,6 +91,16 @@ export const contract = defineFeatureContract({
 			}),
 			output: Type.Unknown()
 		},
+		skills: {
+			kind: 'action',
+			description:
+				"Install, update or remove the integration's official agent skills in OpenClaw's shared skills directory. Removal affects only skills Link installed.",
+			input: obj({
+				provider,
+				action: Type.Union([Type.Literal('install'), Type.Literal('remove')])
+			}),
+			output: Type.Unknown()
+		},
 		cancel: {
 			kind: 'action',
 			description: 'Cancel pending sign-in.',

@@ -128,6 +128,8 @@ const hubspot: ProviderModule = {
 			upgrade: ['upgrade']
 		}
 	},
+	// HubSpot's official Agent CLI skills (Apache-2.0), installed for every agent.
+	skills: { repo: 'HubSpot/agent-cli-skills', branch: 'main', prefix: 'hubspot-' },
 	methods: ['paste_code', 'api_key'],
 	// Sign-in uses HubSpot's own app and code page; nothing needs provisioning.
 	readiness: () => ({ state: 'ready', message: '' }),

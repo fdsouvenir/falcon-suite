@@ -12,6 +12,7 @@ import {
 import { accountHome } from './cli.js';
 import { executable } from './tools.js';
 import { install } from './install.js';
+import { followTool, installSkills, removeSkills } from './skills.js';
 import { toolStatus } from './status.js';
 import { compareVersions } from './versions.js';
 import { PROVIDERS, provider } from './providers/index.js';
@@ -471,10 +472,17 @@ export class LinkService implements Host {
 		if ([...this.logins.values()].some((l) => l.provider === id && ACTIVE.includes(l.state)))
 			throw new Error('Finish or cancel sign-in before changing the CLI.');
 		try {
-			return await install(this.dir, id);
+			const result = await install(this.dir, id);
+			// The provider's skills follow the CLI; a skills failure leaves the tool installed
+			// and shows on the skills row.
+			await followTool(this.dir, id).catch(() => {});
+			return result;
 		} finally {
 			this.catalogs.delete(id);
 		}
+	}
+	skills(id: string, action: 'install' | 'remove') {
+		return action === 'install' ? installSkills(this.dir, id) : removeSkills(this.dir, id);
 	}
 	stop() {
 		for (const l of this.logins.values()) {

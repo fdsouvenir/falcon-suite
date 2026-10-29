@@ -738,6 +738,56 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			);
 		return list.childElementCount ? list : null;
 	}
+	// One row for the integration's official agent skills, shared by every agent.
+	function skillsRow(i: IntegrationStatus) {
+		const s = i.skills;
+		if (!s) return null;
+		const row = el('section', undefined, 'fl-banner fl-skills');
+		row.setAttribute('role', 'status');
+		const copy = el('div');
+		copy.append(
+			el('h3', 'Skills for your agents'),
+			el(
+				'p',
+				s.state === 'installed'
+					? `${i.name}'s official skills are installed for every agent on this Office.`
+					: s.state === 'update_available'
+						? `An update to ${i.name}'s official skills is available.`
+						: s.state === 'unavailable'
+							? s.message
+							: `Install ${i.name}'s official skills so every agent on this Office knows how to use ${i.name}.`,
+				'fl-muted'
+			)
+		);
+		row.append(copy);
+		const run = (label: string, action: 'install' | 'remove', primary: boolean, done: string) => {
+			const b = button(
+				label,
+				async () => {
+					await act(
+						b,
+						async () => {
+							await client.invoke('skills', { provider: i.id, action });
+							await load();
+						},
+						done
+					);
+				},
+				primary
+			);
+			b.disabled = !canWrite();
+			return b;
+		};
+		const actions = el('div', undefined, 'fl-actions');
+		if (s.state === 'not_installed')
+			actions.append(run('Install', 'install', true, 'Skills installed.'));
+		if (s.state === 'update_available')
+			actions.append(run('Update', 'install', true, 'Skills updated.'));
+		if (s.state === 'installed' || s.state === 'update_available')
+			actions.append(run('Remove', 'remove', false, 'Skills removed.'));
+		if (actions.childElementCount) row.append(actions);
+		return row;
+	}
 	function technicalDetails(i: IntegrationStatus) {
 		const details = el('details', undefined, 'fl-technical fl-tool');
 		details.append(el('summary', 'Technical details'));
@@ -763,6 +813,14 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 						: 'Unknown')
 			],
 			['Last checked', i.checked_at ? new Date(i.checked_at).toLocaleString() : 'Not checked'],
+			...(i.skills
+				? [
+						[
+							'Skills',
+							`${i.skills.source}${i.skills.commit ? ` @ ${i.skills.commit.slice(0, 7)} (${i.skills.count})` : ''}`
+						]
+					]
+				: []),
 			['Falcon Link version', PLUGIN_VERSION]
 		]) {
 			list.append(el('dt', term), el('dd', value));
@@ -1011,7 +1069,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			const login = loginCard();
 			if (login) detail.append(login);
 		}
-		detail.append(formHost, technicalDetails(integration));
+		const skills = skillsRow(integration);
+		detail.append(formHost, ...(skills ? [skills] : []), technicalDetails(integration));
 		if (focused) focused.focus({ preventScroll: true });
 	}
 	void loadOwners().then(() => {

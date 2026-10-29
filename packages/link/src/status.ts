@@ -5,6 +5,7 @@ import path from 'node:path';
 import { executable } from './tools.js';
 import { latestDigest, latestRelease, releaseCheckedAt } from './install.js';
 import { PROVIDERS } from './providers/index.js';
+import { skillsStatus, type SkillsStatus } from './skills.js';
 import { compareVersions } from './versions.js';
 export type ToolStatus =
 	| { state: 'installed'; version: string }
@@ -25,6 +26,7 @@ export type IntegrationStatus = {
 	installable: boolean;
 	managed: boolean;
 	setup: { state: string; message: string };
+	skills?: SkillsStatus;
 };
 export type Overview = { checked_at: string; integrations: IntegrationStatus[] };
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -116,7 +118,8 @@ export async function overview(dir = ''): Promise<Overview> {
 				below_minimum: !!installed && (compareVersions(installed, p.tool.minimum) ?? 0) < 0,
 				installable: process.platform === 'linux' && ['x64', 'arm64'].includes(process.arch),
 				managed: !!installed && linkInstalled(dir, id, binary),
-				setup: p.readiness(dir)
+				setup: p.readiness(dir),
+				...(p.skills && dir ? { skills: await skillsStatus(dir, id) } : {})
 			};
 		})
 	);

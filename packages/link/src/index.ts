@@ -111,6 +111,10 @@ export default defineFeaturePlugin({
 				person(context);
 				return ready().metadata(input.account_id, input.owner, input.purpose);
 			},
+			skills(input, context) {
+				person(context);
+				return ready().skills(input.provider, input.action);
+			},
 			install(input, context) {
 				person(context);
 				return ready().install(input.provider);
