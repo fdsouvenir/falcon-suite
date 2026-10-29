@@ -29,6 +29,7 @@ const ACTIVE = ['starting', 'awaiting_consent', 'verifying'];
 export class LinkService implements Host {
 	readonly registry: Registry;
 	private logins = new Map<string, Login>();
+	private watchers = new Set<ReturnType<typeof setTimeout>>();
 	private locks = new Set<string>();
 	constructor(readonly dir: string) {
 		this.registry = new Registry(dir);
@@ -275,6 +276,7 @@ export class LinkService implements Host {
 			if (e instanceof PublicError) this.fail(l, e.message, e.code);
 			else this.fail(l, stage.message, stage.code);
 		}
+		this.watch(l);
 		return this.publicLogin(l);
 	}
 	fail(l: Login, message: string, code = 'signin_failed') {
@@ -500,7 +502,27 @@ export class LinkService implements Host {
 	skills(id: string, action: 'install' | 'remove') {
 		return action === 'install' ? installSkills(this.dir, id) : removeSkills(this.dir, id);
 	}
+	// A hosted sign-in finishes on the server even if the page was reloaded or closed while the
+	// person was on the provider's page; the page only shows progress.
+	private watch(l: Login) {
+		const next = () => {
+			const t = setTimeout(async () => {
+				this.watchers.delete(t);
+				if (!this.logins.has(l.id) || !ACTIVE.includes(l.state)) return;
+				try {
+					this.login(l.id, l.actor);
+					if (l.callback && l.state === 'awaiting_consent') await this.poll(l.id, l.actor);
+				} catch {}
+				if (ACTIVE.includes(l.state)) next();
+			}, 2000);
+			t.unref?.();
+			this.watchers.add(t);
+		};
+		if (ACTIVE.includes(l.state)) next();
+	}
 	stop() {
+		for (const t of this.watchers) clearTimeout(t);
+		this.watchers.clear();
 		for (const l of this.logins.values()) {
 			if (['starting', 'awaiting_consent'].includes(l.state)) {
 				l.state = 'cancelled';
