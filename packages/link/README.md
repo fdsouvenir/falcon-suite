@@ -5,10 +5,12 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 
 ## What it does
 
-- Lists each person's and agent's Google and Microsoft accounts with their owner, purpose,
-  connection state (Connected / Needs attention / Not connected) and access in plain words.
-- Adds accounts, changes their access, checks them and disconnects them — including accounts
-  already present in the CLIs' own stores.
+- Lists each person's and agent's Google and Microsoft accounts with their owner, purpose and
+  access in plain words. A connected account shows no status; otherwise it shows Needs
+  attention, Signing in… or Not connected.
+- Adds accounts, changes their access, checks them and removes them — including accounts
+  already present in the CLIs' own stores. Removing an account deletes its saved sign-in from
+  the CLI's store and removes it from Link's list.
 - Uses the existing command-line tools for everything provider-specific:
   [gog](https://github.com/openclaw/gogcli) for Google and
   [m365cli](https://github.com/fdsouvenir/m365cli) for Microsoft (not the unrelated PnP CLI).
@@ -33,9 +35,10 @@ CLIs themselves, so they follow the installed version:
   preselects the equivalent rows.
 
 Provider scope strings appear only under the form's collapsed Technical details. After
-Microsoft sign-in and on Check connection, Link reads `m365cli auth check`'s grant report and
-shows granted access when Microsoft confirms it; otherwise the selection is labeled as
-selected and not confirmed. Google access is shown as recorded by gog at sign-in.
+Microsoft sign-in and on Check connection, Link reads `m365cli auth check`'s grant report.
+Each account card lists its access under "Access": the access Microsoft granted when it
+reports the grant, otherwise the selection; for Google, the access gog recorded at sign-in.
+Selected Microsoft permissions that Microsoft did not grant are named on the card.
 
 ## Sign-in
 

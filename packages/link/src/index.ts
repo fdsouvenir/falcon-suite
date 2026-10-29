@@ -98,9 +98,9 @@ export default defineFeaturePlugin({
 				person(context);
 				return ready().check(input.account_id);
 			},
-			disconnect(input, context) {
+			remove(input, context) {
 				person(context);
-				return ready().disconnect(input.account_id);
+				return ready().remove(input.account_id);
 			},
 			metadata(input, context) {
 				person(context);

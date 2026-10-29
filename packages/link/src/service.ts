@@ -810,17 +810,24 @@ export class LinkService {
 			}
 		});
 	}
-	async disconnect(id: string) {
+	async remove(id: string) {
 		return this.locked(id, async () => {
 			const a = this.registry.get(id);
-			if (a.state === 'disconnected') return a;
+			const forget = () => {
+				this.registry.remove(id);
+				if (!a.external && /^acct_[a-f0-9-]{36}$/.test(id))
+					rmSync(path.join(this.dir, 'accounts', id), { recursive: true, force: true });
+				return { account_id: id, removed: true };
+			};
+			// Records from earlier versions in state 'disconnected' no longer hold saved credentials.
+			if (a.state === 'disconnected') return forget();
 			if (
 				[...this.logins.values()].some(
 					(l) =>
 						l.account_id === id && ['starting', 'awaiting_consent', 'verifying'].includes(l.state)
 				)
 			)
-				throw new Error('Finish or cancel sign-in before disconnecting.');
+				throw new Error('Finish or cancel sign-in before removing this account.');
 			// Only this account's CLI-native encrypted credentials are removed. Never revoke provider-wide consent.
 			const tool = this.tool(a);
 			const env = this.env(a);
@@ -862,13 +869,7 @@ export class LinkService {
 						after.profiles.some((p: any) => p.name === this.selection(a))
 			)
 				throw new Error('Local credential removal could not be verified.');
-
-			a.state = 'disconnected';
-			delete a.connection_error;
-			a.granted_scopes = null;
-			a.recorded_scopes = null;
-			this.registry.save(a);
-			return a;
+			return forget();
 		});
 	}
 	metadata(id: string, owner: Owner, purpose: Purpose) {

@@ -94,7 +94,7 @@ test('private brief includes human accounts with compact scopes and failures; pu
 	}
 });
 
-test('accounts in CLI stores keep native storage and metadata, and reconnect or disconnect only themselves with their own client', async () => {
+test('accounts in CLI stores keep native storage and metadata, and reconnect or are removed only themselves with their own client', async () => {
 	const { execFile } = await import('node:child_process');
 	const { promisify } = await import('node:util');
 	const root = await mkdtemp(path.join(os.tmpdir(), 'link-existing-'));
@@ -152,7 +152,8 @@ assert.equal(restarted.accounts().find(a=>a.id===google.id).owner.name,'Fred');
 const brief=accountBrief(restarted.accounts());assert.match(brief,/fred@example.com \\| Fred \\| personal \\| Gmail: send \\(recorded\\)/);assert.match(brief,/fred@business.example \\| unassigned \\| unassigned \\| unknown — not checked/);
 const login=await restarted.start({account_id:google.id,provider:'google',owner:{kind:'human',id:'fred',name:'Fred'},purpose:{kind:'personal'},permissions:['gmail:readonly'],email:'fred@example.com'},'fred');
 assert.equal(login.state,'awaiting_consent');restarted.cancel(login.id,'fred');assert.equal(restarted.accounts().find(a=>a.id===google.id).state,'connected','cancelling a reconnect changes nothing');
-await restarted.disconnect(google.id);assert.equal(restarted.accounts().find(a=>a.id===google.id).state,'disconnected');
+await restarted.remove(google.id);assert.ok(!restarted.accounts().some(a=>a.id===google.id));
+const later=new LinkService(process.env.HOME+'/link');await later.discover();assert.ok(!later.accounts().some(a=>a.email==='fred@example.com'),'a removed account is gone from the CLI store, so discovery does not bring it back');
 const calls=fs.readFileSync(process.env.HOME+'/gog.log','utf8').trim().split('\\n').map(l=>JSON.parse(l));
 assert.ok(!calls.some(c=>c.args.includes('set')),'the CLI store keeps its own OAuth client');
 for(const c of calls.filter(c=>['add','remove'].includes(c.args[1])))assert.equal(c.client,'work');

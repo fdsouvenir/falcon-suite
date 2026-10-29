@@ -147,10 +147,13 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 	try {
 		plugin.activate(host);
 		await setImmediate();
+		const version = [...document.querySelectorAll('.fl-tool dt')].find(
+			(dt) => dt.textContent === 'Falcon Link version'
+		);
 		assert.equal(
-			document.querySelector('.fl-footer')?.textContent,
-			`Falcon Link ${PLUGIN_VERSION}`,
-			'the footer shows the full version'
+			version?.nextElementSibling.textContent,
+			PLUGIN_VERSION,
+			'Technical details show the full version'
 		);
 		assert.doesNotMatch(document.body.textContent, /\bv(?:dev|preview)\./);
 		const account = [...document.querySelectorAll('.fl-account')].find((card) =>
@@ -162,15 +165,26 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 			account.textContent,
 			/Send email|Requested:|Granted scopes|Identity last checked|2026/
 		);
-		assert.match(
-			account.textContent,
-			/Recorded at sign-in.*Not confirmed by Google/,
-			'saved scopes must not be promoted to confirmed access'
-		);
+		assert.equal(account.querySelector('.fl-account-access h5')?.textContent, 'Access');
+		assert.doesNotMatch(account.textContent, /Recorded at sign-in|not confirmed/i);
 		assert.equal(
 			account.querySelector('.fl-account-manage').hasAttribute('open'),
 			false,
 			'routine actions start collapsed'
+		);
+		[...account.querySelectorAll('button')]
+			.find((b) => b.textContent === 'Check connection')
+			.click();
+		const card = () =>
+			[...document.querySelectorAll('.fl-account')].find((c) =>
+				c.textContent.includes('work@example.com')
+			);
+		for (let i = 0; i < 50 && !/checked just now/.test(card().textContent); i++)
+			await setImmediate();
+		assert.match(
+			card().querySelector('.fl-account-result')?.textContent ?? '',
+			/^Working — checked just now$/,
+			'the check result stays on its card after the page refreshes'
 		);
 		const empty = [...document.querySelectorAll('.fl-account')].find((card) =>
 			card.textContent.includes('empty@example.com')

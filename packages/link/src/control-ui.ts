@@ -123,8 +123,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	const detail = el('div', undefined, 'fl-detail');
 	const formHost = el('div', undefined, 'fl-form-host');
 	layout.append(nav, detail);
-	const footer = el('footer', `Falcon Link ${PLUGIN_VERSION}`, 'fl-footer');
-	root.append(header, notification, layout, footer);
+	root.append(header, notification, layout);
 	container.append(root);
 	let selected: Provider | null =
 		(context.props.integration as Provider) ||
@@ -161,6 +160,11 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		} else if (!['starting', 'awaiting_consent'].includes(activeLogin.state)) closePendingTab();
 	}
 	let formDisposer: (() => void) | undefined;
+	// Check connection results and open Manage sections stay with their card across refreshes.
+	const checks = new Map<string, { busy: boolean; error?: string }>();
+	const managing = new Set<string>();
+	// An account's own form or confirmation opens inside its card, replacing the card's actions.
+	let cardForm: { account: string; node: HTMLElement } | null = null;
 	const message = (s: string, error = false) => {
 		notification.textContent = s;
 		notification.classList.toggle('fl-error', error);
@@ -191,6 +195,16 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		formDisposer?.();
 		formDisposer = undefined;
 		formHost.replaceChildren();
+		if (cardForm) {
+			cardForm = null;
+			render();
+		}
+	}
+	function openInCard(account: Account, node: HTMLElement, title: HTMLElement) {
+		cardForm = { account: account.id, node };
+		render();
+		title.tabIndex = -1;
+		title.focus();
 	}
 	async function load() {
 		if (refreshing || disposed) return;
@@ -415,6 +429,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		}
 		try {
 			lastStart = input;
+			if (input.account_id) checks.delete(input.account_id);
 			const l = await client.invoke('start', input);
 			if (disposed) {
 				closePendingTab();
@@ -447,9 +462,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		if (!selected || !status) return;
 		closeForm();
 		const provider = selected;
-		const form = el('form', undefined, 'fl-form');
+		const form = el('form', undefined, account ? 'fl-form fl-card-form' : 'fl-form');
 		const title = el(
-			'h3',
+			account ? 'h5' : 'h3',
 			metadataOnly
 				? 'Account details'
 				: account
@@ -472,7 +487,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			if (account) form.append(revokeSentence(account));
 		}
 		const submit = metadataOnly
-			? el('button', 'Save details', 'fl-btn fl-btn-primary')
+			? el('button', 'Save', 'fl-btn fl-btn-primary')
 			: signInButton(provider);
 		submit.type = 'submit';
 		submit.disabled = !canWrite();
@@ -503,6 +518,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				});
 			});
 		});
+		if (account) return openInCard(account, form, title);
 		formHost.append(form);
 		title.tabIndex = -1;
 		title.focus();
@@ -613,21 +629,16 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	}
 	const signingIn = (a: Account) =>
 		activeLogin?.account_id === a.id && ACTIVE.includes(activeLogin.state);
-	// One vocabulary for the sidebar, the badge and each account.
+	// One vocabulary wherever a status appears. Connected is the quiet default and is not shown.
 	function accountWord(a: Account) {
 		if (signingIn(a)) return 'Signing in…';
 		if (a.state === 'connected' || a.state === 'discovered') return 'Connected';
 		if (a.state === 'disconnected') return 'Not connected';
 		return 'Needs attention';
 	}
-	function providerWord(provider: Provider) {
+	function attentionWord(provider: Provider) {
 		const words: string[] = accounts.filter((a) => a.provider === provider).map(accountWord);
-		if (activeLogin?.provider === provider && ACTIVE.includes(activeLogin.state))
-			return 'Signing in…';
-		return (
-			['Signing in…', 'Needs attention', 'Connected'].find((w) => words.includes(w)) ??
-			'Not connected'
-		);
+		return ['Needs attention', 'Not connected'].find((w) => words.includes(w)) ?? null;
 	}
 	const ready = (i: IntegrationStatus) =>
 		i.setup.state === 'ready' && i.tool.state !== 'not_installed' && !i.below_minimum;
@@ -692,7 +703,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 						: 'Unknown'
 			],
 			['Latest version', i.latest_version ?? 'Unknown'],
-			['Last checked', i.checked_at ? new Date(i.checked_at).toLocaleString() : 'Not checked']
+			['Last checked', i.checked_at ? new Date(i.checked_at).toLocaleString() : 'Not checked'],
+			['Falcon Link version', PLUGIN_VERSION]
 		]) {
 			list.append(el('dt', term), el('dd', value));
 		}
@@ -726,15 +738,15 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			);
 		accountName.append(meta);
 		const word = accountWord(a);
-		identity.append(
-			avatar,
-			accountName,
-			el(
-				'span',
-				word,
-				`fl-account-status${word === 'Connected' ? ' fl-account-status-ok' : word === 'Needs attention' ? ' fl-account-status-warn' : ''}`
-			)
-		);
+		identity.append(avatar, accountName);
+		if (word !== 'Connected')
+			identity.append(
+				el(
+					'span',
+					word,
+					`fl-account-status${word === 'Signing in…' ? '' : ' fl-account-status-warn'}`
+				)
+			);
 		card.append(identity);
 		const access = accessSummary(a, status!.catalogs[a.provider]);
 		const body = el('div', undefined, 'fl-account-access');
@@ -748,11 +760,46 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			if (access.note) body.append(el('p', access.note, 'fl-muted'));
 			card.append(body);
 		}
-		if (a.connection_error && word === 'Needs attention')
+		const checked = checks.get(a.id);
+		if (checked && !checked.busy) {
+			const result = el(
+				'p',
+				checked.error ?? 'Working — checked just now',
+				`fl-account-result${checked.error ? ' fl-error' : ''}`
+			);
+			result.setAttribute('role', 'status');
+			card.append(result);
+		} else if (a.connection_error && word === 'Needs attention')
 			card.append(el('p', a.connection_error.message, 'fl-error fl-account-error'));
 		const footer = el('div', undefined, 'fl-account-footer');
 		const primary = el('div', undefined, 'fl-actions');
 		const retryWith = retryInput(a);
+		const remove = button('Remove account', () => {
+			closeForm();
+			const confirm = el('div', undefined, 'fl-card-form');
+			const title = el('h5', `Remove ${a.email ?? 'this account'}?`);
+			confirm.append(
+				title,
+				el(
+					'p',
+					'This removes this account’s saved sign-in from this computer and removes it from this list. Other accounts are unchanged.'
+				),
+				revokeSentence(a)
+			);
+			const yes = button('Remove account', async () => {
+				await act(yes, async () => {
+					await client.invoke('remove', { account_id: a.id });
+					closeForm();
+					await load();
+				});
+			});
+			yes.disabled = !canWrite();
+			const actions = el('div', undefined, 'fl-actions');
+			actions.append(yes, button('Cancel', closeForm));
+			confirm.append(actions);
+			openInCard(a, confirm, title);
+		});
+		remove.disabled = !canWrite();
 		if (word === 'Needs attention' || word === 'Not connected') {
 			const retry = button(
 				'Try again',
@@ -768,76 +815,79 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const change = button('Change access', () => accountForm(a));
 		change.disabled = !canWrite() || !ready(integration) || signingIn(a);
 		primary.append(change);
+		// Records left disconnected by an earlier version show Remove next to Try again.
+		if (a.state === 'disconnected') primary.append(remove);
 		footer.append(primary);
 		const actions = el('div', undefined, 'fl-actions');
 		const edit = button('Edit details', () => accountForm(a, true));
 		edit.disabled = !canWrite();
 		actions.append(edit);
-		const check = button('Check connection', async () => {
-			await act(
-				check,
-				async () => {
-					await client.invoke('check', { account_id: a.id });
-					await load();
-				},
-				'Connection checked.'
-			);
-		});
-		check.disabled = !canWrite() || !a.email || a.state === 'disconnected';
-		actions.append(check);
-		if (a.state !== 'disconnected') {
-			const disconnect = button('Disconnect', () => {
-				closeForm();
-				const confirm = el('section', undefined, 'fl-card');
-				confirm.append(
-					el('h3', `Disconnect ${a.email ?? 'this account'}?`),
-					el(
-						'p',
-						'This removes this account’s saved sign-in from this computer. Other accounts are unchanged.'
-					),
-					revokeSentence(a)
-				);
-				const yes = button('Disconnect account', async () => {
-					await act(yes, async () => {
-						await client.invoke('disconnect', { account_id: a.id });
-						closeForm();
-						await load();
-					});
+		const check = button(checked?.busy ? 'Checking…' : 'Check connection', async () => {
+			checks.set(a.id, { busy: true });
+			render();
+			try {
+				await client.invoke('check', { account_id: a.id });
+				checks.set(a.id, { busy: false });
+			} catch (e) {
+				checks.set(a.id, {
+					busy: false,
+					error: (e as Error).message || 'The connection check failed.'
 				});
-				yes.disabled = !canWrite();
-				confirm.append(yes, button('Cancel', closeForm));
-				formHost.append(confirm);
-			});
-			disconnect.disabled = !canWrite();
-			actions.append(disconnect);
-		}
+			}
+			if (disposed) return;
+			await load();
+			render();
+		});
+		check.disabled = !canWrite() || !a.email || a.state === 'disconnected' || !!checked?.busy;
+		if (checked?.busy) check.setAttribute('aria-busy', 'true');
+		actions.append(check);
+		if (a.state !== 'disconnected') actions.append(remove);
 		const manage = el('details', undefined, 'fl-account-manage');
+		manage.open = managing.has(a.id);
+		manage.addEventListener('toggle', () => {
+			if (manage.open) managing.add(a.id);
+			else managing.delete(a.id);
+		});
 		manage.append(el('summary', 'Manage account'), actions);
 		footer.append(manage);
-		card.append(footer);
+		card.append(cardForm?.account === a.id ? cardForm.node : footer);
 		return card;
 	}
 	function render() {
 		if (disposed) return;
-		const focused = formHost.contains(document.activeElement)
-			? (document.activeElement as HTMLElement)
-			: null;
+		const focused =
+			formHost.contains(document.activeElement) || cardForm?.node.contains(document.activeElement)
+				? (document.activeElement as HTMLElement)
+				: null;
 		layout.classList.toggle('fl-show-detail', selected !== null);
 		nav.replaceChildren(el('h2', 'Integrations', 'fl-nav-label'));
 		for (const id of ['google', 'microsoft'] as Provider[]) {
 			const b = button('', () => navigate(id));
 			b.className = `fl-integration${selected === id ? ' fl-selected' : ''}`;
 			b.setAttribute('aria-current', selected === id ? 'page' : 'false');
-			const word = status ? providerWord(id) : 'Checking…';
+			const count = accounts.filter((a) => a.provider === id).length;
 			const label = el('span', undefined, 'fl-nav-copy');
-			label.append(el('span', NAMES[id], 'fl-integration-name'), el('span', word, 'fl-muted'));
-			const dot = el(
-				'span',
-				undefined,
-				`fl-dot${word === 'Connected' ? ' fl-dot-ok' : word === 'Needs attention' ? ' fl-dot-warn' : ''}`
+			label.append(
+				el('span', NAMES[id], 'fl-integration-name'),
+				el(
+					'span',
+					!status
+						? 'Checking…'
+						: count
+							? `${count} account${count === 1 ? '' : 's'}`
+							: 'No accounts',
+					'fl-muted'
+				)
 			);
-			dot.setAttribute('aria-hidden', 'true');
-			b.append(mark(id), label, dot);
+			b.append(mark(id), label);
+			const attention = status ? attentionWord(id) : null;
+			if (attention) {
+				const dot = el('span', undefined, 'fl-dot fl-dot-warn');
+				dot.setAttribute('role', 'img');
+				dot.setAttribute('aria-label', attention);
+				dot.title = attention;
+				b.append(dot);
+			}
 			nav.append(b);
 		}
 		// Keep the active form node mounted across status refreshes so input and focus survive.
@@ -852,11 +902,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const providerHeader = el('header', undefined, 'fl-provider-header');
 		const identity = el('div', undefined, 'fl-provider-identity');
 		identity.append(mark(integration.id, true), el('h2', integration.name));
-		const word = providerWord(integration.id);
-		providerHeader.append(
-			identity,
-			el('span', word, `fl-badge${word === 'Connected' ? ' fl-badge-ok' : ''}`)
-		);
+		providerHeader.append(identity);
 		detail.append(back, providerHeader);
 		const notices = banners(integration);
 		if (notices) detail.append(notices);

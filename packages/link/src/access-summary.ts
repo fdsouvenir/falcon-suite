@@ -104,13 +104,13 @@ function scopeItems(a: Account, values: string[]) {
 // Granted access when the provider confirmed it; otherwise what was recorded or selected.
 export function accessSummary(a: Account, catalog?: Catalog | null) {
 	if (!['connected', 'discovered', 'check_failed'].includes(a.state)) return null;
-	const name = a.provider === 'google' ? 'Google' : 'Microsoft';
 	if (Array.isArray(a.granted_scopes)) {
+		const name = a.provider === 'google' ? 'Google' : 'Microsoft';
 		const missing = catalog
 			? describeSelection(a.provider, catalog, a.grant?.selected_not_granted ?? [])
 			: [];
 		return {
-			title: 'Allowed access',
+			title: 'Access',
 			items: scopeItems(a, a.granted_scopes),
 			note: [
 				a.granted_scopes.length ? '' : 'No account service access.',
@@ -121,23 +121,11 @@ export function accessSummary(a: Account, catalog?: Catalog | null) {
 		};
 	}
 	if (a.recorded_scopes?.length)
-		return {
-			title: 'Recorded at sign-in',
-			items: scopeItems(a, a.recorded_scopes),
-			note: `Not confirmed by ${name}.`
-		};
+		return { title: 'Access', items: scopeItems(a, a.recorded_scopes), note: '' };
 	const selected = catalog ? describeSelection(a.provider, catalog, a.requested) : [];
-	if (selected.length)
-		return {
-			title: `Selected — not confirmed by ${name}`,
-			items: selected,
-			note:
-				a.grant?.status === 'unknown'
-					? "Microsoft didn't confirm which permissions it granted."
-					: ''
-		};
+	if (selected.length) return { title: 'Access', items: selected, note: '' };
 	return {
-		title: 'Account access',
+		title: 'Access',
 		items: [],
 		note: 'Access details aren’t available for this account.'
 	};
