@@ -8,5 +8,8 @@ These files are the providers' official sign-in artwork, copied unmodified.
 - `microsoft-signin-light.svg` — "Sign in with Microsoft" (light) and `microsoft-logo.svg` — the
   Microsoft logo, from https://learn.microsoft.com/entra/identity-platform/howto-add-branding-in-apps
 
-HubSpot has no artwork here. Its brand guidelines do not clearly cover use in a third-party
-product page, so the page shows a neutral initial and a plain "Connect to HubSpot" button.
+- `hubspot-logo.svg` — the HubSpot sprocket in HubSpot orange (#FF7A59). Path data from
+  Simple Icons 16.36.0 (`icons/hubspot.svg`, CC0 data; source listed as
+  https://www.hubspot.com/style-guide). HubSpot is a trademark of HubSpot, Inc.; the mark only
+  identifies the integration. HubSpot publishes no sign-in button artwork, so the page keeps a
+  plain "Connect to HubSpot" button.
