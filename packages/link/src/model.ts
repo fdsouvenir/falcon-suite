@@ -8,6 +8,8 @@ export type Account = {
 	owner: Owner | null;
 	purpose: Purpose | null;
 	email: string | null;
+	// The person's name where the provider reports one.
+	display_name?: string | null;
 	provider_id: string | null;
 	requested: string[];
 	recorded_scopes?: string[] | null;

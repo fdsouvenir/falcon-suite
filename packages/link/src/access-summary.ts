@@ -50,14 +50,19 @@ export function accessSummary(a: Account, catalog?: Catalog | null) {
 			items,
 			note: [
 				items.length ? '' : 'No account service access.',
-				missing.length ? `${ui?.name} didn't grant: ${missing.join(', ')}.` : ''
+				missing.length ? `${ui?.name} didn't grant: ${missing.join(', ')}.` : '',
+				ui?.access.note ?? ''
 			]
 				.filter(Boolean)
 				.join(' ')
 		};
 	}
 	if (a.recorded_scopes?.length)
-		return { title: 'Access', items: scopeItems(a, a.recorded_scopes), note: '' };
+		return {
+			title: 'Access',
+			items: scopeItems(a, a.recorded_scopes),
+			note: ui?.access.note ?? ''
+		};
 	const selected = catalog && ui ? describeSelection(ui, catalog, a.requested) : [];
 	if (selected.length) return { title: 'Access', items: selected, note: '' };
 	return {

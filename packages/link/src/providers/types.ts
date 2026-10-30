@@ -18,9 +18,15 @@ export type ProviderUi = Permissions & {
 	email_required?: boolean;
 	// Label of the action that starts sign-in.
 	connect: string;
+	// Shown above the sign-in action and kept in view while Link waits for the pasted address.
+	paste_warning?: { title: string; steps: string[] };
+	// One account per Office: why another can't be added while one exists.
+	single_account?: string;
+	// Lines for the sign-in form's Technical details where Link offers no permission rows.
+	technical?: string[];
 	// A second way to connect with a pasted key (for example an API or service key).
 	key?: { action: string; field: string; help: string; note: string };
-	revoke(a: Account): Revoke;
+	revoke?(a: Account): Revoke;
 	remove_note?(a: Account): string | null;
 	title?(a: Account): string | null;
 	tags?(a: Account): { label: string; note: string }[];
@@ -29,6 +35,8 @@ export type ProviderUi = Permissions & {
 		labels: Record<string, string>;
 		describe?(scopes: string[]): string[];
 		unknown?(a: Account): string | null;
+		// A fact shown under the account's access.
+		note?: string;
 	};
 };
 
@@ -42,7 +50,10 @@ export type ToolSource =
 			binary(arch: 'x64' | 'arm64'): string;
 			checksum(arch: 'x64' | 'arm64'): string;
 			upgrade: string[];
-	  };
+	  }
+	// A CLI published as one plain binary per architecture in GitHub releases, checked against
+	// GitHub's per-asset SHA-256. Architectures without an asset have no build.
+	| { kind: 'github_binary'; repo: string; assets: Partial<Record<'x64' | 'arm64', string>> };
 // `version_args` replaces `--version` for CLIs that report their version another way; their
 // version is read from the first line of that output.
 export type Tool = {
@@ -52,7 +63,8 @@ export type Tool = {
 	version_prefix?: string;
 	version_args?: string[];
 };
-export type SkillSource = { repo: string; branch: string; prefix: string };
+// `path` is the folder in the repository that holds the skill folders (default: the root).
+export type SkillSource = { repo: string; branch: string; prefix: string; path?: string };
 
 export type SignInMethod =
 	'hosted_callback' | 'paste_redirect' | 'paste_code' | 'device_code' | 'api_key';
@@ -124,6 +136,7 @@ export interface Host {
 	env(a: Account): NodeJS.ProcessEnv;
 	check(id: string, completingLogin?: boolean): Promise<Account>;
 	fail(l: Login, message: string, code?: string): void;
+	cancel(id: string, actor: string): unknown;
 	finish(id: string, value: string, actor: string, fromCallback?: boolean): Promise<unknown>;
 }
 
@@ -135,8 +148,9 @@ export interface ProviderModule {
 	readiness(dir: string): { state: 'ready' | 'setup_required'; message: string };
 	// Permission rows from the CLI. Absent when permissions are chosen on the provider's page.
 	catalog?(tool: string): Promise<Catalog>;
-	// Accounts already saved in the CLI's own store.
-	discover(tool: string): Promise<Account[]>;
+	// Accounts already saved in the CLI's own store. `known` lists Link's accounts for this
+	// integration.
+	discover(tool: string, known: Account[]): Promise<Account[]>;
 	// Environment for Link's own CLI runs for this account.
 	environment(dir: string, a: Account): NodeJS.ProcessEnv;
 	// Input checks before anything changes; called again with the existing account on reconnect.

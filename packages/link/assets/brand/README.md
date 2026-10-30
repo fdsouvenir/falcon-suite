@@ -20,3 +20,10 @@ These files are the providers' official sign-in artwork, copied unmodified.
   Dropbox is a trademark of Dropbox, Inc.; the glyph only identifies the integration and doesn't
   imply that Dropbox endorses Falcon Link. Dropbox publishes no sign-in button kit, so the page
   shows the glyph next to its own "Sign in with Dropbox" button.
+- `zoominfo-logomark.svg` — the ZoomInfo logomark (white mark on ZoomInfo red, #EA1B15), unmodified
+  from ZoomInfo's own website: https://www.zoominfo.com/logos/acquisitions/zoominfo/zoominfo-red-logomark.svg
+  (downloaded 2026-10-30). ZoomInfo's official digital-asset library (https://brandfolder.com/zoominfo)
+  needs a sign-in, so the mark comes from the site ZoomInfo publishes. ZoomInfo is a trademark of
+  ZoomInfo; the mark only identifies the integration and doesn't imply that ZoomInfo
+  endorses Falcon Link. ZoomInfo publishes no sign-in button artwork, so the page shows the mark next
+  to its own "Sign in with ZoomInfo" button.
