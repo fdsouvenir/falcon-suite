@@ -22,19 +22,21 @@ import microsoftSignIn from '../assets/brand/microsoft-signin-light.svg' with { 
 import microsoftLogo from '../assets/brand/microsoft-logo.svg' with { type: 'text' };
 import hubspotLogo from '../assets/brand/hubspot-logo.svg' with { type: 'text' };
 import dropboxGlyph from '../assets/brand/dropbox-glyph.svg' with { type: 'text' };
+import zoominfoLogo from '../assets/brand/zoominfo-logomark.svg' with { type: 'text' };
 
 const svg = (source: string) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
 // Provider artwork by integration ID. Integrations without artwork use a neutral initial.
 const LOGOS: Record<string, string> = {
 	microsoft: microsoftLogo,
 	hubspot: hubspotLogo,
-	dropbox: dropboxGlyph
+	dropbox: dropboxGlyph,
+	zoominfo: zoominfoLogo
 };
 // Artwork with built-in clear space is shown larger so the mark matches the others.
 const PADDED = new Set(['dropbox']);
 const SIGN_IN_ART: Record<string, string> = { google: googleSignIn, microsoft: microsoftSignIn };
 // Providers without an official sign-in button: their logo beside Link's own button text.
-const SIGN_IN_LOGO = new Set(['dropbox']);
+const SIGN_IN_LOGO = new Set(['dropbox', 'zoominfo']);
 const name = (id: Provider) => uiOf(id).name;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) {
 	const n = document.createElement(tag);
@@ -103,6 +105,21 @@ function signInButton(provider: Provider) {
 	art.alt = '';
 	b.append(art);
 	return b;
+}
+// For sign-ins that end on an address the person copies back: what will happen, in steps,
+// before they go and while Link waits.
+function pasteWarning(provider: Provider) {
+	const w = uiOf(provider).paste_warning;
+	if (!w) return null;
+	const box = el('section', undefined, 'fl-callout');
+	box.setAttribute('role', 'note');
+	const title = el('h4', w.title, 'fl-callout-title');
+	title.id = `fl-callout-${provider}-${Math.random().toString(36).slice(2)}`;
+	box.setAttribute('aria-labelledby', title.id);
+	const steps = el('ol', undefined, 'fl-callout-steps');
+	for (const step of w.steps) steps.append(el('li', step));
+	box.append(title, steps);
+	return box;
 }
 // "To remove access you've already given, use <provider page>."
 function revokeSentence(r: Revoke) {
@@ -538,7 +555,17 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		email.autocomplete = 'email';
 		if (rows) form.append(rows.node);
 		else if (!metadataOnly && ui.consent_note) form.append(el('p', ui.consent_note, 'fl-muted'));
-		if (!metadataOnly && account) form.append(revokeSentence(ui.revoke(account)));
+		if (!metadataOnly && !rows && ui.technical) {
+			const technical = el('details', undefined, 'fl-technical');
+			technical.append(
+				el('summary', 'Technical details'),
+				...ui.technical.map((line) => el('p', line, 'fl-muted fl-scopes'))
+			);
+			form.append(technical);
+		}
+		if (!metadataOnly && account && ui.revoke) form.append(revokeSentence(ui.revoke(account)));
+		const warning = metadataOnly ? null : pasteWarning(provider);
+		if (warning) form.append(warning);
 		const submit = metadataOnly
 			? el('button', 'Save', 'fl-btn fl-btn-primary')
 			: signInButton(provider);
@@ -665,6 +692,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			if (login.step)
 				card.append(el('p', `Step ${login.step.number} of ${login.step.total}`, 'fl-muted'));
 			card.append(el('p', login.message));
+			const warning = login.state === 'verifying' ? null : pasteWarning(login.provider);
+			if (warning) card.append(warning);
 			// A later step needs the person to open the provider again themselves.
 			const later = (login.step?.number ?? 1) > 1;
 			if (login.url) {
@@ -775,7 +804,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		};
 		const outside = `${i.cli} was installed outside Link.`;
 		if (i.setup.state !== 'ready') add(i.setup.message);
-		if (i.tool.state === 'not_installed')
+		if (i.tool.state === 'not_installed' && i.no_build)
+			add(`${i.name} doesn't publish a ${i.cli} build for this computer.`);
+		else if (i.tool.state === 'not_installed')
 			add(
 				i.installable
 					? `Install ${i.cli} to connect ${i.name} accounts.`
@@ -964,9 +995,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				el(
 					'p',
 					'This removes this account’s saved sign-in from this computer and removes it from this list. Other accounts are unchanged.'
-				),
-				revokeSentence(ui.revoke(a))
+				)
 			);
+			if (ui.revoke) confirm.append(revokeSentence(ui.revoke(a)));
 			const note = ui.remove_note?.(a);
 			if (note) confirm.append(el('p', note, 'fl-muted'));
 			const yes = button('Remove account', async () => {
@@ -1114,7 +1145,11 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			group.append(...ways);
 			return ways.length > 1 ? group : ways[0];
 		};
-		if (list.length) accountHeading.append(add());
+		// Integrations that keep one account per Office explain why there's no Add.
+		const single = uiOf(integration.id).single_account;
+		if (single && list.some((a) => a.state !== 'disconnected'))
+			accountHeading.append(el('p', single, 'fl-muted fl-single-account'));
+		else if (list.length) accountHeading.append(add());
 		detail.append(accountHeading);
 		if (!list.length) {
 			const empty = el('section', undefined, 'fl-empty');

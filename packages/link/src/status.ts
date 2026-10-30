@@ -24,6 +24,8 @@ export type IntegrationStatus = {
 	minimum_version: string;
 	below_minimum: boolean;
 	installable: boolean;
+	// Linux, but the provider publishes no build of its CLI for this processor.
+	no_build: boolean;
 	managed: boolean;
 	setup: { state: string; message: string };
 	skills?: SkillsStatus;
@@ -94,6 +96,11 @@ export async function overview(dir = ''): Promise<Overview> {
 			const id = p.ui.id;
 			const binary = executable(dir, id);
 			const selfUpdating = p.tool.source.kind === 'vendor';
+			const linux = process.platform === 'linux' && ['x64', 'arm64'].includes(process.arch);
+			const noBuild =
+				linux &&
+				p.tool.source.kind === 'github_binary' &&
+				!p.tool.source.assets[process.arch as 'x64' | 'arm64'];
 			const [tool, release, digest] = await Promise.all([
 				toolStatus(binary, p.tool.version_prefix, p.tool.version_args),
 				latestRelease(id),
@@ -119,7 +126,8 @@ export async function overview(dir = ''): Promise<Overview> {
 					: !!installed && !!latest && (compareVersions(latest, installed) ?? 0) > 0,
 				minimum_version: p.tool.minimum,
 				below_minimum: !!installed && (compareVersions(installed, p.tool.minimum) ?? 0) < 0,
-				installable: process.platform === 'linux' && ['x64', 'arm64'].includes(process.arch),
+				installable: linux && !noBuild,
+				no_build: noBuild,
 				managed: !!installed && linkInstalled(dir, id, binary),
 				setup: p.readiness(dir),
 				...(p.skills && dir ? { skills: await skillsStatus(dir, id) } : {})

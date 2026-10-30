@@ -1,12 +1,12 @@
 # Falcon Link
 
-A separately installable native OpenClaw page for connecting Google, Microsoft, HubSpot and
-Dropbox accounts.
+A separately installable native OpenClaw page for connecting Google, Microsoft, HubSpot,
+Dropbox and ZoomInfo accounts.
 Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 
 ## What it does
 
-- Lists each person's and agent's Google, Microsoft, HubSpot and Dropbox accounts with their owner, purpose and
+- Lists each person's and agent's Google, Microsoft, HubSpot, Dropbox and ZoomInfo accounts with their owner, purpose and
   access in plain words. A connected account shows no status; otherwise it shows Needs
   attention, Signing in… or Not connected.
 - Adds accounts, changes their access, checks them and removes them — including accounts
@@ -15,10 +15,11 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 - Uses the existing command-line tools for everything provider-specific:
   [gog](https://github.com/openclaw/gogcli) for Google and
   [m365cli](https://github.com/fdsouvenir/m365cli) for Microsoft (not the unrelated PnP CLI)
-  HubSpot's Agent CLI `hubspot` for HubSpot and Dropbox's
-  [dbxcli](https://github.com/dropbox/dbxcli) for Dropbox. Link does not implement a second
-  mail, calendar, CRM or file client.
-- Installs HubSpot's official Agent CLI skills for every agent (see below).
+  HubSpot's Agent CLI `hubspot` for HubSpot, Dropbox's
+  [dbxcli](https://github.com/dropbox/dbxcli) for Dropbox and ZoomInfo's
+  [gtm](https://github.com/Zoominfo/gtm-ai-cli) for ZoomInfo. Link does not implement a second
+  mail, calendar, CRM, file or sales-data client.
+- Installs HubSpot's and ZoomInfo's official agent skills for every agent (see below).
 
 ## Permissions
 
@@ -151,11 +152,53 @@ app key (`dropbox_app_key`); the app is a public (PKCE) client with no secret.
   account deletes its dbxcli auth file; Link doesn't revoke the token at Dropbox, and the page
   links to Dropbox's connected apps page.
 
+## ZoomInfo
+
+ZoomInfo uses ZoomInfo's official CLI, [gtm](https://github.com/Zoominfo/gtm-ai-cli) (MIT).
+ZoomInfo needs a paid license (GTM.ai self-serve or Enterprise); the account's plan, credits and
+admin settings decide what it can do. Nothing needs provisioning.
+
+- **One account per Office.** gtm keeps its sign-in in `~/.config/gtm-ai` with no way to point
+  it elsewhere, so an Office has one ZoomInfo account. While one exists the page offers no Add
+  account and says why.
+- **Sign-in uses gtm's own app.** ZoomInfo registers sign-in apps only for approved vendors, so
+  Link doesn't register its own and doesn't use gtm's vendor name itself: it runs
+  `gtm auth login`, which registers and signs in as gtm normally does. That app returns only
+  to `http://localhost:9876/callback` on the computer running gtm — the Office — so the
+  person's browser ends on a page that can't be reached. Before the person goes to sign in, the
+  page shows a large warning with numbered steps: the error page is expected; copy the whole
+  address from the address bar and paste it back here within 5 minutes. Sign-in opens in a new
+  tab and the warning stays next to the paste box while Link waits.
+- **How the address gets back.** Link starts `gtm auth login` with its own `xdg-open` and
+  `open` commands (which do nothing) first on its PATH, so gtm can't open a browser on the
+  Office's desktop and prints the sign-in address instead; Link shows that address. When the
+  person pastes the address (text around it is fine), Link requires `localhost` or
+  `127.0.0.1` and `/callback`, sends its query string unchanged to the waiting gtm on
+  `127.0.0.1:9876`, waits for gtm to finish, then confirms the account with
+  `gtm auth whoami`. gtm checks the state, exchanges the code and saves the sign-in. The pasted
+  address is never logged or saved. If the person declined on ZoomInfo's page, sign-in ends as
+  cancelled. gtm stops waiting after 5 minutes; the sign-in then expires and Try again starts a
+  new one. If port 9876 is in use, the page says so.
+- **Identity and access.** The card shows the name and ZoomInfo username from
+  `gtm auth whoami`; reconnecting must sign in the same username (otherwise the earlier
+  sign-in is put back). Every sign-in has the same fixed scopes, so there is nothing to choose;
+  the card says in plain words what the account can do and that searches and enrichment can use
+  the account's ZoomInfo credits. Scope names appear only under Technical details.
+- **Existing sign-in.** A sign-in already in `~/.config/gtm-ai` that `gtm auth whoami`
+  accepts is listed and can be checked, reconnected and removed.
+- **Removing** deletes gtm's saved sign-in (`~/.config/gtm-ai/credentials`) and keeps gtm's
+  registered app (`client_id`) for the next sign-in. Like the other integrations, Link doesn't
+  revoke tokens at ZoomInfo (`gtm auth logout` would).
+- **Skills.** Link installs ZoomInfo's official `gtm-ai-cli` skill from the same repository
+  (`.claude/skills/`) as `zoominfo-gtm-ai-cli`, the same way as HubSpot's skills.
+
 ## Command-line tools
 
-Link needs gog 0.44.0 or later, m365cli 2.1.0 or later, hubspot 0.16.0 or later and dbxcli
-3.5.0 or later. On Linux x64/arm64 Link installs the latest GitHub release of gog, m365cli and
-dbxcli (whose archive must also be listed in the release's `SHA256SUMS`), and HubSpot's published
+Link needs gog 0.44.0 or later, m365cli 2.1.0 or later, hubspot 0.16.0 or later, dbxcli
+3.5.0 or later and gtm 1.0.0 or later. On Linux x64/arm64 Link installs the latest GitHub
+release of gog, m365cli and dbxcli (whose archive must also be listed in the release's
+`SHA256SUMS`), and of gtm (the single `gtm-linux-x64` binary, checked against GitHub's
+SHA-256 asset digest; ZoomInfo publishes no Linux arm64 build, and the page says so there), and HubSpot's published
 `hubspot-linux-<arch>.bin` checked against its `hubspot-linux-<arch>.sha256`, as ordinary
 commands in `~/.local/bin` (which must be on the Office PATH). Link never runs HubSpot's
 `install.sh`, which edits shell startup files. Installation checks the known repository, the expected asset name,
@@ -242,6 +285,9 @@ For a Dropbox account it returns `DBXCLI_AUTH_FILE` and a `command_prefix`
 (`env -u DBXCLI_ACCESS_TOKEN DBXCLI_AUTH_FILE='…' '/home/…/dbxcli'`), because a
 `DBXCLI_ACCESS_TOKEN` in the environment would override the file, plus the requested and granted
 scopes for the person and, separately, for team administration.
+
+For a ZoomInfo account it returns no arguments or environment: `gtm` uses the one sign-in saved
+on the Office.
 
 A compact `before_prompt_build` brief lists the same accounts. Account facts are omitted in
 group, channel and room conversations and provided in every other session.

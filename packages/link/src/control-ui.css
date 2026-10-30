@@ -708,3 +708,55 @@
 		justify-content: flex-start;
 	}
 }
+/* A sign-in that ends on an unreachable page the person copies back: impossible to miss. */
+.fl-callout {
+	margin: var(--space-4) 0;
+	padding: var(--space-4) var(--space-5);
+	border: 2px solid var(--warn);
+	border-left-width: 8px;
+	border-radius: var(--radius-md);
+	background: color-mix(in srgb, var(--warn) 14%, var(--bg-elevated));
+	color: var(--text-strong);
+}
+.fl-page .fl-callout-title {
+	display: flex;
+	gap: var(--space-3);
+	align-items: flex-start;
+	margin: 0 0 var(--space-3);
+	font-size: calc(var(--control-ui-text-lg) * 1.4);
+	font-weight: 700;
+	line-height: 1.3;
+	color: var(--text-strong);
+}
+.fl-callout-title::before {
+	content: '⚠';
+	flex: none;
+	color: var(--warn);
+	font-size: 1.2em;
+	line-height: 1.1;
+}
+.fl-callout-steps {
+	margin: 0;
+	padding-left: 1.6em;
+	font-size: calc(var(--control-ui-text-md) * 1.15);
+	line-height: 1.5;
+}
+.fl-callout-steps li + li {
+	margin-top: var(--space-2);
+}
+.fl-callout-steps li::marker {
+	font-weight: 700;
+}
+.fl-single-account {
+	margin: 0;
+	max-width: 32rem;
+	text-align: right;
+}
+@media (max-width: 700px) {
+	.fl-callout {
+		padding: var(--space-3) var(--space-4);
+	}
+	.fl-single-account {
+		text-align: left;
+	}
+}

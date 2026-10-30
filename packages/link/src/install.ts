@@ -60,15 +60,20 @@ function source<K extends ToolSource['kind']>(provider: string, kind: K) {
 // Release lookups are cached in memory to stay well inside GitHub's unauthenticated limit.
 const HOUR = 60 * 60 * 1000;
 const releases = new Map<string, { at: number; release: Release | null }>();
+const githubRepo = (provider: string) => {
+	const s = providerOf(provider).tool.source;
+	return s.kind === 'github' || s.kind === 'github_binary' ? s.repo : null;
+};
 export async function latestRelease(provider: string, retryFailure = false) {
-	if (providerOf(provider).tool.source.kind !== 'github') return null;
+	const repo = githubRepo(provider);
+	if (!repo) return null;
 	const cached = releases.get(provider);
 	if (cached && Date.now() - cached.at < HOUR && (cached.release || !retryFailure))
 		return cached.release;
 	let release: Release | null = null;
 	try {
 		const r = (await (
-			await get(`https://api.github.com/repos/${source(provider, 'github').repo}/releases/latest`)
+			await get(`https://api.github.com/repos/${repo}/releases/latest`)
 		).json()) as Release;
 		if (/^v\d+\.\d+\.\d+$/.test(r.tag_name) && Array.isArray(r.assets)) release = r;
 	} catch {}
@@ -169,6 +174,9 @@ const busy = new Set<string>();
 export async function install(dir: string, provider: string) {
 	if (process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch))
 		throw new Error('Link installs CLIs on Linux x64 and arm64 only.');
+	const p = providerOf(provider);
+	if (p.tool.source.kind === 'github_binary' && !p.tool.source.assets[arch()])
+		throw new Error(`${p.ui.name} doesn't publish a ${p.tool.binary} build for this computer.`);
 	const lock = `${dir}:${provider}`;
 	if (busy.has(lock)) throw new Error('Installation is already running.');
 	busy.add(lock);
@@ -276,12 +284,18 @@ async function installRelease(provider: string, base: string) {
 	let stage: string | undefined;
 	try {
 		const tool = providerOf(provider).tool;
-		const t = { ...source(provider, 'github'), binary: tool.binary };
+		const s = tool.source;
+		if (s.kind !== 'github' && s.kind !== 'github_binary')
+			throw new Error('Unsupported release source.');
+		const t = { repo: s.repo, binary: tool.binary };
 		const versionArgs = tool.version_args ?? ['--version'];
 		const release = await latestRelease(provider, true);
 		if (!release) throw new Error('Release lookup failed. Try again later.');
 		const version = release.tag_name.slice(1);
-		const name = `${t.archive}_${version}_linux_${process.arch === 'x64' ? 'amd64' : 'arm64'}.tar.gz`;
+		const name =
+			s.kind === 'github_binary'
+				? s.assets[arch()]!
+				: `${s.archive}_${version}_linux_${process.arch === 'x64' ? 'amd64' : 'arm64'}.tar.gz`;
 		const asset = release.assets.find((a) => a.name === name);
 		if (
 			!asset ||
@@ -290,10 +304,15 @@ async function installRelease(provider: string, base: string) {
 				`https://github.com/${t.repo}/releases/download/${release.tag_name}/${name}`
 		)
 			throw new Error('Release checksum or source is unavailable.');
-		const bytes = await download(asset.browser_download_url, 64 * 1024 * 1024);
+		// A single binary is the whole executable; archives hold a smaller one.
+		const bytes = await download(
+			asset.browser_download_url,
+			(s.kind === 'github_binary' ? 256 : 64) * 1024 * 1024
+		);
 		if (`sha256:${sha256(bytes)}` !== asset.digest)
 			throw new Error('Release checksum mismatch. Existing tool retained.');
-		if (t.checksums) await checkSums(release, t.repo, t.checksums, name, bytes);
+		if (s.kind === 'github' && s.checksums)
+			await checkSums(release, t.repo, s.checksums, name, bytes);
 		const destination = path.join(base, version);
 		// Already installed versions are immutable; no in-place overwrite of a working binary.
 		try {
@@ -310,25 +329,28 @@ async function installRelease(provider: string, base: string) {
 		}
 		stage = await mkdtemp(path.join(base, '.stage-'));
 		const archive = path.join(stage, 'release.tar.gz');
-		await writeFile(archive, bytes, { mode: 0o600 });
-		const entries = (await run('tar', ['-tzf', archive])).trim().split('\n');
-		// Extract only the exact executable to stdout, never archive paths, links or bundled files.
-		// Some releases keep it in a folder named after the archive.
-		const folder = name.replace(/\.tar\.gz$/, '');
-		const entry = entries.find((e) =>
-			[t.binary, `./${t.binary}`, `${folder}/${t.binary}`].includes(e)
-		);
-		if (!entry) throw new Error('Executable missing from archive.');
-		// execFile's normal string runner is unsuitable for binary data.
-		const { execFile } = await import('node:child_process');
-		const binary = await new Promise<Buffer>((resolve, reject) =>
-			execFile(
-				'tar',
-				['-xOzf', archive, entry],
-				{ encoding: 'buffer', timeout: 20000, maxBuffer: 64 * 1024 * 1024 },
-				(err, stdout) => (err ? reject(new Error('Archive extraction failed.')) : resolve(stdout))
-			)
-		);
+		let binary: Buffer = bytes;
+		if (s.kind === 'github') {
+			await writeFile(archive, bytes, { mode: 0o600 });
+			const entries = (await run('tar', ['-tzf', archive])).trim().split('\n');
+			// Extract only the exact executable to stdout, never archive paths, links or bundled
+			// files. Some releases keep it in a folder named after the archive.
+			const folder = name.replace(/\.tar\.gz$/, '');
+			const entry = entries.find((e) =>
+				[t.binary, `./${t.binary}`, `${folder}/${t.binary}`].includes(e)
+			);
+			if (!entry) throw new Error('Executable missing from archive.');
+			// execFile's normal string runner is unsuitable for binary data.
+			const { execFile } = await import('node:child_process');
+			binary = await new Promise<Buffer>((resolve, reject) =>
+				execFile(
+					'tar',
+					['-xOzf', archive, entry],
+					{ encoding: 'buffer', timeout: 20000, maxBuffer: 64 * 1024 * 1024 },
+					(err, stdout) => (err ? reject(new Error('Archive extraction failed.')) : resolve(stdout))
+				)
+			);
+		}
 		const binaryPath = path.join(stage, t.binary);
 		await writeFile(binaryPath, binary, { mode: 0o700 });
 		await chmod(binaryPath, 0o700);
@@ -344,7 +366,7 @@ async function installRelease(provider: string, base: string) {
 			attempt: randomUUID()
 		};
 		await writeFile(path.join(stage, 'receipt.json'), JSON.stringify(receipt), { mode: 0o600 });
-		await rm(archive);
+		await rm(archive, { force: true });
 		await rename(stage, destination);
 		stage = undefined;
 		await activate(provider, base, path.join(destination, t.binary), version);

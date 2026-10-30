@@ -71,7 +71,10 @@ export class LinkService implements Host {
 				PROVIDERS.map(async (p) => {
 					const id = p.ui.id;
 					try {
-						const found = await p.discover(executable(this.dir, id));
+						const found = await p.discover(
+							executable(this.dir, id),
+							this.accounts().filter((a) => a.provider === id)
+						);
 						for (const account of found) {
 							const prior = this.accounts().find((a) => a.id === account.id);
 							this.registry.save(

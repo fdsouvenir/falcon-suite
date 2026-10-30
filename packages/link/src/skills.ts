@@ -162,7 +162,7 @@ async function plainTree(root: string) {
 			throw new Error('The skills download contains links or special files.');
 	}
 }
-// Names the skill after its install slug, the only change to HubSpot's text, and says so.
+// Names the skill after its install slug, the only change to the provider's text, and says so.
 function renamed(text: string, name: string) {
 	const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
 	if (!m) throw new Error('A skill is missing its description header.');
@@ -211,8 +211,11 @@ export async function installSkills(dir: string, id: string) {
 		await mkdir(extracted);
 		await exec(['tar', '-xzf', archive, '-C', extracted, '--no-same-owner'], process.env);
 		await plainTree(extracted);
-		const root = path.join(extracted, top);
-		const license = path.join(root, 'LICENSE');
+		const repository = path.join(extracted, top);
+		const root = path.join(repository, s.path ?? '');
+		const license = path.join(repository, 'LICENSE');
+		if (!existsSync(root))
+			throw new Error('The skills download did not contain the expected skills.');
 		const names: string[] = [];
 		const out = path.join(stage, 'skills');
 		await mkdir(out);
