@@ -150,6 +150,24 @@ the team, not the person, and reaches a person's files only on their behalf. Tea
 administration is therefore a second sign-in that a team admin approves, saved in dbxcli's team
 slots of the same account file.
 
+## ZoomInfo (requested by Fred 2026-10-30)
+
+Decisions (2026-10-30):
+
+- Fifth integration, through ZoomInfo's official CLI, gtm (Zoominfo/gtm-ai-cli, MIT), and its
+  built-in sign-in app. Link doesn't register its own ZoomInfo app: ZoomInfo's app registration
+  accepts only approved vendor names, and Link doesn't use gtm's vendor name itself. Link runs
+  `gtm auth login` and gtm does the registration, PKCE, code exchange and saving.
+- That app returns only to `http://localhost:9876/callback` on the Office, so the person's
+  browser lands on a page that can't be reached and they paste its address back into Link. The
+  page warns about this loudly, in numbered steps, before sending them to sign in, and keeps the
+  warning next to the paste box while it waits.
+- One ZoomInfo account per Office: gtm keeps its sign-in in `~/.config/gtm-ai` with no override.
+  Several accounts are a later version.
+- Installation on Linux x64 only, because ZoomInfo publishes no Linux arm64 build. Sign-in works
+  on any system where gtm is already installed.
+- ZoomInfo's official agent skill is installed for every agent, like HubSpot's.
+
 ## Delivery tracking
 
 Parent: [Google and Microsoft onboarding #7](https://github.com/fdsouvenir/falcon-suite/issues/7).
