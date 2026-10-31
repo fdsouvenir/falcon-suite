@@ -1,0 +1,49 @@
+{
+  "name": "@fdsouvenir/falcon-link",
+  "version": "1.0.2",
+  "description": "Falcon Link for OpenClaw: connect and maintain known integrations.",
+  "type": "module",
+  "license": "CC-BY-NC-4.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fdsouvenir/falcon-suite",
+    "directory": "packages/link"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && OPENCLAW_STATE_DIR=../../.openclaw-build openclaw plugins build",
+    "validate": "OPENCLAW_STATE_DIR=../../.openclaw-build openclaw plugins validate --json",
+    "test": "node --test \"test/**/*.test.mjs\""
+  },
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md",
+    "assets",
+    "scripts",
+    "scripts/provision.mjs"
+  ],
+  "peerDependencies": {
+    "openclaw": ">=2026.9.6"
+  },
+  "dependencies": {
+    "typebox": "^1.3.17"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "linkedom": "0.18.13",
+    "openclaw": "2026.9.6",
+    "typescript": "7.0.2"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "controlUi": "./src/control-ui.ts",
+    "compat": {
+      "pluginApi": ">=2026.9.6"
+    },
+    "build": {
+      "openclawVersion": "2026.9.6"
+    }
+  }
+}
