@@ -1,0 +1,26 @@
+{
+  "id": "falcon-link",
+  "name": "Falcon Link",
+  "description": "Connect and maintain known integrations.",
+  "version": "1.0.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "falcon_link_accounts",
+      "falcon_link_status"
+    ]
+  },
+  "controlUi": {
+    "entry": "dist/control-ui/3b9176aeb7a55d9b02af51b138537c70897da41c232796ea0d5b089955e311fd/index.js",
+    "styles": [
+      "dist/control-ui/3b9176aeb7a55d9b02af51b138537c70897da41c232796ea0d5b089955e311fd/index.css"
+    ]
+  }
+}
