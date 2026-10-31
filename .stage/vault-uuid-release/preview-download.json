@@ -1,0 +1,23 @@
+{
+  "package": "@fdsouvenir/falcon-vault-preview",
+  "version": "5.0.0-preview.7",
+  "artifact": {
+    "kind": "npm-pack",
+    "sha256": "9178f4e6ba6ae69f2b80f64299dcf428a6129229ea838fe95b5388b2094057ab",
+    "size": 80364,
+    "format": "tgz",
+    "npmIntegrity": "sha512-TAMf7rhHpprbAB15FlU0Qhcr8+MF5oZndJA9NAqq+O2p6u0PUJPLS59bx5DSdOPjEmAULaGTjzrqqX8pJwv/QQ==",
+    "npmShasum": "dd00ff3a0a70377508a3ebb1cdd0f24a030382dd",
+    "npmTarballName": "fdsouvenir-falcon-vault-preview-5.0.0-preview.7.tgz",
+    "npmUnpackedSize": 289245,
+    "npmFileCount": 32,
+    "downloadUrl": "https://clawhub.ai/api/npm/@fdsouvenir/falcon-vault-preview/-/fdsouvenir-falcon-vault-preview-5.0.0-preview.7.tgz",
+    "tarballUrl": "https://clawhub.ai/api/npm/@fdsouvenir/falcon-vault-preview/-/fdsouvenir-falcon-vault-preview-5.0.0-preview.7.tgz",
+    "legacyDownloadUrl": "https://clawhub.ai/api/v1/packages/@fdsouvenir/falcon-vault-preview/download?version=5.0.0-preview.7"
+  },
+  "path": "/tmp/falcon-vault-preview-5.0.0-preview.7.tgz",
+  "bytes": 80364,
+  "sha256": "9178f4e6ba6ae69f2b80f64299dcf428a6129229ea838fe95b5388b2094057ab",
+  "npmIntegrity": "sha512-TAMf7rhHpprbAB15FlU0Qhcr8+MF5oZndJA9NAqq+O2p6u0PUJPLS59bx5DSdOPjEmAULaGTjzrqqX8pJwv/QQ==",
+  "npmShasum": "dd00ff3a0a70377508a3ebb1cdd0f24a030382dd"
+}

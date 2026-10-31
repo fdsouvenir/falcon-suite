@@ -1,0 +1,10 @@
+{
+	"agent:main:dashboard:f7a19055-2d39-47e4-bbd8-937bd8fc0fa6": "Building Manager + Job Dispatcher",
+	"agent:main:dashboard:0ac08262-f9cf-442e-bad3-b6fde542637d": "Build Fredbot Backend 2.0 Manager",
+	"agent:main:dashboard:73d91193-3bfa-4e5d-b885-1519a7143854": "Portal Fix",
+	"agent:main:dashboard:4c069a99-f4e1-4b30-9933-ff64d264b2d8": "cron exec admission rejected \u2014 diagnosis",
+	"agent:main:dashboard:02f954fb-dee9-4aff-8f6f-09a4063a0dad": "Cold plunge cooling system troubleshooting",
+	"agent:main:openai-application-watch": "OpenAI application watch",
+	"agent:main:dashboard:21ea60b8-9931-4090-9e6b-6b4847e2cefd": "ESPN Fantasy",
+	"agent:main:dashboard:2faf394d-f265-43bd-94de-8cf18ba5ab92": "Falcon Dash"
+}

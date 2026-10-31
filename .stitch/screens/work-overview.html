@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>OpenClaw Control UI - Work</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-background": "#1a1c1b",
+            "secondary": "#006a61",
+            "surface-variant": "#e3e2e0",
+            "on-surface": "#1a1c1b",
+            "surface-container": "#efeeec",
+            "bg-content": "#f4f1ec",
+            "tertiary-fixed": "#a8edff",
+            "bg-hover": "#efebe4",
+            "surface-container-highest": "#e3e2e0",
+            "on-error": "#ffffff",
+            "on-primary": "#ffffff",
+            "error": "#ba1a1a",
+            "primary": "#bd4531",
+            "outline-variant": "#dfbfba",
+            "primary-fixed-dim": "#ffb4a6",
+            "surface-tint": "#a93724",
+            "text": "#403c35",
+            "on-tertiary-container": "#d5f6ff",
+            "on-secondary": "#ffffff",
+            "on-tertiary-fixed-variant": "#004e5b",
+            "primary-fixed": "#ffdad4",
+            "on-tertiary": "#ffffff",
+            "border-strong": "#d6d0c5",
+            "muted": "#6e6960",
+            "surface-container-high": "#e9e8e6",
+            "on-tertiary-fixed": "#001f26",
+            "inverse-on-surface": "#f1f1ef",
+            "border": "#e8e4dc",
+            "on-error-container": "#93000a",
+            "surface-bright": "#faf9f7",
+            "secondary-fixed-dim": "#6bd8cb",
+            "on-surface-variant": "#58413d",
+            "inverse-surface": "#2f3130",
+            "surface": "#faf9f7",
+            "warn": "#92400e",
+            "on-primary-fixed": "#3f0300",
+            "on-secondary-fixed": "#00201d",
+            "danger": "#b91c1c",
+            "tertiary-fixed-dim": "#7cd3e8",
+            "tertiary": "#005e6d",
+            "on-primary-container": "#ffece9",
+            "surface-container-low": "#f4f3f1",
+            "ok": "#166534",
+            "on-secondary-container": "#006f66",
+            "on-primary-fixed-variant": "#881f0f",
+            "inverse-primary": "#ffb4a6",
+            "info": "#1d4ed8",
+            "secondary-fixed": "#89f5e7",
+            "card": "#ffffff",
+            "tertiary-container": "#00788b",
+            "primary-container": "#bd4531",
+            "accent-subtle": "#bd453114",
+            "background": "#faf9f7",
+            "on-secondary-fixed-variant": "#005049",
+            "secondary-container": "#86f2e4",
+            "error-container": "#ffdad6",
+            "surface-container-lowest": "#ffffff",
+            "surface-dim": "#dadad8",
+            "outline": "#8c716c",
+            "text-strong": "#211e1a"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "card": "10px",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "space-md": "0.75rem",
+            "space-2xl": "2rem",
+            "margin": "2rem",
+            "space-sm": "0.5rem",
+            "gutter": "1rem",
+            "space-xs": "0.25rem",
+            "space-xl": "1.5rem",
+            "space-lg": "1rem"
+          },
+          "fontFamily": {
+            "body-sm": ["Instrument Sans", "sans-serif"],
+            "headline-md": ["Instrument Sans", "sans-serif"],
+            "headline-lg": ["Instrument Sans", "sans-serif"],
+            "label-xs": ["Instrument Sans", "sans-serif"],
+            "headline-sm": ["Instrument Sans", "sans-serif"],
+            "code": ["JetBrains Mono", "monospace"],
+            "body-md": ["Instrument Sans", "sans-serif"]
+          },
+          "fontSize": {
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+            "label-xs": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+            "headline-sm": ["13px", { "lineHeight": "18px", "fontWeight": "600" }],
+            "code": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 16px;
+      line-height: 1;
+      display: inline-block;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #e8e4dc;
+      border-radius: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: #d6d0c5;
+    }
+  </style>
+</head>
+<body class="bg-background text-text font-body-md text-body-md antialiased h-screen overflow-hidden flex select-none">
+<!-- LEFT SIDEBAR (SideNavBar Shared Component) -->
+<aside class="w-60 h-screen flex flex-col fixed left-0 top-0 bg-bg-content border-r border-border justify-between p-space-md z-30 flex-shrink-0">
+<!-- Top Block: Agent Verl status & Pages -->
+<div class="flex flex-col gap-4">
+<!-- Verl Host Agent Header -->
+<div class="flex items-center justify-between px-1 py-1">
+<div class="flex items-center gap-2.5">
+<div class="relative w-7 h-7 rounded-full bg-border-strong text-text-strong flex items-center justify-center font-headline-sm text-headline-sm font-semibold border border-border">
+<span>V</span>
+<span class="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-[#166534] ring-2 ring-bg-content"></span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm font-semibold text-text-strong">Verl</span>
+</div>
+</div>
+<button class="text-muted hover:text-text-strong p-1 rounded transition-colors duration-150 ease-in-out" title="Agent Settings">
+<span class="material-symbols-outlined" data-icon="tune">tune</span>
+</button>
+</div>
+<!-- Quick Action CTA -->
+<button class="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-surface border border-border text-text-strong font-body-sm text-body-sm font-semibold rounded hover:bg-bg-hover transition-colors duration-150 ease-in-out shadow-none">
+<span class="material-symbols-outlined text-[14px]" data-icon="add">add</span>
+<span>New Session</span>
+</button>
+<!-- Pages Navigation -->
+<div class="flex flex-col gap-0.5">
+<span class="font-label-xs text-label-xs text-muted font-medium px-2 py-1 tracking-wider uppercase">Pages</span>
+<!-- Home -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded px-3 py-1.5 flex items-center gap-2.5 font-body-sm text-body-sm transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span>Home</span>
+</a>
+<!-- Automations -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded px-3 py-1.5 flex items-center gap-2.5 font-body-sm text-body-sm transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+<span>Automations</span>
+</a>
+<!-- Plugins -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded px-3 py-1.5 flex items-center gap-2.5 font-body-sm text-body-sm transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="extension">extension</span>
+<span>Plugins</span>
+</a>
+<!-- Portals -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded px-3 py-1.5 flex items-center gap-2.5 font-body-sm text-body-sm transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="sensor_window">sensor_window</span>
+<span>Portals</span>
+</a>
+<!-- Dashboards -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded px-3 py-1.5 flex items-center gap-2.5 font-body-sm text-body-sm transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboards</span>
+</a>
+<!-- Work (ACTIVE TAB MATCHING CURRENT INTENT) -->
+<a class="bg-bg-hover text-text-strong font-semibold rounded px-3 py-1.5 flex items-center gap-2.5 font-body-sm text-body-sm transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-primary" data-icon="checklist">checklist</span>
+<span>Work</span>
+</a>
+<!-- Vault -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded px-3 py-1.5 flex items-center gap-2.5 font-body-sm text-body-sm transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="lock">lock</span>
+<span>Vault</span>
+</a>
+</div>
+<!-- Sessions Navigation -->
+<div class="flex flex-col gap-0.5 mt-2">
+<div class="flex items-center justify-between px-2 py-1">
+<span class="font-label-xs text-label-xs text-muted font-medium tracking-wider uppercase">Sessions</span>
+</div>
+<div class="space-y-0.5 overflow-hidden">
+<a class="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-bg-hover text-text-strong font-body-sm text-body-sm truncate transition-colors duration-150 ease-in-out" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#0d9488] flex-shrink-0"></span>
+<span class="truncate">Falcon Dash</span>
+</a>
+<a class="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-bg-hover text-muted hover:text-text-strong font-body-sm text-body-sm truncate transition-colors duration-150 ease-in-out" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong flex-shrink-0"></span>
+<span class="truncate">Building Manager + Job Dispatcher</span>
+</a>
+<a class="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-bg-hover text-muted hover:text-text-strong font-body-sm text-body-sm truncate transition-colors duration-150 ease-in-out" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong flex-shrink-0"></span>
+<span class="truncate">Build Fredbot Backend 2.0 Manager</span>
+</a>
+<a class="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-bg-hover text-muted hover:text-text-strong font-body-sm text-body-sm truncate transition-colors duration-150 ease-in-out" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong flex-shrink-0"></span>
+<span class="truncate">Portal Fix</span>
+</a>
+<a class="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-bg-hover text-muted hover:text-text-strong font-body-sm text-body-sm truncate transition-colors duration-150 ease-in-out" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong flex-shrink-0"></span>
+<span class="truncate">OpenAI application watch</span>
+</a>
+<a class="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-bg-hover text-muted hover:text-text-strong font-body-sm text-body-sm truncate transition-colors duration-150 ease-in-out" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong flex-shrink-0"></span>
+<span class="truncate">Morning Brief</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Bottom Block: User Fred -->
+<div class="pt-3 border-t border-border flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-surface-variant flex items-center justify-center text-text-strong font-headline-sm text-headline-sm font-semibold border border-border">
+          F
+        </div>
+<div class="flex flex-col">
+<span class="font-body-sm text-body-sm font-semibold text-text-strong">Fred</span>
+<span class="font-label-xs text-label-xs text-ok flex items-center gap-1">online</span>
+</div>
+</div>
+<button class="text-muted hover:text-text-strong p-1 rounded hover:bg-bg-hover transition-colors duration-150 ease-in-out">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+</aside>
+<!-- MAIN VIEWPORT CONTAINER (Directly right of sidebar, fills canvas) -->
+<div class="flex-1 ml-60 flex flex-col h-screen overflow-hidden bg-background">
+<!-- TopNavBar (Shared Component implementation) -->
+<header class="bg-surface border-b border-border flex-shrink-0 z-20">
+<div class="px-8 pt-5 pb-3 flex items-center justify-between">
+<!-- Title -->
+<div class="flex items-center gap-3">
+<h1 class="font-headline-lg text-headline-lg font-semibold text-text-strong">Work</h1>
+</div>
+<!-- Quiet Toolbar Actions -->
+<div class="flex items-center gap-2.5">
+<!-- Search input on left of toolbar -->
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2.5 top-2 text-muted text-[15px]" data-icon="search">search</span>
+<input class="bg-card border border-border-strong rounded-lg pl-8 pr-3 py-1.5 font-body-sm text-body-sm text-text placeholder-muted focus:outline-none focus:border-primary w-60 shadow-none" placeholder="Search work..." type="text"/>
+</div>
+<!-- Filter Dropdown: All Agents -->
+<div class="relative">
+<button class="flex items-center gap-1.5 bg-card border border-border-strong rounded-lg px-3 py-1.5 font-body-sm text-body-sm text-text hover:text-text-strong hover:bg-bg-hover transition-colors duration-150 ease-in-out">
+<span class="material-symbols-outlined text-[15px] text-muted" data-icon="filter_list">filter_list</span>
+<span>All agents</span>
+<span class="material-symbols-outlined text-[14px] text-muted" data-icon="expand_more">expand_more</span>
+</button>
+</div>
+<!-- Notification indicator -->
+<!-- Primary CTA Button -->
+<button class="bg-primary hover:bg-[#a53b29] text-on-primary font-body-sm text-body-sm font-medium px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors duration-150 ease-in-out shadow-none">
+<span class="material-symbols-outlined text-[15px]" data-icon="add">add</span>
+<span>New</span>
+</button>
+</div>
+</div>
+<!-- Quiet Tab Navigation Row -->
+<nav class="px-8 flex gap-6 font-body-sm text-body-sm font-medium">
+<a class="border-b-2 border-primary text-primary font-semibold pb-2.5 flex items-center gap-1.5" href="#">
+<span>Overview</span>
+<span class="font-label-xs text-label-xs px-1.5 py-0.2 rounded-full bg-accent-subtle text-primary font-semibold">13</span>
+</a>
+<a class="text-muted pb-2.5 hover:text-text-strong transition-colors duration-150 ease-in-out" href="#">
+          Objectives
+        </a>
+<a class="text-muted pb-2.5 hover:text-text-strong transition-colors duration-150 ease-in-out" href="#">
+          Areas &amp; Projects
+        </a>
+<a class="text-muted pb-2.5 hover:text-text-strong transition-colors duration-150 ease-in-out" href="#">
+          Activity
+        </a>
+</nav>
+</header>
+<!-- MAIN SCROLLABLE CONTENT CANVAS -->
+<main class="flex-1 overflow-y-auto custom-scroll p-8">
+<div class="max-w-[1360px] mx-auto grid grid-cols-12 gap-8 items-start">
+<!-- ================= MAIN COLUMN (col-span-8) ================= -->
+<div class="col-span-8 space-y-7">
+<!-- SECTION 1: Needs You -->
+<section class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<h2 class="font-headline-sm text-headline-sm font-semibold text-text-strong">Needs you</h2>
+<span class="font-label-xs text-label-xs px-2 py-0.5 rounded-full bg-accent-subtle text-primary font-semibold">13</span>
+</div>
+</div>
+<div class="space-y-2">
+<!-- Warning row 1: Stalled Objective -->
+<div class="bg-card border border-border rounded-card p-3.5 flex items-start gap-3 hover:border-border-strong transition-colors duration-150 ease-in-out">
+<span class="material-symbols-outlined text-warn flex-shrink-0 mt-0.5" data-icon="warning">warning</span>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm font-semibold text-warn">Objective without progress</span>
+<span class="text-border-strong">·</span>
+<span class="font-body-sm text-body-sm font-semibold text-text-strong truncate">Home AI Solutions reaches $10K monthly revenue</span>
+</div>
+<div class="font-label-xs text-label-xs text-muted mt-1 flex items-center gap-2"><span>No progress recorded since Aug 19 (44 days stalled)</span></div>
+</div>
+</div>
+<!-- Warning row 2: Stalled Task -->
+<div class="bg-card border border-border rounded-card p-3.5 flex items-start gap-3 hover:border-border-strong transition-colors duration-150 ease-in-out">
+<span class="material-symbols-outlined text-warn flex-shrink-0 mt-0.5" data-icon="warning">warning</span>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm font-semibold text-warn">Stalled Task</span>
+<span class="text-border-strong">·</span>
+<span class="font-body-sm text-body-sm font-semibold text-text-strong truncate">Restore Schwab CLI authentication</span>
+</div>
+<div class="font-label-xs text-label-xs text-muted mt-1 flex items-center gap-2"><span>No recorded activity since Sep 5</span></div>
+</div>
+</div>
+<!-- Warning row 3: Stalled Task -->
+<div class="bg-card border border-border rounded-card p-3.5 flex items-start gap-3 hover:border-border-strong transition-colors duration-150 ease-in-out">
+<span class="material-symbols-outlined text-warn flex-shrink-0 mt-0.5" data-icon="warning">warning</span>
+<div class="flex-1 min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm font-semibold text-warn">Stalled Task</span>
+<span class="text-border-strong">·</span>
+<span class="font-body-sm text-body-sm font-semibold text-text-strong truncate">Fix cron exec admission failures</span>
+</div>
+<div class="font-label-xs text-label-xs text-muted mt-1 flex items-center gap-2"><span>No recorded activity since Sep 20</span></div>
+</div>
+</div>
+<!-- Decision row 1: Home AI Solutions Next Step -->
+<div class="bg-card border border-border rounded-card p-4 space-y-3 hover:border-border-strong transition-colors duration-150 ease-in-out"><div class="flex items-start gap-2.5"><span class="material-symbols-outlined text-primary flex-shrink-0 mt-0.5" data-icon="call_split">call_split</span><div class="flex-1"><h3 class="font-headline-sm text-headline-sm font-semibold text-text-strong">What should I do next for Home AI Solutions?</h3><p class="font-body-sm text-body-sm text-muted mt-0.5">No Work has served this Objective in six weeks.</p></div></div><div class="flex flex-wrap gap-2 pl-6"><button class="border border-primary bg-accent-subtle text-primary font-body-sm text-body-sm font-semibold px-3 py-1.5 rounded-card flex items-center gap-1.5 hover:bg-primary hover:text-on-primary transition-colors duration-150 ease-in-out"><span>Draft the thesis and pilot offer (recommended)</span><span class="material-symbols-outlined text-[13px]" data-icon="check">check</span></button><button class="border border-border bg-surface text-text hover:bg-bg-hover hover:border-border-strong font-body-sm text-body-sm px-3 py-1.5 rounded-card transition-colors duration-150 ease-in-out">Wait for Territory 1</button><button class="border border-border bg-surface text-text hover:bg-bg-hover hover:border-border-strong font-body-sm text-body-sm px-3 py-1.5 rounded-card transition-colors duration-150 ease-in-out">Pause this Objective</button></div><div class="pl-6 flex items-center gap-2"><input class="flex-1 bg-surface border border-border-strong rounded-lg px-3 py-1.5 font-body-sm text-body-sm text-text placeholder-muted focus:outline-none focus:border-primary shadow-none" placeholder="Why? (optional)" type="text"/><button class="bg-primary hover:bg-[#a53b29] text-on-primary font-body-sm text-body-sm font-medium px-4 py-1.5 rounded-lg transition-colors duration-150 ease-in-out shadow-none flex-shrink-0">Decide</button></div><div class="pl-6 flex items-center gap-2 pt-1 font-label-xs text-label-xs text-muted border-t border-border"><span>Raised Oct 1</span><span>·</span><span class="inline-flex items-center gap-1 px-2 py-0.5 bg-surface-container rounded font-medium text-text"><span class="w-1.5 h-1.5 rounded-full bg-[#0d9488]"></span>Falcon Dash</span></div></div>
+<!-- Decision row 2: Failing Automations -->
+<div class="bg-card border border-border rounded-card p-4 space-y-3 hover:border-border-strong transition-colors duration-150 ease-in-out"><div class="flex items-start gap-2.5"><span class="material-symbols-outlined text-primary flex-shrink-0 mt-0.5" data-icon="call_split">call_split</span><div class="flex-1"><h3 class="font-headline-sm text-headline-sm font-semibold text-text-strong">Apply --clear-tools to the two failing automations?</h3><p class="font-body-sm text-body-sm text-muted mt-0.5">Two automations fail exec admission every night; neither needs tools.</p></div></div><div class="flex flex-wrap gap-2 pl-6"><button class="border border-border bg-surface text-text hover:bg-bg-hover hover:border-border-strong font-body-sm text-body-sm px-3 py-1.5 rounded-card transition-colors duration-150 ease-in-out">Apply --clear-tools (recommended)</button><button class="border border-border bg-surface text-text hover:bg-bg-hover hover:border-border-strong font-body-sm text-body-sm px-3 py-1.5 rounded-card transition-colors duration-150 ease-in-out">Wait for the upstream fix</button></div><div class="pl-6 flex items-center gap-2 pt-1 font-label-xs text-label-xs text-muted border-t border-border"><span>Open 11 days</span><span>·</span><span class="inline-flex items-center gap-1 px-2 py-0.5 bg-surface-container rounded font-medium text-muted"><span class="w-1.5 h-1.5 rounded-full bg-border-strong"></span>cron exec admission rejected — diagnosis</span></div></div>
+<!-- Question row 1: Territory 1 definition -->
+<div class="bg-card border border-border rounded-card p-4 space-y-3 hover:border-border-strong transition-colors duration-150 ease-in-out"><div class="flex items-start gap-2.5"><span class="material-symbols-outlined text-tertiary flex-shrink-0 mt-0.5" data-icon="help_outline">help_outline</span><div class="flex-1"><div class="flex items-baseline justify-between"><h3 class="font-headline-sm text-headline-sm font-semibold text-text-strong">Which area is Territory 1?</h3><span class="font-label-xs text-label-xs text-muted">Open since Sep 2 · holds 2 Tasks · Work tab only</span></div><div class="mt-2 flex items-center gap-2"><input class="flex-1 bg-surface border border-border-strong rounded-lg px-3 py-1.5 font-body-sm text-body-sm text-text placeholder-muted focus:outline-none focus:border-primary shadow-none" placeholder="Type an answer…" type="text"/><button class="bg-card border border-border-strong text-text-strong hover:bg-bg-hover font-body-sm text-body-sm font-medium px-3.5 py-1.5 rounded-lg transition-colors duration-150 ease-in-out shadow-none flex-shrink-0">Answer</button></div></div></div></div>
+<!-- Question row 2: Anthropic fallback model -->
+<div class="bg-card border border-border rounded-card p-4 space-y-2 hover:border-border-strong transition-colors duration-150 ease-in-out"><div class="flex items-start gap-2.5"><span class="material-symbols-outlined text-tertiary flex-shrink-0 mt-0.5" data-icon="help_outline">help_outline</span><div class="flex-1 min-w-0 space-y-2.5"><h3 class="font-headline-sm text-headline-sm font-semibold text-text-strong">Which model should I fall back to when Anthropic session limits black me out?</h3><div class="flex items-center gap-2 font-label-xs text-label-xs text-muted"><span>Verl's hypothesis:</span><span class="font-code text-[11px] text-text bg-surface-container-low px-1.5 py-0.5 border border-border rounded">openai/gpt-5.5</span><span class="text-border-strong">·</span><span class="inline-flex items-center gap-1 px-2 py-0.5 bg-surface-container rounded font-medium text-text"><span class="w-1.5 h-1.5 rounded-full bg-[#0d9488]"></span>Falcon Dash</span></div><div class="flex items-center gap-2 pt-0.5"><button class="bg-card border border-border-strong text-text-strong hover:bg-bg-hover font-body-sm text-body-sm font-medium px-3 py-1.5 rounded-lg transition-colors duration-150 ease-in-out shadow-none flex-shrink-0">Use Verl's hypothesis</button><input class="flex-1 bg-surface border border-border-strong rounded-lg px-3 py-1.5 font-body-sm text-body-sm text-text placeholder-muted focus:outline-none focus:border-primary shadow-none" placeholder="Or type a different answer…" type="text"/><button class="bg-card border border-border-strong text-text-strong hover:bg-bg-hover font-body-sm text-body-sm font-medium px-3.5 py-1.5 rounded-lg transition-colors duration-150 ease-in-out shadow-none flex-shrink-0">Answer</button><a class="font-body-sm text-body-sm text-muted hover:text-text-strong transition-colors duration-150 ease-in-out px-1 flex-shrink-0" href="#">Discuss in session</a></div></div></div></div>
+<!-- Show more expander button -->
+<div class="pt-1 text-center">
+<button class="font-body-sm text-body-sm text-muted hover:text-text-strong font-medium py-1 px-3 rounded hover:bg-bg-hover transition-colors duration-150 ease-in-out inline-flex items-center gap-1">
+<span>Show 6 more</span>
+<span class="material-symbols-outlined text-[14px]" data-icon="expand_more">expand_more</span>
+</button>
+</div>
+</div>
+</section>
+<!-- SECTION 2: Now (In Progress) -->
+<section class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-[#0d9488]"></span>
+<h2 class="font-headline-sm text-headline-sm font-semibold text-text-strong">Now</h2>
+<span class="font-label-xs text-label-xs text-muted">4</span>
+</div>
+</div>
+<div class="bg-card border border-border rounded-card divide-y divide-border">
+<!-- Task 1 -->
+<div class="p-3.5 flex items-center justify-between gap-4 hover:bg-surface transition-colors duration-150 ease-in-out">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-text-strong font-label-xs text-label-xs font-semibold border border-border flex-shrink-0">
+                    V
+                  </div>
+<div class="min-w-0">
+<p class="font-body-sm text-body-sm font-semibold text-text-strong truncate">Authenticate the NOC backend to the API independently of Verl</p>
+<p class="font-label-xs text-label-xs text-muted truncate">Backend 2.0: Job Dispatcher first build</p>
+</div>
+</div>
+<div class="flex items-center gap-2.5 flex-shrink-0">
+<span class="inline-flex items-center gap-1.5 px-2 py-1 bg-surface-container rounded-card font-label-xs text-label-xs text-text border border-border">
+<span class="w-1.5 h-1.5 rounded-full bg-[#0d9488] animate-pulse"></span>
+                    Build Fredbot Backend 2.0 Manager
+                  </span>
+</div>
+</div>
+<!-- Task 2 -->
+<div class="p-3.5 flex items-center justify-between gap-4 hover:bg-surface transition-colors duration-150 ease-in-out">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-text-strong font-label-xs text-label-xs font-semibold border border-border flex-shrink-0">
+                    V
+                  </div>
+<div class="min-w-0">
+<p class="font-body-sm text-body-sm font-semibold text-text-strong truncate">Fix cron exec admission failures</p>
+<p class="font-label-xs text-label-xs text-muted truncate">Verl</p>
+</div>
+</div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<span class="font-label-xs text-label-xs text-warn bg-[#92400e12] border border-[#92400e2b] px-2 py-0.5 rounded font-medium">
+                    blocked by a pending Decision
+                  </span>
+</div>
+</div>
+<!-- Task 3 -->
+<div class="p-3.5 flex items-center justify-between gap-4 hover:bg-surface transition-colors duration-150 ease-in-out">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-text-strong font-label-xs text-label-xs font-semibold border border-border flex-shrink-0">
+                    V
+                  </div>
+<div class="min-w-0">
+<p class="font-body-sm text-body-sm font-semibold text-text-strong truncate">Revise the résumé and application packet</p>
+<p class="font-label-xs text-label-xs text-muted truncate">Apply: OpenAI Forward Deployed Engineer</p>
+</div>
+</div>
+<div class="flex items-center gap-2.5 flex-shrink-0">
+<span class="inline-flex items-center gap-1.5 px-2 py-1 bg-surface-container rounded-card font-label-xs text-label-xs text-muted border border-border">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong"></span>
+                    OpenAI application watch
+                  </span>
+</div>
+</div>
+<!-- Task 4 -->
+<div class="p-3.5 flex items-center justify-between gap-4 hover:bg-surface transition-colors duration-150 ease-in-out">
+<div class="flex items-center gap-3 min-w-0">
+<div class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-text-strong font-label-xs text-label-xs font-semibold border border-border flex-shrink-0">
+                    V
+                  </div>
+<div class="min-w-0">
+<p class="font-body-sm text-body-sm font-semibold text-text-strong truncate">Restore Schwab CLI authentication</p>
+<p class="font-label-xs text-label-xs text-muted truncate">Finances</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 3: Waiting -->
+<section class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-muted text-[15px]" data-icon="hourglass_empty">hourglass_empty</span>
+<h2 class="font-headline-sm text-headline-sm font-semibold text-text-strong">Waiting</h2>
+<span class="font-label-xs text-label-xs text-muted">4</span>
+</div>
+</div>
+<div class="bg-card border border-border rounded-card divide-y divide-border">
+<!-- Item 1 -->
+<div class="p-3 flex items-center justify-between gap-4 hover:bg-surface transition-colors duration-150 ease-in-out">
+<div class="font-body-sm text-body-sm font-medium text-text-strong truncate">
+                  Reconnect GitHub OAuth for the Building Manager
+                </div>
+<div class="flex items-center gap-3 flex-shrink-0">
+<div class="flex items-center gap-1.5 font-label-xs text-label-xs text-muted">
+<span>waiting on</span>
+<div class="w-5 h-5 rounded-full bg-surface-variant flex items-center justify-center text-text-strong font-semibold border border-border text-[10px]">F</div>
+<span class="font-medium text-text">fred</span>
+</div>
+<span class="text-border-strong">·</span>
+<span class="font-label-xs text-label-xs font-code text-muted">follow up Oct 2</span>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="p-3 flex items-center justify-between gap-4 hover:bg-surface transition-colors duration-150 ease-in-out">
+<div class="font-body-sm text-body-sm font-medium text-text-strong truncate">
+                  Route Portals through the gateway listener
+                </div>
+<div class="flex items-center gap-3 flex-shrink-0">
+<div class="flex items-center gap-1.5 font-label-xs text-label-xs text-muted">
+<span>waiting on</span>
+<div class="w-5 h-5 rounded-full bg-surface-variant flex items-center justify-center text-text-strong font-semibold border border-border text-[10px]">F</div>
+<span class="font-medium text-text">fred</span>
+</div>
+<span class="text-border-strong">·</span>
+<span class="font-label-xs text-label-xs font-code text-muted">follow up Oct 3</span>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="p-3 flex items-center justify-between gap-4 hover:bg-surface transition-colors duration-150 ease-in-out">
+<div class="font-body-sm text-body-sm font-medium text-text-strong truncate">
+                  Find out what the two April reimbursements covered
+                </div>
+<div class="flex items-center gap-3 flex-shrink-0">
+<div class="flex items-center gap-1.5 font-label-xs text-label-xs text-muted">
+<span>waiting on</span>
+<div class="w-5 h-5 rounded-full bg-[#e3e2e0] flex items-center justify-center text-text-strong font-semibold border border-border text-[10px]">A</div>
+<span class="font-medium text-text">Adrien</span>
+</div>
+<span class="text-border-strong">·</span>
+<span class="font-label-xs text-label-xs font-code text-muted">follow up Oct 3</span>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="p-3 flex items-center justify-between gap-4 hover:bg-surface transition-colors duration-150 ease-in-out">
+<div class="font-body-sm text-body-sm font-medium text-text-strong truncate">
+                  Build and stamp the provisional Platform template
+                </div>
+<div class="flex items-center gap-3 flex-shrink-0">
+<div class="flex items-center gap-1.5 font-label-xs text-label-xs text-muted">
+<span>waiting on</span>
+<div class="w-5 h-5 rounded-full bg-surface-variant flex items-center justify-center text-text-strong font-semibold border border-border text-[10px]">F</div>
+<span class="font-medium text-text">fred</span>
+</div>
+<span class="text-border-strong">·</span>
+<span class="font-label-xs text-label-xs font-code text-warn bg-[#92400e0d] px-1.5 py-0.5 rounded">until Platform-02 hardware</span>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- ================= SIDE COLUMN (col-span-4) ================= -->
+<div class="col-span-4 space-y-7">
+<!-- SECTION 4: Objectives -->
+<section class="space-y-3">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-sm text-headline-sm font-semibold text-text-strong">Objectives</h2>
+</div>
+<div class="space-y-3">
+<!-- Objective Card 1 -->
+<div class="bg-card border border-border rounded-card p-3.5 space-y-2 hover:border-border-strong transition-colors duration-150 ease-in-out">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-start gap-2">
+<span class="font-code text-label-xs font-medium text-muted bg-surface-container px-1 py-0.5 rounded">#1</span>
+<h3 class="font-body-sm text-body-sm font-semibold text-text-strong leading-tight">Home AI Solutions reaches $10K monthly revenue</h3>
+</div>
+<span class="font-label-xs text-label-xs bg-bg-hover text-muted px-2 py-0.5 rounded font-medium flex-shrink-0">propose</span>
+</div>
+<div class="space-y-1.5 pt-1">
+<div class="flex justify-between font-label-xs text-label-xs">
+<span class="text-muted">Monthly revenue</span>
+<span class="font-code text-muted">unmeasured / $10,000</span>
+</div>
+<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden"></div>
+</div>
+<div class="pt-1 flex items-center justify-between font-label-xs text-label-xs border-t border-border">
+<span class="text-warn font-medium">none since Aug 19</span>
+</div>
+</div>
+<!-- Objective Card 2 -->
+<div class="bg-card border border-border rounded-card p-3.5 space-y-2 hover:border-border-strong transition-colors duration-150 ease-in-out">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-start gap-2">
+<span class="font-code text-label-xs font-medium text-muted bg-surface-container px-1 py-0.5 rounded">#2</span>
+<h3 class="font-body-sm text-body-sm font-semibold text-text-strong leading-tight">Fredbot runs customer Offices on its own platform</h3>
+</div>
+<span class="font-label-xs text-label-xs bg-bg-hover text-text-strong px-2 py-0.5 rounded font-medium flex-shrink-0">act</span>
+</div>
+<div class="space-y-1.5 pt-1">
+<div class="flex justify-between font-label-xs text-label-xs">
+<span class="text-muted">Customer Offices live</span>
+<span class="font-code text-text">0 / 1</span>
+</div>
+<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden"></div>
+</div>
+<div class="pt-1 flex items-center justify-between font-label-xs text-label-xs border-t border-border">
+<span class="text-muted">Last progress: <span class="text-text font-medium">Sep 30</span></span>
+</div>
+</div>
+<!-- Objective Card 3 -->
+<div class="bg-card border border-border rounded-card p-3.5 space-y-2 hover:border-border-strong transition-colors duration-150 ease-in-out">
+<div class="flex items-start justify-between gap-2">
+<div class="flex items-start gap-2">
+<span class="font-code text-label-xs font-medium text-muted bg-surface-container px-1 py-0.5 rounded">#3</span>
+<h3 class="font-body-sm text-body-sm font-semibold text-text-strong leading-tight">Land a role at a frontier AI lab</h3>
+</div>
+<span class="font-label-xs text-label-xs bg-bg-hover text-muted px-2 py-0.5 rounded font-medium flex-shrink-0">propose</span>
+</div>
+<div class="pt-1 flex items-center justify-between font-label-xs text-label-xs border-t border-border">
+<span class="text-warn font-medium">none since Sep 8</span>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 5: Recently Completed -->
+<section class="space-y-3">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-sm text-headline-sm font-semibold text-text-strong">Recently completed</h2>
+</div>
+<div class="bg-card border border-border rounded-card divide-y divide-border">
+<!-- Item 1 -->
+<div class="p-3 flex items-start gap-2.5">
+<span class="material-symbols-outlined text-[#166534] text-[16px] flex-shrink-0 mt-0.5" data-icon="check_circle">check_circle</span>
+<div class="flex-1 min-w-0">
+<p class="font-body-sm text-body-sm font-medium text-text-strong truncate">Prepare building-903 as management-test</p>
+<div class="flex items-center gap-2 mt-0.5"><span class="font-label-xs text-label-xs text-muted">Sep 30</span><span class="text-border-strong">·</span><span class="font-code text-[11px] text-muted bg-surface px-1.5 py-0.5 border border-border rounded">fredbot-backend#378</span></div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="p-3 flex items-start gap-2.5">
+<span class="material-symbols-outlined text-[#166534] text-[16px] flex-shrink-0 mt-0.5" data-icon="check_circle">check_circle</span>
+<div class="flex-1 min-w-0">
+<p class="font-body-sm text-body-sm font-medium text-text-strong truncate">Bootstrap Firestore for the Dispatcher</p>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="font-label-xs text-label-xs text-muted">Sep 28</span>
+<span class="text-border-strong">·</span>
+<span class="font-code text-[11px] text-muted bg-surface px-1.5 py-0.5 border border-border rounded">5be4a2d</span>
+</div>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="p-3 flex items-start gap-2.5">
+<span class="material-symbols-outlined text-[#166534] text-[16px] flex-shrink-0 mt-0.5" data-icon="check_circle">check_circle</span>
+<div class="flex-1 min-w-0">
+<p class="font-body-sm text-body-sm font-medium text-text-strong truncate">Fix spool headroom before publication</p>
+<div class="flex items-center gap-2 mt-0.5"><span class="font-label-xs text-label-xs text-muted">Sep 22</span><span class="text-border-strong">·</span><span class="font-code text-[11px] text-muted bg-surface px-1.5 py-0.5 border border-border rounded">PR #317</span></div>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION 6: Untracked Activity -->
+<section class="space-y-3">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-sm text-headline-sm font-semibold text-text-strong">Untracked activity (4)</h2>
+</div>
+<div class="bg-card border border-border rounded-card divide-y divide-border">
+<!-- Untracked item 1 -->
+<div class="p-3 space-y-1.5">
+<p class="font-body-sm text-body-sm text-muted">
+<span class="text-text font-medium">Sep 27</span> · Changed USER.md to send images as attachments
+                </p>
+<div>
+<button class="font-label-xs text-label-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
+<span>Create Task from this</span>
+<span class="material-symbols-outlined text-[12px]" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Untracked item 2 -->
+<div class="p-3 space-y-1.5">
+<p class="font-body-sm text-body-sm text-muted">
+<span class="text-text font-medium">Sep 24</span> · Refreshed 14 Cloudflare skills
+                </p>
+<div>
+<button class="font-label-xs text-label-xs font-semibold text-primary hover:underline inline-flex items-center gap-1">
+<span>Create Task from this</span>
+<span class="material-symbols-outlined text-[12px]" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+</div>
+</body></html>

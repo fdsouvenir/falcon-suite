@@ -1,0 +1,43 @@
+{
+  "id": "falcon-vault-preview",
+  "name": "Falcon Vault",
+  "description": "Credentials for your agents and OpenClaw, stored in your KeePassXC database.",
+  "version": "5.0.0-preview.7",
+  "categories": [
+    "security"
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "secretProviderIntegrations": {
+    "falcon-vault": {
+      "displayName": "Falcon Vault",
+      "description": "Entries in the Falcon Vault KeePassXC database. Reference an entry by its path, or path:Field.",
+      "source": "exec",
+      "command": "${node}",
+      "args": [
+        "./bin/resolve-secrets.mjs"
+      ],
+      "passEnv": [
+        "OPENCLAW_STATE_DIR"
+      ],
+      "jsonOnly": true
+    }
+  },
+  "contracts": {
+    "tools": [
+      "falcon_vault"
+    ]
+  },
+  "controlUi": {
+    "entry": "dist/control-ui/3eee7b93f9d29f2a17732fd8ef6336938fee84bbc799104da7f20a6d824e40e2/index.js",
+    "styles": [
+      "dist/control-ui/3eee7b93f9d29f2a17732fd8ef6336938fee84bbc799104da7f20a6d824e40e2/index.css"
+    ]
+  }
+}

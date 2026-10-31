@@ -1,0 +1,346 @@
+{
+  "package": {
+    "_id": "rn7cr454h2nw4vpxwmah1zgtm18fzs7v",
+    "artifact": {
+      "format": "tgz",
+      "kind": "npm-pack",
+      "npmFileCount": 32,
+      "npmIntegrity": "sha512-TAMf7rhHpprbAB15FlU0Qhcr8+MF5oZndJA9NAqq+O2p6u0PUJPLS59bx5DSdOPjEmAULaGTjzrqqX8pJwv/QQ==",
+      "npmShasum": "dd00ff3a0a70377508a3ebb1cdd0f24a030382dd",
+      "npmTarballName": "fdsouvenir-falcon-vault-preview-5.0.0-preview.7.tgz",
+      "npmUnpackedSize": 289245,
+      "sha256": "9178f4e6ba6ae69f2b80f64299dcf428a6129229ea838fe95b5388b2094057ab",
+      "size": 80364
+    },
+    "categories": [
+      "security"
+    ],
+    "channel": "community",
+    "compatibility": {
+      "builtWithOpenClawVersion": "2026.9.6",
+      "pluginApiRange": ">=2026.9.6"
+    },
+    "createdAt": 1791508597763,
+    "displayName": "Falcon Vault Preview",
+    "family": "code-plugin",
+    "icon": null,
+    "isOfficial": false,
+    "latestReleaseId": "rd772qa6jw7j55nthhw8npe09x8gr41j",
+    "latestVersion": "5.0.0-preview.7",
+    "name": "@fdsouvenir/falcon-vault-preview",
+    "runtimeId": "falcon-vault-preview",
+    "scanStatus": "suspicious",
+    "stats": {
+      "downloads": 25,
+      "installs": 6,
+      "stars": 0,
+      "versions": 7
+    },
+    "summary": "Falcon Vault for OpenClaw: credentials for your agents and OpenClaw, stored in your KeePassXC database.",
+    "tags": {
+      "latest": "5.0.0-preview.7"
+    },
+    "updatedAt": 1792702809883,
+    "verification": {
+      "hasProvenance": false,
+      "scanStatus": "suspicious",
+      "scope": "artifact-only",
+      "sourceCommit": "57752e0f6e5c3808f9d8415d469bd54f2e63e77b",
+      "sourcePath": "packages/vault",
+      "sourceRepo": "fdsouvenir/falcon-suite",
+      "sourceTag": "main",
+      "summary": "Validated package structure and linked the release to source metadata.",
+      "tier": "source-linked"
+    }
+  },
+  "owner": {
+    "handle": "fdsouvenir",
+    "displayName": "Frederic Souvenir",
+    "image": "https://avatars.githubusercontent.com/u/19579890?v=4",
+    "official": false
+  },
+  "version": {
+    "version": "5.0.0-preview.7",
+    "createdAt": 1792702448231,
+    "changelog": "Stable UUID config references from existing KeePass entry IDs. Copy config reference now works with spaces and survives entry and folder renames or moves. Used by recognizes UUID and legacy path references; rename warnings apply only to legacy paths. Recycled/deleted entries and ambiguous UUID/path collisions fail closed. Existing path references remain supported. Verified by 89 repository tests, 23 staged resolver/storage tests, plugin validation and source CI.",
+    "icon": null,
+    "distTags": [
+      "latest"
+    ],
+    "files": [
+      {
+        "path": "dist/control-ui/3eee7b93f9d29f2a17732fd8ef6336938fee84bbc799104da7f20a6d824e40e2/index.css",
+        "size": 17555,
+        "sha256": "9eb9e0372b283d22dfed6c498ecc2c47d44253591df69452ef6d97e4c6f9b331",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/ui/app.js",
+        "size": 13093,
+        "sha256": "8e2be7778d7c0773d7948c680e581ac3775b5435f60ccbdc054277cad6cb9611",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/store/audit.js",
+        "size": 5303,
+        "sha256": "27753ceb9d01ed6ceb9b68683c887815f5bcebee824408429d7e7e44e82925c4",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/contract.js",
+        "size": 5925,
+        "sha256": "c0f0e42800e73bc42a2f3cdb606e1e4cb27b0480652054358845bc4455781f54",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/control-ui.js",
+        "size": 627,
+        "sha256": "ff4df42e766600c9f35dbe01b8f34c13632bbaafe1d63d8efef2befc6a960b3d",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/ui/dialog.js",
+        "size": 3486,
+        "sha256": "dd22f98c2e52ec678cb0745223d37ec79bec44a27b30f4e41e8f9814486921b6",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/ui/dom.js",
+        "size": 4400,
+        "sha256": "49fb27d81d620e5b3f0bbb778966267dce304678eef878b401156568b5e10296",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/ui/entry.js",
+        "size": 11547,
+        "sha256": "a1ab9e8e4cedc13000ff7b7581d703912cad49f7e7d753b3b566c578092cdcd5",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/store/files.js",
+        "size": 2420,
+        "sha256": "7351420e2e6ae524b501651f284364c51a82591ac040ae80abdb23f77fc7ad64",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/ui/form.js",
+        "size": 12367,
+        "sha256": "b41ee361fe647c4877ff1cfcb460680d16bf793d904ded9d8b0607ca0721f9fa",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/ui/history.js",
+        "size": 2929,
+        "sha256": "9468da97a5d1646f6e297a265cdeabf6116d29404950189f51aef20b5e528eee",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/identity.js",
+        "size": 154,
+        "sha256": "f32d4df258f5a3be974b536013495c10da3610b2d7890c517300a4404e0fa887",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/plugin/identity.js",
+        "size": 1070,
+        "sha256": "4d34db765cbb9381e2eedd3361b620e100840dbae8e9fe25b0880d3c5be3e35e",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/control-ui/3eee7b93f9d29f2a17732fd8ef6336938fee84bbc799104da7f20a6d824e40e2/index.js",
+        "size": 117153,
+        "sha256": "24492594a7d2e49b8c06fc812f47fa1672443bd348d410f770a5b7806a69d562",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/index.js",
+        "size": 13852,
+        "sha256": "0dc4c224d768a2e8ecc4c6a14e12d5255080a0a82063158a399d1b1bc3dacb56",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/plugin/install.js",
+        "size": 1138,
+        "sha256": "b5ae210edcdb53355703fdcfc451f3eb35a89f3cf173e45b892e2548c39cc077",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/store/kdbx.js",
+        "size": 2410,
+        "sha256": "9ca4fe42af65625f758196cb68cd780c1bc7a1694fd6fd963ead58a7cb25253f",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/ui/list.js",
+        "size": 2636,
+        "sha256": "9bbe7388a81d2bf86be716ae129b4f674e961a201f4a17864a7d066a04ca91f2",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/store/lock.js",
+        "size": 4293,
+        "sha256": "b92ad6f203aba276ce76bfca6e2cf31fc56fdb7b7969563b786c82f6ee890749",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/ui/menu.js",
+        "size": 2551,
+        "sha256": "6fbea4f4bcff604d5b5da504bd297e832e87130f4cdbd9d5b3081f45cac09d6c",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/store/model.js",
+        "size": 3706,
+        "sha256": "ebe46dab0207922a412289404ae9872a0473b468344234918d33a27d322e412f",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/store/ops.js",
+        "size": 23885,
+        "sha256": "dc2848c3ff82dd5c313b6c321f32f87a868d9b43b8801c3d5d4cefcdce518504",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/store/paths.js",
+        "size": 2443,
+        "sha256": "0f378b177c2bb14ac20571a5b9aa09f800b56e19e1b363498a8619fbaa7ae8e6",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/resolver.js",
+        "size": 6327,
+        "sha256": "0861154f1690cabf62a35b25f42f26e76cb65942b42eb25b7b4299f1aa1c72f2",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/plugin/runtime.js",
+        "size": 2059,
+        "sha256": "718a927331efa0e86cbd7e0c6fdb0f3f188f03498dd319207721022174bfaf75",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/ui/tree.js",
+        "size": 7315,
+        "sha256": "8d5de57ca0e045f8579631237801e79e8ef35928197e2ecbbcaf9fda65a02192",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/store/usages.js",
+        "size": 3771,
+        "sha256": "fa1c063164068c40c0ed30fa17bfcafeab75234b821df5220eed735f8d46c5f6",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "dist/store/vault.js",
+        "size": 5854,
+        "sha256": "9bb2ee5b64edc727422054853b3cf1fa640ebc64381fc4818430b89a07dcceb9",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "openclaw.plugin.json",
+        "size": 1105,
+        "sha256": "5714b23eef2255ce63b5971589fa238868a98d368ec6682ee56b1d94fbc8e934",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "package.json",
+        "size": 1230,
+        "sha256": "1dc9682b2365ca15e4b1834b7176a4e93f1809e267f7a271f0b507849fd91f9b",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "README.md",
+        "size": 5876,
+        "sha256": "5ce35ca0aca1a01b2514a6717efa9279a461379450d77f29dd2f696610f0d606",
+        "contentType": "application/octet-stream"
+      },
+      {
+        "path": "bin/resolve-secrets.mjs",
+        "size": 765,
+        "sha256": "b4253b748f712483558721b51872e09b863d7bed99d7aabb2e72438dc6d121ab",
+        "contentType": "application/octet-stream"
+      }
+    ],
+    "compatibility": {
+      "builtWithOpenClawVersion": "2026.9.6",
+      "pluginApiRange": ">=2026.9.6"
+    },
+    "pluginManifestSummary": {
+      "bundledSkills": [],
+      "categories": [
+        "security"
+      ],
+      "compatibility": {
+        "builtWithOpenClawVersion": "2026.9.6",
+        "pluginApiRange": ">=2026.9.6"
+      },
+      "configFields": [],
+      "contracts": {
+        "tools": [
+          "falcon_vault"
+        ]
+      },
+      "manifestIdentity": {
+        "description": "Credentials for your agents and OpenClaw, stored in your KeePassXC database.",
+        "name": "Falcon Vault",
+        "version": "5.0.0-preview.7"
+      },
+      "mcpServers": [],
+      "schemaVersion": 1
+    },
+    "clawManifestSummary": null,
+    "verification": {
+      "hasProvenance": false,
+      "scanStatus": "suspicious",
+      "scope": "artifact-only",
+      "sourceCommit": "57752e0f6e5c3808f9d8415d469bd54f2e63e77b",
+      "sourcePath": "packages/vault",
+      "sourceRepo": "fdsouvenir/falcon-suite",
+      "sourceTag": "main",
+      "summary": "Validated package structure and linked the release to source metadata.",
+      "tier": "source-linked"
+    },
+    "artifact": {
+      "kind": "npm-pack",
+      "sha256": "9178f4e6ba6ae69f2b80f64299dcf428a6129229ea838fe95b5388b2094057ab",
+      "size": 80364,
+      "format": "tgz",
+      "npmIntegrity": "sha512-TAMf7rhHpprbAB15FlU0Qhcr8+MF5oZndJA9NAqq+O2p6u0PUJPLS59bx5DSdOPjEmAULaGTjzrqqX8pJwv/QQ==",
+      "npmShasum": "dd00ff3a0a70377508a3ebb1cdd0f24a030382dd",
+      "npmTarballName": "fdsouvenir-falcon-vault-preview-5.0.0-preview.7.tgz",
+      "npmUnpackedSize": 289245,
+      "npmFileCount": 32
+    },
+    "sha256hash": "284ece3f8dada830a521f58d08ca541da6f86bae070d64fa030855dbff316069",
+    "vtAnalysis": {
+      "checkedAt": 1792702843721,
+      "engineStats": {
+        "harmless": 0,
+        "malicious": 0,
+        "suspicious": 0,
+        "undetected": 62
+      },
+      "source": "engines",
+      "status": "clean"
+    },
+    "skillSpectorAnalysis": null,
+    "llmAnalysis": {
+      "checkedAt": 1792702808096,
+      "confidence": "high",
+      "model": "gpt-6.1-sol",
+      "status": "suspicious",
+      "summary": "This vault clearly discloses credential access, but verified storage, deletion, and history gaps warrant review before trusting it with important passwords.",
+      "verdict": "suspicious"
+    },
+    "staticScan": {
+      "checkedAt": 1792702414722,
+      "engineVersion": "v2.4.26",
+      "findings": [],
+      "reasonCodes": [],
+      "status": "clean",
+      "summary": "No suspicious patterns detected."
+    }
+  },
+  "versions": null,
+  "file": null
+}

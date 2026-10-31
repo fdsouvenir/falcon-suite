@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Falcon Work - Activity</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Instrument Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            bg: '#faf9f7',
+            'bg-content': '#f4f1ec',
+            card: '#ffffff',
+            'bg-hover': '#efebe4',
+            text: '#403c35',
+            'text-strong': '#211e1a',
+            muted: '#6e6960',
+            border: '#e8e4dc',
+            'border-strong': '#d6d0c5',
+            accent: '#bd4531',
+            'accent-subtle': '#bd453114',
+            'accent-teal': '#0d9488',
+            ok: '#166534',
+            warn: '#92400e',
+            danger: '#b91c1c',
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body {
+      background-color: #faf9f7;
+      color: #403c35;
+      font-family: 'Instrument Sans', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex text-[13px] leading-normal antialiased selection:bg-accent/15 selection:text-text-strong">
+<!-- Left Sidebar (OpenClaw Control UI) -->
+<aside class="w-60 flex-shrink-0 min-h-screen border-r border-[#e8e4dc] bg-[#f4f1ec] flex flex-col justify-between py-3.5 px-3 select-none">
+<div class="flex flex-col gap-4">
+<!-- Agent Identity Top -->
+<div class="flex items-center justify-between px-2 pt-0.5 pb-1">
+<div class="flex items-center gap-2.5">
+<div class="relative w-6 h-6 rounded-full bg-[#e4dfd5] border border-[#d6d0c5] flex items-center justify-center font-medium text-[11px] text-[#211e1a]">
+            v
+            <span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#0d9488] ring-2 ring-[#f4f1ec]"></span>
+</div>
+<span class="font-semibold text-[13px] text-[#211e1a] tracking-tight">Verl</span>
+</div>
+<button class="text-[#6e6960] hover:text-[#211e1a] p-1 rounded transition-colors" title="Settings">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 16 16">
+<path d="M2 4h8M12 4h2M6 8h8M2 8h2M2 12h5M9 12h5M10 2.5v3M4 6.5v3M7 10.5v3"></path>
+</svg>
+</button>
+</div>
+<!-- New Session CTA Button -->
+<button class="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-[#e8e4dc] bg-white text-[#211e1a] font-medium text-[12px] hover:bg-[#efebe4] transition-colors shadow-[0_1px_2px_#3c2a1808]">
+<svg class="w-3 h-3 text-[#bd4531]" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 16 16">
+<path d="M8 3v10M3 8h10"></path>
+</svg>
+        New Session
+      </button>
+<!-- Navigation Pages List -->
+<div class="flex flex-col gap-0.5">
+<div class="px-2 pt-1 pb-1 text-[11px] font-semibold text-[#6e6960]">Pages</div>
+<!-- Home -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[#6e6960] hover:text-[#211e1a] hover:bg-[#efebe4] transition-colors font-medium" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 16 16">
+<path d="M2.5 7L8 2.5 13.5 7v6.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1V7z"></path>
+<path d="M6 14.5v-5h4v5"></path>
+</svg>
+          Home
+        </a>
+<!-- Agents -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[#6e6960] hover:text-[#211e1a] hover:bg-[#efebe4] transition-colors font-medium" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 16 16">
+<circle cx="8" cy="8" r="5.5"></circle>
+<circle cx="6" cy="7" fill="currentColor" r="1"></circle>
+<circle cx="10" cy="7" fill="currentColor" r="1"></circle>
+<path d="M6 10.5s.8 1 2 1 2-1 2-1"></path>
+</svg>
+          Agents
+        </a>
+<!-- Dashboards -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[#6e6960] hover:text-[#211e1a] hover:bg-[#efebe4] transition-colors font-medium" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 16 16">
+<rect height="4.5" rx="1" width="4.5" x="2.5" y="2.5"></rect>
+<rect height="4.5" rx="1" width="4.5" x="9" y="2.5"></rect>
+<rect height="4.5" rx="1" width="4.5" x="2.5" y="9"></rect>
+<rect height="4.5" rx="1" width="4.5" x="9" y="9"></rect>
+</svg>
+          Dashboards
+        </a>
+<!-- Systems -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[#6e6960] hover:text-[#211e1a] hover:bg-[#efebe4] transition-colors font-medium" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 16 16">
+<rect height="3" rx="0.8" width="11" x="2.5" y="3"></rect>
+<rect height="3" rx="0.8" width="11" x="2.5" y="9"></rect>
+<circle cx="5" cy="4.5" fill="currentColor" r="0.6"></circle>
+<circle cx="5" cy="10.5" fill="currentColor" r="0.6"></circle>
+</svg>
+          Systems
+        </a>
+<!-- Automations -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[#6e6960] hover:text-[#211e1a] hover:bg-[#efebe4] transition-colors font-medium" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 16 16">
+<path d="M4 13.5l3.5-3.5M6 4.5l-2-2 1.5-1.5L9 4.5l4-1.5 1 1-1.5 4 3.5 3.5-1.5 1.5L11 9.5"></path>
+</svg>
+          Automations
+        </a>
+<!-- Plugins -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[#6e6960] hover:text-[#211e1a] hover:bg-[#efebe4] transition-colors font-medium" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 16 16">
+<path d="M6 3v2a2 2 0 0 0 4 0V3h3v5a2 2 0 0 1 0 4v3H3v-3a2 2 0 0 1 0-4V3h3z"></path>
+</svg>
+          Plugins
+        </a>
+<!-- Vault -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[#6e6960] hover:text-[#211e1a] hover:bg-[#efebe4] transition-colors font-medium" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 16 16">
+<rect height="7" rx="1.5" width="10" x="3" y="6.5"></rect>
+<path d="M5.5 6.5V4.5a2.5 2.5 0 0 1 5 0v2"></path>
+</svg>
+          Vault
+        </a>
+<!-- Work (Active / Selected) -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-[#efebe4] text-[#211e1a] font-semibold transition-colors" href="#">
+<svg class="w-4 h-4 text-[#bd4531]" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 16 16">
+<path d="M2.5 4.5h11v9a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-9z"></path>
+<path d="M5.5 4.5V3a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 10.5 3v1.5"></path>
+<path d="M5 8.5l2 2 4-4"></path>
+</svg>
+          Work
+        </a>
+</div>
+<!-- Sessions List -->
+<div class="flex flex-col gap-0.5 pt-2">
+<div class="px-2 pb-1 text-[11px] font-semibold text-[#6e6960]">Sessions</div>
+<a class="flex items-center gap-2 px-2 py-1.5 rounded-md text-[#403c35] hover:bg-[#efebe4] text-[12px] transition-colors" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#0d9488] flex-shrink-0"></span>
+<span class="truncate">Falcon Dash</span>
+</a>
+<a class="flex items-center gap-2 px-2 py-1.5 rounded-md text-[#6e6960] hover:bg-[#efebe4] text-[12px] transition-colors" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#9ca3af] flex-shrink-0"></span>
+<span class="truncate">Building Manager + Job Dispatc...</span>
+</a>
+<a class="flex items-center gap-2 px-2 py-1.5 rounded-md text-[#403c35] hover:bg-[#efebe4] text-[12px] transition-colors" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#0d9488] flex-shrink-0"></span>
+<span class="truncate">Build Fredbot Backend 2.0 Man...</span>
+</a>
+<a class="flex items-center gap-2 px-2 py-1.5 rounded-md text-[#6e6960] hover:bg-[#efebe4] text-[12px] transition-colors" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#9ca3af] flex-shrink-0"></span>
+<span class="truncate">Portal Fix</span>
+</a>
+<a class="flex items-center gap-2 px-2 py-1.5 rounded-md text-[#6e6960] hover:bg-[#efebe4] text-[12px] transition-colors" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#9ca3af] flex-shrink-0"></span>
+<span class="truncate">OpenAI application watch</span>
+</a>
+<a class="flex items-center gap-2 px-2 py-1.5 rounded-md text-[#6e6960] hover:bg-[#efebe4] text-[12px] transition-colors" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#9ca3af] flex-shrink-0"></span>
+<span class="truncate">Morning Brief</span>
+</a>
+</div>
+</div>
+<!-- Sidebar Footer / Operator Profile -->
+<div class="pt-3 border-t border-[#e8e4dc] flex items-center justify-between px-2">
+<div class="flex items-center gap-2">
+<div class="relative w-6 h-6 rounded-full bg-[#211e1a] text-white flex items-center justify-center font-medium text-[11px]">
+          F
+          <span class="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#0d9488]"></span>
+</div>
+<span class="font-medium text-[12px] text-[#211e1a]">Fred</span>
+</div>
+<button class="text-[#6e6960] hover:text-[#211e1a] p-1 rounded transition-colors" title="User Settings">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 16 16">
+<circle cx="8" cy="8" r="2.5"></circle>
+<path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"></path>
+</svg>
+</button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-w-0 bg-[#faf9f7] min-h-screen">
+<!-- Top Header Bar -->
+<header class="h-14 border-b border-[#e8e4dc] px-8 flex items-center justify-between bg-[#faf9f7] flex-shrink-0">
+<h1 class="text-[24px] font-semibold text-[#211e1a] tracking-tight">Work</h1>
+<!-- Right Toolbar -->
+<div class="flex items-center gap-2.5">
+<div class="relative">
+<svg class="w-3.5 h-3.5 text-[#6e6960] absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" stroke-width="1.8" viewbox="0 0 16 16">
+<circle cx="7" cy="7" r="4.5"></circle>
+<path d="M10.5 10.5L14 14"></path>
+</svg>
+<input class="w-64 h-8 pl-8 pr-3 bg-white border border-[#e8e4dc] focus:border-[#d6d0c5] focus:outline-none rounded-md text-[13px] text-[#211e1a] placeholder-[#6e6960]" placeholder="Search work…" type="text"/>
+</div>
+</div>
+</header>
+<!-- Sub-header Navigation Tabs -->
+<div class="px-8 border-b border-[#e8e4dc] bg-[#faf9f7] flex items-center justify-between">
+<nav class="flex items-center gap-6 text-[13px]">
+<a class="py-3 text-[#6e6960] hover:text-[#211e1a] transition-colors flex items-center gap-1.5" href="#">
+          Overview
+          
+</a>
+<a class="py-3 text-[#6e6960] hover:text-[#211e1a] transition-colors" href="#">
+          Objectives
+        </a>
+<a class="py-3 text-[#6e6960] hover:text-[#211e1a] transition-colors" href="#">
+          Areas &amp; Projects
+        </a>
+<a class="py-3 text-[#bd4531] font-semibold border-b-2 border-[#bd4531] -mb-px flex items-center gap-1" href="#">
+          Activity
+        </a>
+</nav>
+</div>
+<!-- Page Body Area -->
+<div class="px-8 py-5 max-w-6xl w-full">
+<!-- Filter Chips Under Tabs -->
+<div class="flex items-center gap-2 mb-6">
+<button class="px-3 py-1 rounded-full text-[12px] font-semibold bg-[#211e1a] text-white border border-[#211e1a] transition-colors shadow-[0_1px_2px_#3c2a180d]">
+          All
+        </button>
+<button class="px-3 py-1 rounded-full text-[12px] font-medium bg-white text-[#6e6960] border border-[#e8e4dc] hover:bg-[#efebe4] hover:text-[#211e1a] transition-colors flex items-center gap-1.5">
+          Unfiled
+          <span class="px-1.5 py-0.2 bg-[#f4f1ec] text-[#6e6960] text-[10.5px] font-semibold rounded-full border border-[#e8e4dc]">1</span>
+</button>
+</div>
+<!-- TIMELINE CONTENT -->
+<div class="space-y-8">
+<!-- ==================== DAY GROUP: TODAY ==================== -->
+<div>
+<!-- Day Header -->
+<div class="flex items-center gap-2 mb-2.5">
+<h2 class="text-[13px] font-semibold text-[#6e6960]">Today</h2>
+<div class="h-px bg-[#e8e4dc] flex-1"></div>
+</div>
+<!-- Card List Container -->
+<div class="bg-white border border-[#e8e4dc] rounded-[10px] divide-y divide-[#e8e4dc] shadow-[0_1px_2px_#3c2a180d] overflow-hidden">
+<!-- Entry 1: 16:42 (EXPANDED DISCLOSURE) -->
+<div class="p-3.5 hover:bg-[#faf9f7] transition-colors">
+<div class="flex items-start justify-between gap-4">
+<div class="flex items-start gap-3 flex-1 min-w-0">
+<!-- Time -->
+<span class="font-mono text-[11px] font-medium text-[#6e6960] pt-0.5 w-11 flex-shrink-0">16:42</span>
+<div class="flex-1 min-w-0">
+<!-- Task + Project Link Line -->
+<div class="flex items-center flex-wrap gap-1.5 mb-2">
+<a class="inline-flex items-center px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] hover:bg-[#efebe4] text-[#211e1a] font-medium text-[12.5px] border border-[#e8e4dc] transition-colors group" href="#">
+<span>Finish protected enrollment and live telemetry</span>
+</a>
+<span class="text-[#6e6960] text-[12px]">· Fredbot Backend 2.0</span>
+</div>
+<!-- Outcomes as small chips -->
+<div class="flex items-center flex-wrap gap-1.5">
+<!-- Commit chip -->
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] border border-[#e8e4dc] text-[11.5px] text-[#403c35]">
+<svg class="w-3 h-3 text-[#6e6960] flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.6" viewbox="0 0 16 16">
+<circle cx="8" cy="8" r="3.2"></circle>
+<path d="M1.5 8h3.3M11.2 8h3.3"></path>
+</svg>
+<span class="font-mono text-[11px] font-semibold text-[#211e1a]">16593e1</span>
+<span class="text-[#403c35] truncate max-w-xs">‘NetBird protected enrollment’</span>
+</span>
+<!-- Push chip -->
+<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[5px] bg-[#f4f1ec] border border-[#e8e4dc] text-[11.5px] text-[#403c35]">
+<svg class="w-3 h-3 text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="1.6" viewbox="0 0 16 16">
+<path d="M8 13.5V2.5M3.5 7L8 2.5 12.5 7"></path>
+</svg>
+                        Push
+                      </span>
+<!-- Message chip -->
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] border border-[#e8e4dc] text-[11.5px] text-[#403c35]">
+<svg class="w-3 h-3 text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="1.6" viewbox="0 0 16 16">
+<path d="M2.5 4h11a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-7L3 14.5V12h-.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"></path>
+</svg>
+                        Comment on #336
+                      </span>
+</div>
+<!-- EXPANDED DISCLOSURE: What happened -->
+<div class="mt-2.5 pt-2 border-t border-[#f0ece5]">
+<button class="flex items-center gap-1 text-[11.5px] font-medium text-[#6e6960] hover:text-[#211e1a] mb-1.5 transition-colors">
+<svg class="w-3 h-3 rotate-90 transition-transform text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 16 16">
+<path d="M6 3.5l4.5 4.5L6 12.5"></path>
+</svg>
+                        What happened
+                      </button>
+<!-- Expanded contents -->
+<div class="pl-4 border-l-2 border-[#e8e4dc] ml-1 mt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-0.5">
+<p class="text-[12.5px] text-[#211e1a]">
+                          Committed protected NetBird enrollment; provider wiring and live guest qualification are still to do.
+                        </p>
+<!-- Open session chip with green dot -->
+<a class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] hover:bg-[#efebe4] border border-[#e8e4dc] text-[11.5px] text-[#211e1a] font-medium transition-colors flex-shrink-0" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#166534]"></span>
+<span>Building Manager Astra</span>
+<span class="text-[#6e6960] text-[10.5px]">↗</span>
+</a>
+</div>
+</div>
+</div>
+</div>
+<!-- Right recorded tag -->
+</div>
+</div>
+<!-- Entry 2: 16:31 -->
+<div class="p-3.5 hover:bg-[#faf9f7] transition-colors">
+<div class="flex items-start justify-between gap-4">
+<div class="flex items-start gap-3 flex-1 min-w-0">
+<!-- Time -->
+<span class="font-mono text-[11px] font-medium text-[#6e6960] pt-0.5 w-11 flex-shrink-0">16:31</span>
+<div class="flex-1 min-w-0">
+<!-- Task + Project Link Line -->
+<div class="flex items-center flex-wrap gap-1.5 mb-2">
+<a class="inline-flex items-center px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] hover:bg-[#efebe4] text-[#211e1a] font-medium text-[12.5px] border border-[#e8e4dc] transition-colors" href="#">
+<span>Report installed and running versions to the NOC</span>
+</a>
+<span class="text-[#6e6960] text-[12px]">· Fredbot Backend 2.0</span>
+</div>
+<!-- Outcomes chips -->
+<div class="flex items-center flex-wrap gap-1.5">
+<!-- File chip -->
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] border border-[#e8e4dc] text-[11.5px] text-[#403c35]">
+<svg class="w-3 h-3 text-[#6e6960] flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.6" viewbox="0 0 16 16">
+<path d="M3.5 2.5h6l3.5 3.5v7.5a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z"></path>
+<path d="M9.5 2.5v3.5h3.5"></path>
+</svg>
+<span>4 files in <span class="font-mono text-[11px] text-[#211e1a]">noc/src</span></span>
+</span>
+<!-- Commit chip -->
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] border border-[#e8e4dc] text-[11.5px] text-[#403c35]">
+<svg class="w-3 h-3 text-[#6e6960] flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.6" viewbox="0 0 16 16">
+<circle cx="8" cy="8" r="3.2"></circle>
+<path d="M1.5 8h3.3M11.2 8h3.3"></path>
+</svg>
+<span class="font-mono text-[11px] font-semibold text-[#211e1a]">a91c2e0</span>
+<span class="text-[#403c35] truncate max-w-xs">‘Installed vs running versions in the NOC’</span>
+</span>
+</div>
+<!-- Collapsed Disclosure -->
+<div class="mt-2">
+<button class="flex items-center gap-1 text-[11.5px] text-[#6e6960] hover:text-[#211e1a] transition-colors">
+<svg class="w-3 h-3 transition-transform text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 16 16">
+<path d="M6 3.5l4.5 4.5L6 12.5"></path>
+</svg>
+                        What happened
+                      </button>
+</div>
+</div>
+</div>
+<!-- Right recorded tag -->
+<span class="text-[11px] text-[#6e6960]/80 flex-shrink-0 pt-0.5">recorded by the agent</span>
+</div>
+</div>
+<!-- Entry 3: 16:20 (Muted single line) -->
+<div class="p-3.5 hover:bg-[#faf9f7] transition-colors bg-[#fbfaf8]">
+<div class="flex items-center justify-between gap-4">
+<div class="flex items-center gap-3 flex-1 min-w-0">
+<!-- Time -->
+<span class="font-mono text-[11px] font-medium text-[#6e6960] w-11 flex-shrink-0">16:20</span>
+<div class="flex items-center gap-2 flex-wrap text-[12px] text-[#6e6960]">
+<span>3 turns of discussion</span>
+<span class="text-[#d6d0c5]">·</span>
+<a class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] hover:bg-[#efebe4] border border-[#e8e4dc] text-[11px] text-[#403c35] transition-colors" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#0d9488]"></span>
+<span>Build Fredbot Backend 2.0 Manager</span>
+</a>
+</div>
+</div>
+<!-- Right recorded tag -->
+</div>
+</div>
+<!-- Entry 4: 16:05 (Completed task marker) -->
+<div class="p-3.5 hover:bg-[#faf9f7] transition-colors">
+<div class="flex items-start justify-between gap-4">
+<div class="flex items-start gap-3 flex-1 min-w-0">
+<!-- Time -->
+<span class="font-mono text-[11px] font-medium text-[#6e6960] pt-0.5 w-11 flex-shrink-0">16:05</span>
+<div class="flex-1 min-w-0">
+<!-- Task + Project Link Line with Done marker -->
+<div class="flex items-center flex-wrap gap-1.5 mb-2">
+<a class="inline-flex items-center px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] hover:bg-[#efebe4] text-[#211e1a] font-medium text-[12.5px] border border-[#e8e4dc] transition-colors" href="#">
+<span>Fix readiness checks</span>
+</a>
+<span class="text-[#6e6960] text-[12px]">· Fredbot Backend 2.0</span>
+<!-- Done marker: small check + 'Completed' pill -->
+<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-[#166534]/10 text-[#166534] text-[11px] font-semibold border border-[#166534]/20 ml-1">
+<svg class="w-3 h-3 text-[#166534]" fill="none" stroke="currentColor" stroke-width="2.2" viewbox="0 0 16 16">
+<path d="M3.5 8.5l3 3 6-6"></path>
+</svg>
+                        Completed
+                      </span>
+</div>
+<!-- Outcomes chips -->
+<div class="flex items-center flex-wrap gap-1.5">
+<!-- Commit chip -->
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] border border-[#e8e4dc] text-[11.5px] text-[#403c35]">
+<svg class="w-3 h-3 text-[#6e6960] flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.6" viewbox="0 0 16 16">
+<circle cx="8" cy="8" r="3.2"></circle>
+<path d="M1.5 8h3.3M11.2 8h3.3"></path>
+</svg>
+<span class="font-mono text-[11px] font-semibold text-[#211e1a]">7d3b0f4</span>
+<span class="text-[#403c35] truncate max-w-xs">‘Storage is an upper limit; telemetry checked after access closes’</span>
+</span>
+</div>
+<!-- Collapsed Disclosure -->
+<div class="mt-2">
+<button class="flex items-center gap-1 text-[11.5px] text-[#6e6960] hover:text-[#211e1a] transition-colors">
+<svg class="w-3 h-3 transition-transform text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 16 16">
+<path d="M6 3.5l4.5 4.5L6 12.5"></path>
+</svg>
+                        What happened
+                      </button>
+</div>
+</div>
+</div>
+<!-- Right recorded tag -->
+</div>
+</div>
+<!-- Entry 5: 15:12 (UNFILED ENTRY - subtle warm tint) -->
+<div class="p-3.5 bg-[#92400e]/[0.025] hover:bg-[#92400e]/[0.05] transition-colors">
+<div class="flex items-start justify-between gap-4">
+<div class="flex items-start gap-3 flex-1 min-w-0">
+<!-- Time -->
+<span class="font-mono text-[11px] font-medium text-[#6e6960] pt-0.5 w-11 flex-shrink-0">15:12</span>
+<div class="flex-1 min-w-0">
+<!-- Unfiled header row -->
+<div class="flex items-center flex-wrap gap-2 mb-2">
+<span class="inline-flex items-center px-2 py-0.5 rounded-[5px] bg-[#92400e]/10 text-[#92400e] font-semibold text-[11.5px] border border-[#92400e]/20">
+                        Unfiled
+                      </span>
+</div>
+<!-- Outcomes chips -->
+<div class="flex items-center flex-wrap gap-1.5">
+<!-- File chip -->
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] bg-white border border-[#e8e4dc] text-[11.5px] text-[#403c35]">
+<svg class="w-3 h-3 text-[#6e6960] flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.6" viewbox="0 0 16 16">
+<path d="M3.5 2.5h6l3.5 3.5v7.5a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z"></path>
+<path d="M9.5 2.5v3.5h3.5"></path>
+</svg>
+<span class="font-mono text-[11px] text-[#211e1a]">scratch/enroll-notes.md</span>
+</span>
+</div>
+<!-- Collapsed Disclosure -->
+<div class="mt-2">
+<button class="flex items-center gap-1 text-[11.5px] text-[#6e6960] hover:text-[#211e1a] transition-colors">
+<svg class="w-3 h-3 transition-transform text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 16 16">
+<path d="M6 3.5l4.5 4.5L6 12.5"></path>
+</svg>
+                        What happened
+                      </button>
+</div>
+</div>
+</div>
+<!-- Right Action Link -->
+<div class="flex flex-col items-end gap-1 flex-shrink-0 pt-0.5">
+<a class="text-[12px] font-medium text-[#bd4531] hover:underline flex items-center gap-1" href="#">
+                    File under a Task →
+                  </a>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- ==================== DAY GROUP: YESTERDAY ==================== -->
+<div>
+<!-- Day Header -->
+<div class="flex items-center gap-2 mb-2.5">
+<h2 class="text-[13px] font-semibold text-[#6e6960]">Yesterday</h2>
+<div class="h-px bg-[#e8e4dc] flex-1"></div>
+</div>
+<!-- Card List Container -->
+<div class="bg-white border border-[#e8e4dc] rounded-[10px] divide-y divide-[#e8e4dc] shadow-[0_1px_2px_#3c2a180d] overflow-hidden">
+<!-- Entry 1: 18:22 (Yesterday) -->
+<div class="p-3.5 hover:bg-[#faf9f7] transition-colors">
+<div class="flex items-start justify-between gap-4">
+<div class="flex items-start gap-3 flex-1 min-w-0">
+<!-- Time -->
+<span class="font-mono text-[11px] font-medium text-[#6e6960] pt-0.5 w-11 flex-shrink-0">18:22</span>
+<div class="flex-1 min-w-0">
+<!-- Task + Project Link Line with Done marker -->
+<div class="flex items-center flex-wrap gap-1.5 mb-2">
+<a class="inline-flex items-center px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] hover:bg-[#efebe4] text-[#211e1a] font-medium text-[12.5px] border border-[#e8e4dc] transition-colors" href="#">
+<span>Create a garage-cleaning to-do list</span>
+</a>
+<span class="text-[#6e6960] text-[12px]">· Home</span>
+<!-- Completed Pill -->
+<span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-[#166534]/10 text-[#166534] text-[11px] font-semibold border border-[#166534]/20 ml-1">
+<svg class="w-3 h-3 text-[#166534]" fill="none" stroke="currentColor" stroke-width="2.2" viewbox="0 0 16 16">
+<path d="M3.5 8.5l3 3 6-6"></path>
+</svg>
+                        Completed
+                      </span>
+</div>
+<!-- Outcomes chips -->
+<div class="flex items-center flex-wrap gap-1.5">
+<!-- File chip -->
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] bg-[#f4f1ec] border border-[#e8e4dc] text-[11.5px] text-[#403c35]">
+<svg class="w-3 h-3 text-[#6e6960] flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.6" viewbox="0 0 16 16">
+<path d="M3.5 2.5h6l3.5 3.5v7.5a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z"></path>
+<path d="M9.5 2.5v3.5h3.5"></path>
+</svg>
+<span class="font-mono text-[11px] text-[#211e1a]">garage.md</span>
+</span>
+</div>
+<!-- Collapsed Disclosure -->
+<div class="mt-2">
+<button class="flex items-center gap-1 text-[11.5px] text-[#6e6960] hover:text-[#211e1a] transition-colors">
+<svg class="w-3 h-3 transition-transform text-[#6e6960]" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 16 16">
+<path d="M6 3.5l4.5 4.5L6 12.5"></path>
+</svg>
+                        What happened
+                      </button>
+</div>
+</div>
+</div>
+<!-- Right recorded tag -->
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body>
+</html>

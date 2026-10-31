@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+
+<html class="h-full bg-bg text-text antialiased" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>OpenClaw Vault — Edit Secret</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Fonts: Instrument Sans & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS v3 -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "bg": "#faf9f7",
+            "background": "#faf9f7",
+            "surface-container-low": "#f4f3f1",
+            "on-error-container": "#93000a",
+            "info": "#1d4ed8",
+            "text": "#403c35",
+            "on-secondary-fixed": "#00201d",
+            "inverse-primary": "#ffb4a6",
+            "accent": "#bd4531",
+            "surface-bright": "#faf9f7",
+            "primary-fixed": "#ffdad4",
+            "muted": "#6e6960",
+            "secondary": "#006a61",
+            "on-primary-fixed-variant": "#881f0f",
+            "tertiary-container": "#00788b",
+            "on-secondary": "#ffffff",
+            "on-error": "#ffffff",
+            "on-surface": "#1a1c1b",
+            "on-tertiary-fixed": "#001f26",
+            "on-primary": "#ffffff",
+            "on-tertiary": "#ffffff",
+            "border": "#e8e4dc",
+            "tertiary-fixed": "#a8edff",
+            "secondary-fixed": "#89f5e7",
+            "surface-tint": "#a93724",
+            "border-strong": "#d6d0c5",
+            "error": "#ba1a1a",
+            "surface-container-high": "#e9e8e6",
+            "outline-variant": "#dfbfba",
+            "bg-elevated": "#ffffff",
+            "on-surface-variant": "#58413d",
+            "accent-subtle": "#bd453114",
+            "on-primary-container": "#ffece9",
+            "surface": "#faf9f7",
+            "warn": "#92400e",
+            "primary": "#9c2d1c",
+            "on-secondary-container": "#006f66",
+            "surface-container-highest": "#e3e2e0",
+            "bg-content": "#f4f1ec",
+            "primary-container": "#bd4531",
+            "bg-hover": "#efebe4",
+            "inverse-surface": "#2f3130",
+            "secondary-container": "#86f2e4",
+            "on-secondary-fixed-variant": "#005049",
+            "primary-fixed-dim": "#ffb4a6",
+            "outline": "#8c716c",
+            "danger": "#b91c1c",
+            "text-strong": "#211e1a",
+            "surface-container-lowest": "#ffffff",
+            "surface-variant": "#e3e2e0",
+            "on-primary-fixed": "#3f0300",
+            "secondary-fixed-dim": "#6bd8cb",
+            "error-container": "#ffdad6",
+            "accent-2": "#0d9488",
+            "on-tertiary-container": "#d5f6ff",
+            "tertiary": "#005e6d",
+            "ok": "#166534",
+            "on-tertiary-fixed-variant": "#004e5b",
+            "inverse-on-surface": "#f1f1ef",
+            "tertiary-fixed-dim": "#7cd3e8",
+            "surface-container": "#efeeec",
+            "surface-dim": "#dadad8",
+            "on-background": "#1a1c1b"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "space-lg": "16px",
+            "space-xs": "4px",
+            "gutter": "16px",
+            "space-md": "12px",
+            "space-xl": "24px",
+            "space-sm": "8px",
+            "space-3xl": "40px",
+            "margin": "24px",
+            "space-2xl": "32px"
+          },
+          "fontFamily": {
+            "section-header": [
+              "Instrument Sans"
+            ],
+            "code-mono": [
+              "JetBrains Mono"
+            ],
+            "page-title": [
+              "Instrument Sans"
+            ],
+            "body-sm": [
+              "Instrument Sans"
+            ],
+            "body-xs": [
+              "Instrument Sans"
+            ],
+            "headline-lg": [
+              "Instrument Sans"
+            ],
+            "body-md": [
+              "Instrument Sans"
+            ]
+          },
+          "fontSize": {
+            "section-header": [
+              "13px",
+              {
+                "lineHeight": "18px",
+                "fontWeight": "600"
+              }
+            ],
+            "code-mono": [
+              "12px",
+              {
+                "lineHeight": "16px",
+                "fontWeight": "400"
+              }
+            ],
+            "page-title": [
+              "24px",
+              {
+                "lineHeight": "32px",
+                "fontWeight": "600"
+              }
+            ],
+            "body-sm": [
+              "12px",
+              {
+                "lineHeight": "16px",
+                "fontWeight": "400"
+              }
+            ],
+            "body-xs": [
+              "11px",
+              {
+                "lineHeight": "14px",
+                "fontWeight": "400"
+              }
+            ],
+            "headline-lg": [
+              "16px",
+              {
+                "lineHeight": "24px",
+                "fontWeight": "600"
+              }
+            ],
+            "body-md": [
+              "14px",
+              {
+                "lineHeight": "20px",
+                "fontWeight": "400"
+              }
+            ]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-size: 20px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+    }
+    /* Prevent default webkit highlights on taps */
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-bg min-h-screen flex justify-center selection:bg-accent-subtle selection:text-accent">
+<!-- Mobile Viewport Frame (390px fixed width simulator on desktop, native on mobile) -->
+<div class="w-full max-w-[390px] min-h-screen bg-bg flex flex-col relative border-x border-border shadow-[0_0_24px_rgba(0,0,0,0.03)]">
+<!-- 1. Device Status Bar -->
+<!-- 2. Top App Bar (Sticky Docked Top) -->
+<nav class="sticky top-0 w-full z-40 bg-surface flex items-center justify-between px-space-md h-12 border-b border-border">
+<!-- Leading: Back arrow + Breadcrumb -->
+<button aria-label="Back to Cloudflare" class="flex items-center gap-1 text-muted hover:text-text-strong active:opacity-80 transition-colors py-1.5 pr-2 -ml-1" type="button">
+<span class="material-symbols-outlined text-[20px] text-text-strong" data-icon="arrow_back">arrow_back</span>
+<span class="font-section-header text-[14px] text-muted font-medium tracking-tight">Cloudflare</span>
+</button>
+<!-- Center Title -->
+<div class="flex-1 text-center px-1 truncate">
+<h1 class="font-headline-lg text-[15px] font-semibold text-text-strong truncate tracking-tight">
+          API token — DNS edit
+        </h1>
+</div>
+<!-- Trailing Action: Save -->
+<button class="font-headline-lg text-[14px] font-semibold text-primary-container hover:text-primary active:opacity-80 px-2 py-1 transition-colors -mr-1" type="button">
+        Save
+      </button>
+</nav>
+<!-- 3. Form Content Canvas -->
+<main class="flex-1 overflow-y-auto px-space-lg pt-4 pb-8 space-y-4">
+<!-- Form Inputs Group -->
+<form class="space-y-3.5" onsubmit="event.preventDefault();">
+<!-- Field 1: Title -->
+<div class="flex flex-col gap-1.5">
+<label class="font-section-header text-body-sm font-medium text-muted" for="field-title">
+            Title
+          </label>
+<div class="relative">
+<input class="w-full min-h-[44px] h-[44px] bg-bg-elevated border border-border-strong rounded-xl px-space-md text-[16px] font-body-md text-text-strong placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors" id="field-title" type="text" value="API token — DNS edit"/>
+</div>
+</div>
+<!-- Field 2: Group (Dropdown selector) -->
+<div class="flex flex-col gap-1.5">
+<label class="font-section-header text-body-sm font-medium text-muted" for="field-group">
+            Group
+          </label>
+<div class="relative flex items-center">
+<button class="w-full min-h-[44px] h-[44px] bg-bg-elevated border border-border-strong rounded-xl px-space-md pr-10 text-[16px] font-body-md text-text-strong text-left flex items-center justify-between focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors cursor-pointer" id="field-group" type="button">
+<span class="truncate">Services / Cloudflare</span>
+<span class="material-symbols-outlined absolute right-3 text-muted pointer-events-none text-[20px]" data-icon="expand_more">expand_more</span>
+</button>
+</div>
+</div>
+<!-- Field 3: Username -->
+<div class="flex flex-col gap-1.5">
+<label class="font-section-header text-body-sm font-medium text-muted" for="field-username">
+            Username
+          </label>
+<div class="relative">
+<input autocomplete="off" class="w-full min-h-[44px] h-[44px] bg-bg-elevated border border-border-strong rounded-xl px-space-md text-[16px] font-body-md text-text-strong placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors" id="field-username" type="text" value="ops@example.com"/>
+</div>
+</div>
+<!-- Field 4: Password with Reveal & Generator Trigger -->
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between">
+<label class="font-section-header text-body-sm font-medium text-muted" for="field-password">
+              Password
+            </label>
+</div>
+<div class="relative flex items-center">
+<input class="w-full min-h-[44px] h-[44px] bg-bg-elevated border border-border-strong rounded-xl pl-space-md pr-11 text-[16px] font-code-mono tracking-[0.16em] text-text-strong focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors" id="field-password" type="password" value="v1_092cf89ab_sec440d12"/>
+<button aria-label="Toggle password visibility" class="absolute right-2 p-1.5 text-muted hover:text-text-strong active:opacity-70 transition-colors flex items-center justify-center rounded-lg" id="toggle-password" type="button">
+<span class="material-symbols-outlined text-[19px]" data-icon="visibility">visibility</span>
+</button>
+</div>
+<!-- Sub-action: Generate Password -->
+<div class="flex items-center pt-0.5">
+<button class="flex items-center gap-1.5 text-muted hover:text-accent font-body-sm text-[12px] font-medium transition-colors py-0.5 px-0.5 active:opacity-75" type="button">
+<span class="material-symbols-outlined text-[15px] text-muted leading-none" data-icon="casino">casino</span>
+<span>Generate password</span>
+</button>
+</div>
+</div>
+<!-- Field 5: URL -->
+<div class="flex flex-col gap-1.5">
+<label class="font-section-header text-body-sm font-medium text-muted" for="field-url">
+            URL
+          </label>
+<div class="relative flex items-center">
+<input class="w-full min-h-[44px] h-[44px] bg-bg-elevated border border-border-strong rounded-xl pl-space-md pr-10 text-[16px] font-body-md text-text-strong focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors" id="field-url" type="url" value="https://dash.cloudflare.com"/>
+<a aria-label="Open external URL" class="absolute right-2.5 p-1 text-muted hover:text-primary active:opacity-70 transition-colors inline-flex items-center" href="https://dash.cloudflare.com" rel="noreferrer" target="_blank">
+<span class="material-symbols-outlined text-[18px]" data-icon="open_in_new">open_in_new</span>
+</a>
+</div>
+</div>
+<!-- Field 6: Notes -->
+<div class="flex flex-col gap-1.5">
+<label class="font-section-header text-body-sm font-medium text-muted" for="field-notes">
+            Notes
+          </label>
+<textarea class="w-full min-h-[88px] bg-bg-elevated border border-border-strong rounded-xl p-space-md text-[16px] font-body-md text-text-strong focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent transition-colors resize-none leading-relaxed" id="field-notes" rows="3">Scoped to zone example.com, DNS:Edit only. Rotates yearly.</textarea>
+</div>
+</form>
+<!-- 4. Section: Used by OpenClaw -->
+<section class="pt-2">
+<div class="flex items-center gap-1.5 mb-2 px-0.5">
+<span class="w-1.5 h-1.5 rounded-full bg-accent-2 inline-block"></span>
+<h2 class="font-section-header text-section-header font-semibold text-muted tracking-tight">
+            Used by OpenClaw
+          </h2>
+</div>
+<!-- Card Container with hairlines -->
+<div class="bg-bg-elevated border border-border rounded-xl divide-y divide-border overflow-hidden"><!-- Row 1 -->
+<div class="flex flex-col px-space-md py-2.5 hover:bg-bg-hover transition-colors min-w-0">
+<span class="font-body-md text-[13px] font-medium text-text-strong truncate">Cloudflare plugin — API token</span>
+<span class="font-code-mono text-body-sm text-muted font-normal truncate">plugins.entries.cloudflare.config.apiToken</span>
+</div>
+<!-- Row 2 -->
+<div class="flex flex-col px-space-md py-2.5 hover:bg-bg-hover transition-colors min-w-0">
+<span class="font-body-md text-[13px] font-medium text-text-strong truncate">dns-sync skill — API key</span>
+<span class="font-code-mono text-body-sm text-muted font-normal truncate">skills.entries.dns-sync.apiKey</span>
+</div></div>
+</section>
+<!-- 5. Bottom Destructive Action -->
+<div class="pt-4 pb-2">
+<button class="w-full min-h-[44px] h-[44px] flex items-center justify-center gap-2 text-danger hover:bg-error-container/30 active:opacity-80 rounded-xl font-body-md text-[14px] font-medium transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px] text-danger" data-icon="delete">delete</span>
+<span>Move to Recycle Bin</span>
+</button>
+</div>
+</main>
+</div>
+<!-- Micro-interactions Script -->
+<script>
+    // Password mask toggle micro-interaction
+    const toggleBtn = document.getElementById('toggle-password');
+    const pwdInput = document.getElementById('field-password');
+    
+    if (toggleBtn && pwdInput) {
+      toggleBtn.addEventListener('click', () => {
+        const isPassword = pwdInput.getAttribute('type') === 'password';
+        const iconSpan = toggleBtn.querySelector('.material-symbols-outlined');
+        
+        if (isPassword) {
+          pwdInput.setAttribute('type', 'text');
+          iconSpan.textContent = 'visibility_off';
+          iconSpan.setAttribute('data-icon', 'visibility_off');
+        } else {
+          pwdInput.setAttribute('type', 'password');
+          iconSpan.textContent = 'visibility';
+          iconSpan.setAttribute('data-icon', 'visibility');
+        }
+      });
+    }
+  </script>
+</body></html>

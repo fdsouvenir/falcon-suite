@@ -1,0 +1,58 @@
+{
+  "package": {
+    "name": "@fdsouvenir/falcon-vault",
+    "displayName": "Falcon Vault",
+    "family": "code-plugin",
+    "isOfficial": false,
+    "latestVersion": "1.1.0"
+  },
+  "ready": false,
+  "checks": [
+    {
+      "id": "official",
+      "label": "Official package",
+      "status": "fail",
+      "message": "Package is not in the official channel."
+    },
+    {
+      "id": "latest-version",
+      "label": "Latest version",
+      "status": "pass",
+      "message": "Latest version is 1.1.0."
+    },
+    {
+      "id": "clawpack",
+      "label": "ClawPack artifact",
+      "status": "pass",
+      "message": "Latest version has an npm-pack ClawPack artifact."
+    },
+    {
+      "id": "artifact-digest",
+      "label": "Artifact digest",
+      "status": "pass",
+      "message": "Artifact has a SHA-256 digest."
+    },
+    {
+      "id": "source",
+      "label": "Source provenance",
+      "status": "pass",
+      "message": "Source is fdsouvenir/falcon-suite@57752e0f6e5c3808f9d8415d469bd54f2e63e77b."
+    },
+    {
+      "id": "compatibility",
+      "label": "OpenClaw compatibility",
+      "status": "pass",
+      "message": "pluginApi=>=2026.9.6, builtWith=2026.9.6."
+    },
+    {
+      "id": "scan",
+      "label": "Security scan",
+      "status": "fail",
+      "message": "Scan status is suspicious."
+    }
+  ],
+  "blockers": [
+    "official",
+    "scan"
+  ]
+}

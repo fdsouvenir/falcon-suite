@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Falcon Vault - OpenClaw Control UI</title>
+<!-- Instrument Sans & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    :root {
+      --bg: #faf9f7;
+      --bg-content: #f4f1ec;
+      --bg-elevated: #ffffff;
+      --card: #ffffff;
+      --bg-hover: #efebe4;
+      --text: #403c35;
+      --text-strong: #211e1a;
+      --muted: #6e6960;
+      --border: #e8e4dc;
+      --border-strong: #d6d0c5;
+      --accent: #bd4531;
+      --accent-subtle: #bd453114;
+      --accent-2: #0d9488;
+      --ok: #166534;
+      --warn: #92400e;
+      --danger: #b91c1c;
+      --info: #1d4ed8;
+      --card-shadow: 0 1px 2px rgba(60, 42, 24, 0.05);
+    }
+
+    body {
+      font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #e2ddd5;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #d0c9bf;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex bg-[#faf9f7] text-[#403c35]">
+<!-- CONTROL UI LEFT SIDEBAR (Context) -->
+<aside class="w-[230px] flex-shrink-0 h-full border-r border-[#e8e4dc] bg-[#f4f1ec] flex flex-col justify-between select-none">
+<div class="p-3">
+<!-- Agent Identity (Verl) -->
+<div class="flex items-center gap-2.5 px-2 py-2 mb-4 rounded-md bg-[#ffffff] border border-[#e8e4dc] shadow-[0_1px_2px_rgba(60,42,24,0.04)]">
+<div class="w-6 h-6 rounded-full bg-[#bd4531] text-white flex items-center justify-center text-xs font-semibold tracking-wider">
+          V
+        </div>
+<div class="flex flex-col min-w-0">
+<span class="text-[13px] font-semibold text-[#211e1a] leading-none truncate">Verl</span>
+<span class="text-[11px] text-[#6e6960] mt-0.5 leading-none font-mono">agent · active</span>
+</div>
+</div>
+<!-- Section: Pages -->
+<div class="mb-5">
+<div class="px-2 mb-1.5 text-[11px] font-semibold tracking-wider text-[#6e6960] uppercase">
+          Pages
+        </div>
+<nav class="space-y-0.5">
+<!-- Chat -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] font-medium text-[#403c35] hover:bg-[#efebe4] rounded-md transition-colors" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+<span>Chat</span>
+</a>
+<!-- Work -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] font-medium text-[#403c35] hover:bg-[#efebe4] rounded-md transition-colors" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+<span>Work</span>
+</a>
+<!-- Vault (Selected with key icon) -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] font-semibold text-[#bd4531] bg-[#bd453114] rounded-md transition-colors" href="#">
+<svg class="w-4 h-4 text-[#bd4531]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Vault</span>
+</a>
+<!-- Automations -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] font-medium text-[#403c35] hover:bg-[#efebe4] rounded-md transition-colors" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+<span>Automations</span>
+</a>
+<!-- Settings -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-[13px] font-medium text-[#403c35] hover:bg-[#efebe4] rounded-md transition-colors" href="#">
+<svg class="w-4 h-4 text-[#6e6960]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+<span>Settings</span>
+</a>
+</nav>
+</div>
+<!-- Section: Sessions -->
+<div>
+<div class="px-2 mb-1.5 text-[11px] font-semibold tracking-wider text-[#6e6960] uppercase">
+          Sessions
+        </div>
+<div class="space-y-0.5">
+<div class="flex items-center justify-between px-2.5 py-1.5 text-[12px] text-[#403c35] hover:bg-[#efebe4] rounded-md cursor-pointer">
+<span class="truncate">dns-sync-daemon</span>
+<span class="w-1.5 h-1.5 rounded-full bg-[#166534]"></span>
+</div>
+<div class="flex items-center justify-between px-2.5 py-1.5 text-[12px] text-[#403c35] hover:bg-[#efebe4] rounded-md cursor-pointer">
+<span class="truncate">cert-renewal</span>
+<span class="w-1.5 h-1.5 rounded-full bg-[#6e6960]"></span>
+</div>
+<div class="flex items-center justify-between px-2.5 py-1.5 text-[12px] text-[#403c35] hover:bg-[#efebe4] rounded-md cursor-pointer">
+<span class="truncate">tunnel-watcher</span>
+<span class="w-1.5 h-1.5 rounded-full bg-[#166534]"></span>
+</div>
+</div>
+</div>
+</div>
+<!-- Sidebar footer / version indicator -->
+<div class="p-3 border-t border-[#e8e4dc] flex items-center justify-between text-[11px] text-[#6e6960]">
+<span class="font-mono">OpenClaw 2026.9.7</span>
+<span class="w-2 h-2 rounded-full bg-[#166534]"></span>
+</div>
+</aside>
+<!-- MAIN VIEWPORT: VAULT PAGE (Native host style, 32px padding) -->
+<main class="flex-1 h-full flex flex-col min-w-0 bg-[#faf9f7] p-8 overflow-hidden">
+<!-- HEADER ROW -->
+<header class="flex items-center justify-between flex-shrink-0 mb-6">
+<h1 class="text-[24px] font-semibold text-[#211e1a] tracking-tight leading-none">Vault</h1>
+<div class="flex items-center gap-2">
+<button class="px-3 py-1.5 text-[13px] font-medium text-[#6e6960] hover:text-[#211e1a] hover:bg-[#efebe4] rounded-md transition-colors">
+          New group
+        </button>
+<button class="px-3.5 py-1.5 text-[13px] font-medium text-white bg-[#bd4531] hover:bg-[#a83c2a] rounded-md transition-colors flex items-center gap-1.5 shadow-[0_1px_2px_rgba(189,69,49,0.2)]">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+</svg>
+<span>New entry</span>
+</button>
+</div>
+</header>
+<!-- SEARCH ROW (Full width) -->
+<div class="relative flex-shrink-0 mb-6">
+<div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#6e6960]">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<input class="w-full pl-10 pr-4 py-2 bg-white border border-[#d6d0c5] focus:border-[#bd4531] focus:ring-1 focus:ring-[#bd4531] rounded-md text-[13px] text-[#211e1a] placeholder-[#6e6960] outline-none shadow-[0_1px_2px_rgba(60,42,24,0.03)] transition-colors" placeholder="Search 108 entries" type="text"/>
+</div>
+<!-- THREE COLUMNS LAYOUT -->
+<div class="flex-1 flex gap-6 min-h-0 overflow-hidden">
+<!-- COLUMN 1: Group Tree (approx 220px, no card) -->
+<nav class="w-[220px] flex-shrink-0 flex flex-col justify-between overflow-y-auto pr-2 select-none">
+<div class="space-y-0.5">
+<!-- "Needs a value" (Pinned at top with warn dot) -->
+<div class="flex items-center justify-between px-2.5 py-1.5 rounded-md hover:bg-[#efebe4] text-[13px] font-medium text-[#403c35] cursor-pointer group">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-[#92400e] flex-shrink-0"></span>
+<span class="truncate">Needs a value</span>
+</div>
+<span class="text-[12px] font-mono text-[#92400e] font-semibold">1</span>
+</div>
+<!-- "All entries" 108 -->
+<div class="flex items-center justify-between px-2.5 py-1.5 rounded-md hover:bg-[#efebe4] text-[13px] font-medium text-[#403c35] cursor-pointer">
+<span class="truncate">All entries</span>
+<span class="text-[12px] font-mono text-[#6e6960]">108</span>
+</div>
+<!-- "Providers" 5 -->
+<div class="flex items-center justify-between px-2.5 py-1.5 rounded-md hover:bg-[#efebe4] text-[13px] font-medium text-[#403c35] cursor-pointer">
+<span class="truncate">Providers</span>
+<span class="text-[12px] font-mono text-[#6e6960]">5</span>
+</div>
+<!-- "Services" 73 (Expanded) -->
+<div>
+<div class="flex items-center justify-between px-2.5 py-1.5 rounded-md hover:bg-[#efebe4] text-[13px] font-semibold text-[#211e1a] cursor-pointer">
+<div class="flex items-center gap-1.5">
+<svg class="w-3.5 h-3.5 text-[#6e6960]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="truncate">Services</span>
+</div>
+<span class="text-[12px] font-mono text-[#6e6960]">73</span>
+</div>
+<!-- Indented children -->
+<div class="pl-4 mt-0.5 space-y-0.5 border-l border-[#e8e4dc] ml-3.5">
+<!-- APIs -->
+<div class="flex items-center justify-between px-2 py-1 rounded-md hover:bg-[#efebe4] text-[12.5px] text-[#403c35] cursor-pointer">
+<span class="truncate">APIs</span>
+<span class="text-[11.5px] font-mono text-[#6e6960]">9</span>
+</div>
+<!-- Cloudflare (Selected group) -->
+<div class="flex items-center justify-between px-2 py-1 rounded-md bg-[#bd453114] text-[12.5px] font-semibold text-[#bd4531] cursor-pointer">
+<span class="truncate">Cloudflare</span>
+<span class="text-[11.5px] font-mono text-[#bd4531]">12</span>
+</div>
+<!-- Google -->
+<div class="flex items-center justify-between px-2 py-1 rounded-md hover:bg-[#efebe4] text-[12.5px] text-[#403c35] cursor-pointer">
+<span class="truncate">Google</span>
+<span class="text-[11.5px] font-mono text-[#6e6960]">8</span>
+</div>
+<!-- Home Assistant -->
+<div class="flex items-center justify-between px-2 py-1 rounded-md hover:bg-[#efebe4] text-[12.5px] text-[#403c35] cursor-pointer">
+<span class="truncate">Home Assistant</span>
+<span class="text-[11.5px] font-mono text-[#6e6960]">3</span>
+</div>
+</div>
+</div>
+<!-- "Home" 11 -->
+<div class="flex items-center justify-between px-2.5 py-1.5 rounded-md hover:bg-[#efebe4] text-[13px] font-medium text-[#403c35] cursor-pointer">
+<span class="truncate">Home</span>
+<span class="text-[12px] font-mono text-[#6e6960]">11</span>
+</div>
+<!-- "Personal" 9 -->
+<div class="flex items-center justify-between px-2.5 py-1.5 rounded-md hover:bg-[#efebe4] text-[13px] font-medium text-[#403c35] cursor-pointer">
+<span class="truncate">Personal</span>
+<span class="text-[12px] font-mono text-[#6e6960]">9</span>
+</div>
+</div>
+<!-- Hairline separator + Recycle Bin -->
+<div class="pt-3 mt-3 border-t border-[#e8e4dc]">
+<div class="flex items-center justify-between px-2.5 py-1.5 rounded-md hover:bg-[#efebe4] text-[13px] text-[#6e6960] cursor-pointer">
+<span class="truncate">Recycle Bin</span>
+<span class="text-[12px] font-mono text-[#6e6960]">18</span>
+</div>
+</div>
+</nav>
+<!-- COLUMN 2: Entry List (Flexible width, white card) -->
+<section class="flex-1 bg-white border border-[#e8e4dc] rounded-[10px] shadow-[0_1px_2px_rgba(60,42,24,0.05)] flex flex-col min-w-0 overflow-hidden">
+<!-- List Header -->
+<div class="px-4 py-3 border-b border-[#e8e4dc] bg-[#faf9f7] flex items-center justify-between flex-shrink-0">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-[#bd4531]"></span>
+<span class="text-[13px] font-semibold text-[#211e1a]">Services / Cloudflare · 12</span>
+</div>
+</div>
+<!-- Entries rows -->
+<div class="flex-1 overflow-y-auto divide-y divide-[#e8e4dc]"><!-- Row 1: Selected ("API token — DNS edit") -->
+<div class="px-4 py-2.5 hover:bg-[#efebe4] cursor-pointer transition-colors select-none">
+<div class="text-[14px] font-semibold text-[#211e1a] leading-snug">API token — DNS edit</div>
+<div class="text-[12px] text-[#6e6960] leading-normal font-normal truncate mt-0.5">ops@example.com · dash.cloudflare.com</div>
+</div>
+<!-- Row 2 -->
+<div class="px-4 py-2.5 hover:bg-[#efebe4] cursor-pointer transition-colors select-none">
+<div class="text-[14px] font-semibold text-[#211e1a] leading-snug">API token — Workers deploy</div>
+<div class="text-[12px] text-[#6e6960] leading-normal font-normal truncate mt-0.5">deploy-bot@company.internal · dash.cloudflare.com</div>
+</div>
+<!-- Row 3 -->
+<div class="px-4 py-2.5 hover:bg-[#efebe4] cursor-pointer transition-colors select-none">
+<div class="text-[14px] font-semibold text-[#211e1a] leading-snug">Account login</div>
+<div class="text-[12px] text-[#6e6960] leading-normal font-normal truncate mt-0.5">fred@example.com · dash.cloudflare.com</div>
+</div>
+<!-- Row 4 -->
+<div class="px-4 py-2.5 hover:bg-[#efebe4] cursor-pointer transition-colors select-none">
+<div class="text-[14px] font-semibold text-[#211e1a] leading-snug">Tunnel credentials — home</div>
+<div class="text-[12px] text-[#6e6960] leading-normal font-normal truncate mt-0.5">tunnel-id-948271 · api.cloudflare.com</div>
+</div>
+<!-- Row 5 -->
+<div class="px-4 py-2.5 hover:bg-[#efebe4] cursor-pointer transition-colors select-none">
+<div class="text-[14px] font-semibold text-[#211e1a] leading-snug">Tunnel credentials — office</div>
+<div class="text-[12px] text-[#6e6960] leading-normal font-normal truncate mt-0.5">tunnel-id-381029 · api.cloudflare.com</div>
+</div>
+<!-- Row 6 -->
+<div class="px-4 py-2.5 hover:bg-[#efebe4] cursor-pointer transition-colors select-none">
+<div class="text-[14px] font-semibold text-[#211e1a] leading-snug">R2 access key</div>
+<div class="text-[12px] text-[#6e6960] leading-normal font-normal truncate mt-0.5">r2-sync-agent · r2.cloudflarestorage.com</div>
+</div>
+<!-- Row 7 -->
+<div class="px-4 py-2.5 hover:bg-[#efebe4] cursor-pointer transition-colors select-none">
+<div class="text-[14px] font-semibold text-[#211e1a] leading-snug">R2 secret key</div>
+<div class="text-[12px] text-[#6e6960] leading-normal font-normal truncate mt-0.5">r2-sync-agent · r2.cloudflarestorage.com</div>
+</div>
+<!-- Row 8 -->
+<div class="px-4 py-2.5 hover:bg-[#efebe4] cursor-pointer transition-colors select-none">
+<div class="text-[14px] font-semibold text-[#211e1a] leading-snug">Zero Trust service token</div>
+<div class="text-[12px] text-[#6e6960] leading-normal font-normal truncate mt-0.5">cf-access-client · one.dash.cloudflare.com</div>
+</div>
+<!-- Row 9 -->
+<div class="px-4 py-2.5 hover:bg-[#efebe4] cursor-pointer transition-colors select-none">
+<div class="text-[14px] font-semibold text-[#211e1a] leading-snug">Email routing API</div>
+<div class="text-[12px] text-[#6e6960] leading-normal font-normal truncate mt-0.5">relay@example.com · dash.cloudflare.com</div>
+</div>
+<!-- Row 10 -->
+<div class="px-4 py-2.5 hover:bg-[#efebe4] cursor-pointer transition-colors select-none">
+<div class="text-[14px] font-semibold text-[#211e1a] leading-snug">Pages deploy hook</div>
+<div class="text-[12px] text-[#6e6960] leading-normal font-normal truncate mt-0.5">ci-trigger · api.cloudflare.com</div>
+</div></div>
+</section>
+<!-- COLUMN 3: Detail Pane (approx 400px, white card) -->
+<aside class="w-[400px] flex-shrink-0 bg-white border border-[#e8e4dc] rounded-[10px] shadow-[0_1px_2px_rgba(60,42,24,0.05)] flex flex-col min-w-0 overflow-hidden">
+<!-- Header -->
+<div class="p-4 border-b border-[#e8e4dc] flex items-center justify-between flex-shrink-0">
+<div>
+<h2 class="text-[16px] font-semibold text-[#211e1a] leading-tight">New entry</h2>
+<div class="text-[12px] text-[#6e6960] mt-0.5">Add credentials to your vault</div>
+</div>
+<button class="w-7 h-7 flex items-center justify-center text-[#6e6960] hover:text-[#211e1a] hover:bg-[#efebe4] rounded transition-colors" title="Close">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+<!-- Form Body -->
+<div class="flex-1 overflow-y-auto p-4 space-y-4">
+<!-- Title (Focused state) -->
+<div>
+<label class="block text-[12px] font-medium text-[#6e6960] mb-1.5">Title</label>
+<input autofocus="" class="w-full px-3 py-2 bg-white border border-[#bd4531] ring-1 ring-[#bd4531] rounded-md text-[14px] text-[#211e1a] placeholder-[#6e6960] outline-none shadow-[0_1px_2px_rgba(60,42,24,0.03)]" placeholder="e.g. GitHub — deploy key" type="text"/>
+</div>
+<!-- Group -->
+<div>
+<label class="block text-[12px] font-medium text-[#6e6960] mb-1.5">Group</label>
+<div class="relative">
+<input class="w-full pl-3 pr-8 py-2 bg-[#faf9f7] border border-[#d6d0c5] rounded-md text-[14px] text-[#211e1a] outline-none cursor-pointer select-none" readonly="" value="Services / Cloudflare"/>
+<div class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-[#6e6960]">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Username -->
+<div>
+<label class="block text-[12px] font-medium text-[#6e6960] mb-1.5">Username</label>
+<input class="w-full px-3 py-2 bg-white border border-[#d6d0c5] focus:border-[#bd4531] focus:ring-1 focus:ring-[#bd4531] rounded-md text-[14px] text-[#211e1a] placeholder-[#6e6960] outline-none shadow-[0_1px_2px_rgba(60,42,24,0.03)] transition-colors" placeholder="Username or email" type="text"/>
+</div>
+<!-- Password -->
+<div>
+<label class="block text-[12px] font-medium text-[#6e6960] mb-1.5">Password</label>
+<div class="relative">
+<input class="w-full pl-3 pr-10 py-2 bg-white border border-[#d6d0c5] focus:border-[#bd4531] focus:ring-1 focus:ring-[#bd4531] rounded-md text-[14px] font-mono tracking-widest text-[#211e1a] placeholder-[#6e6960] outline-none shadow-[0_1px_2px_rgba(60,42,24,0.03)] transition-colors" placeholder="••••••••••••" type="password"/>
+<button class="absolute inset-y-0 right-0 pr-3 flex items-center text-[#6e6960] hover:text-[#211e1a] transition-colors" title="Reveal password" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+<path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+</button>
+</div>
+<button class="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-[#6e6960] hover:text-[#211e1a] transition-colors py-0.5" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Generate password</span>
+</button>
+</div>
+<!-- URL -->
+<div>
+<label class="block text-[12px] font-medium text-[#6e6960] mb-1.5">URL</label>
+<input class="w-full px-3 py-2 bg-white border border-[#d6d0c5] focus:border-[#bd4531] focus:ring-1 focus:ring-[#bd4531] rounded-md text-[14px] text-[#211e1a] placeholder-[#6e6960] outline-none shadow-[0_1px_2px_rgba(60,42,24,0.03)] transition-colors" placeholder="https://..." type="text"/>
+</div>
+<!-- Notes -->
+<div>
+<label class="block text-[12px] font-medium text-[#6e6960] mb-1.5">Notes</label>
+<textarea class="w-full px-3 py-2 bg-white border border-[#d6d0c5] focus:border-[#bd4531] focus:ring-1 focus:ring-[#bd4531] rounded-md text-[14px] text-[#211e1a] placeholder-[#6e6960] outline-none shadow-[0_1px_2px_rgba(60,42,24,0.03)] transition-colors resize-none leading-relaxed" placeholder="Add notes, purpose, or rotation policy..." rows="3"></textarea>
+</div>
+</div>
+<!-- Footer Actions -->
+<div class="p-4 border-t border-[#e8e4dc] bg-[#faf9f7] flex items-center justify-between flex-shrink-0">
+<button class="px-3 py-1.5 text-[13px] font-medium text-[#6e6960] hover:text-[#211e1a] hover:bg-[#efebe4] rounded-md transition-colors" type="button">
+    Cancel
+  </button>
+<button class="px-4 py-1.5 text-[13px] font-medium text-white bg-[#bd4531] opacity-50 cursor-not-allowed rounded-md shadow-[0_1px_2px_rgba(189,69,49,0.2)]" disabled="" type="button">
+    Create entry
+  </button>
+</div>
+</aside>
+</div>
+</main>
+</body>
+</html>

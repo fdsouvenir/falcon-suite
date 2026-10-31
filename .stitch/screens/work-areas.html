@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>OpenClaw Control UI - Work</title>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS v3 -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-tint": "#a93724",
+            "on-error-container": "#93000a",
+            "tertiary-container": "#00788b",
+            "error-container": "#ffdad6",
+            "surface-container-high": "#e9e8e6",
+            "on-tertiary": "#ffffff",
+            "error": "#ba1a1a",
+            "on-secondary-fixed": "#00201d",
+            "primary-fixed-dim": "#ffb4a6",
+            "card": "#ffffff",
+            "on-background": "#1a1c1b",
+            "outline-variant": "#dfbfba",
+            "on-primary-fixed": "#3f0300",
+            "inverse-primary": "#ffb4a6",
+            "primary-fixed": "#ffdad4",
+            "tertiary": "#005e6d",
+            "outline": "#8c716c",
+            "surface-dim": "#dadad8",
+            "inverse-on-surface": "#f1f1ef",
+            "tertiary-fixed": "#a8edff",
+            "info": "#1d4ed8",
+            "danger": "#b91c1c",
+            "warn": "#92400e",
+            "inverse-surface": "#2f3130",
+            "ok": "#166534",
+            "accent-subtle": "#bd453114",
+            "border-strong": "#d6d0c5",
+            "text-strong": "#211e1a",
+            "muted": "#6e6960",
+            "surface-container": "#efeeec",
+            "text": "#403c35",
+            "secondary-container": "#86f2e4",
+            "on-secondary-container": "#006f66",
+            "secondary": "#006a61",
+            "secondary-fixed": "#89f5e7",
+            "on-tertiary-fixed-variant": "#004e5b",
+            "surface-bright": "#faf9f7",
+            "surface": "#faf9f7",
+            "bg-content": "#f4f1ec",
+            "bg-hover": "#efebe4",
+            "background": "#faf9f7",
+            "on-tertiary-container": "#d5f6ff",
+            "secondary-fixed-dim": "#6bd8cb",
+            "on-tertiary-fixed": "#001f26",
+            "on-surface": "#1a1c1b",
+            "on-primary-fixed-variant": "#881f0f",
+            "surface-container-lowest": "#ffffff",
+            "on-surface-variant": "#58413d",
+            "on-primary": "#ffffff",
+            "primary": "#9c2d1c",
+            "border": "#e8e4dc",
+            "surface-container-low": "#f4f3f1",
+            "primary-container": "#bd4531",
+            "on-error": "#ffffff",
+            "surface-variant": "#e3e2e0",
+            "surface-container-highest": "#e3e2e0",
+            "on-primary-container": "#ffece9",
+            "tertiary-fixed-dim": "#7cd3e8",
+            "on-secondary-fixed-variant": "#005049",
+            "on-secondary": "#ffffff"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "space-xl": "1.5rem",
+            "space-md": "0.75rem",
+            "space-2xl": "2rem",
+            "space-sm": "0.5rem",
+            "space-xs": "0.25rem",
+            "space-lg": "1rem",
+            "margin": "2rem",
+            "gutter": "1rem"
+          },
+          "fontFamily": {
+            "label-xs": ["Instrument Sans"],
+            "body-sm": ["Instrument Sans"],
+            "body-md": ["Instrument Sans"],
+            "headline-md": ["Instrument Sans"],
+            "headline-sm": ["Instrument Sans"],
+            "headline-lg": ["Instrument Sans"],
+            "code": ["JetBrains Mono"]
+          },
+          "fontSize": {
+            "label-xs": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+            "headline-sm": ["13px", { "lineHeight": "18px", "fontWeight": "600" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+            "code": ["12px", { "lineHeight": "16px", "fontWeight": "400" }]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body {
+      font-family: 'Instrument Sans', sans-serif;
+      color: #403c35;
+      background-color: #faf9f7;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      vertical-align: middle;
+      font-size: 18px;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body class="bg-background text-text selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- Main Root Layout Container (w: 1440px minimum layout context) -->
+<div class="flex w-full min-h-screen bg-background">
+<!-- LEFT SIDEBAR (~240px wide, bg #f4f1ec, border-r border-[#e8e4dc]) -->
+<aside class="w-60 h-screen flex flex-col fixed left-0 top-0 bg-bg-content border-r border-border select-none z-20 justify-between">
+<!-- Upper Section: Agent Verl Header, New Session, Pages, Sessions -->
+<div class="flex flex-col p-3 overflow-y-auto">
+<!-- Agent Verl Header -->
+<div class="flex items-center gap-2 px-2 py-2 mb-2">
+<div class="w-6 h-6 rounded-full bg-border-strong flex items-center justify-center relative flex-shrink-0">
+<span class="font-headline-sm text-headline-sm font-semibold text-text-strong">V</span>
+<span class="w-2 h-2 rounded-full bg-[#16a34a] border border-bg-content absolute -bottom-0.5 -right-0.5"></span>
+</div>
+<span class="font-headline-md text-headline-md font-semibold text-text-strong">Verl</span>
+</div>
+<!-- + New Session CTA Button -->
+<button class="w-full flex items-center justify-center gap-1.5 bg-card hover:bg-bg-hover text-text-strong border border-border-strong rounded-lg py-1.5 px-3 mb-4 font-headline-sm text-headline-sm transition-colors duration-150">
+<span class="material-symbols-outlined" style="font-size: 16px;">add</span>
+<span>New Session</span>
+</button>
+<!-- Pages Nav -->
+<div class="mb-4">
+<div class="px-2 pb-1.5 text-[11px] font-semibold text-muted uppercase tracking-wider">Pages</div>
+<nav class="flex flex-col gap-0.5">
+<!-- Home -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-md text-body-md transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">home</span>
+<span>Home</span>
+</a>
+<!-- Automations -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-md text-body-md transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span>Automations</span>
+</a>
+<!-- Plugins -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-md text-body-md transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">extension</span>
+<span>Plugins</span>
+</a>
+<!-- Portals -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-md text-body-md transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">sensor_window</span>
+<span>Portals</span>
+</a>
+<!-- Dashboards -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-md text-body-md transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Dashboards</span>
+</a>
+<!-- Work (Active) -->
+<a class="bg-bg-hover text-text-strong font-semibold rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-md text-body-md transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">checklist</span>
+<span>Work</span>
+</a>
+<!-- Vault -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-md text-body-md transition-colors duration-150" href="#">
+<span class="material-symbols-outlined">lock</span>
+<span>Vault</span>
+</a>
+</nav>
+</div>
+<!-- Sessions Nav -->
+<div class="mb-2">
+<div class="px-2 pb-1.5 text-[11px] font-semibold text-muted uppercase tracking-wider">Sessions</div>
+<nav class="flex flex-col gap-0.5">
+<!-- Falcon Dash -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-sm text-body-sm transition-colors duration-150 truncate" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#0d9488] flex-shrink-0"></span>
+<span class="truncate">Falcon Dash</span>
+</a>
+<!-- Building Manager + Job Dispatcher -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-sm text-body-sm transition-colors duration-150 truncate" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong flex-shrink-0"></span>
+<span class="truncate">Building Manager + Job Dispatcher</span>
+</a>
+<!-- Build Fredbot Backend 2.0 Manager -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-sm text-body-sm transition-colors duration-150 truncate" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-[#0d9488] flex-shrink-0"></span>
+<span class="truncate">Build Fredbot Backend 2.0 Manager</span>
+</a>
+<!-- Portal Fix -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-sm text-body-sm transition-colors duration-150 truncate" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong flex-shrink-0"></span>
+<span class="truncate">Portal Fix</span>
+</a>
+<!-- OpenAI application watch -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-sm text-body-sm transition-colors duration-150 truncate" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong flex-shrink-0"></span>
+<span class="truncate">OpenAI application watch</span>
+</a>
+<!-- Morning Brief -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 font-body-sm text-body-sm transition-colors duration-150 truncate" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong flex-shrink-0"></span>
+<span class="truncate">Morning Brief</span>
+</a>
+</nav>
+</div>
+</div>
+<!-- Footer: User Fred -->
+<div class="p-3 border-t border-border flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-[#bd4531] text-white flex items-center justify-center font-headline-sm text-headline-sm font-semibold flex-shrink-0">
+            F
+          </div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm font-semibold text-text-strong leading-tight">Fred</span>
+<span class="font-label-xs text-label-xs text-muted">online</span>
+</div>
+</div>
+<button class="text-muted hover:text-text-strong p-1 rounded hover:bg-bg-hover transition-colors">
+<span class="material-symbols-outlined" style="font-size: 18px;">settings</span>
+</button>
+</div>
+</aside>
+<!-- MAIN CONTENT CANVAS (full width next to sidebar) -->
+<div class="pl-60 flex-1 flex flex-col min-h-screen">
+<!-- Top Page Header (Shared Component: TopNavBar docked dense layout) -->
+<header class="w-full bg-surface border-b border-border px-8 pt-5 sticky top-0 z-10">
+<div class="flex items-center justify-between pb-4">
+<!-- Title "Work" -->
+<div class="flex items-center gap-3">
+<h1 class="font-headline-lg text-headline-lg font-semibold text-text-strong">Work</h1>
+</div>
+<!-- Actions & Search -->
+<div class="flex items-center gap-3">
+<!-- Search input -->
+<div class="relative w-56">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" style="font-size: 16px;">search</span>
+<input class="w-full bg-card border border-border rounded-lg pl-8 pr-3 py-1.5 font-body-sm text-body-sm text-text-strong placeholder-muted focus:outline-none focus:border-primary transition-colors" placeholder="Search work..." type="text"/>
+</div>
+<!-- Agent Filter Dropdown -->
+<div class="relative">
+<select class="bg-card border border-border rounded-lg pl-3 pr-8 py-1.5 font-body-sm text-body-sm text-text-strong focus:outline-none focus:border-primary cursor-pointer appearance-none">
+<option>All agents</option>
+<option>Verl</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-muted pointer-events-none" style="font-size: 16px;">expand_more</span>
+</div>
+<!-- Primary "New" Button -->
+<button class="bg-[#bd4531] hover:bg-[#a93724] text-white px-3.5 py-1.5 rounded-lg font-headline-sm text-headline-sm flex items-center gap-1 transition-colors duration-150">
+<span class="material-symbols-outlined" style="font-size: 16px;">add</span>
+<span>New</span>
+</button>
+</div>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex items-center gap-6">
+<a class="text-muted pb-2.5 font-body-md text-body-md hover:text-text-strong transition-colors flex items-center gap-1.5" href="#">
+<span>Overview</span>
+<span class="bg-bg-hover text-muted text-label-xs font-semibold px-1.5 py-0.2 rounded-full">13</span>
+</a>
+<a class="text-muted pb-2.5 font-body-md text-body-md hover:text-text-strong transition-colors" href="#">
+            Objectives
+          </a>
+<!-- Active Tab: Areas & Projects -->
+<a class="border-b-2 border-primary text-text-strong font-semibold pb-2.5 font-body-md text-body-md" href="#">
+            Areas &amp; Projects
+          </a>
+<a class="text-muted pb-2.5 font-body-md text-body-md hover:text-text-strong transition-colors" href="#">
+            Activity
+          </a>
+</nav>
+</header>
+<!-- Page Body (Two Panes on page background #faf9f7, padding 24px-32px) -->
+<main class="flex-1 p-6 md:p-8 flex flex-col gap-6 max-w-[1400px] w-full">
+<!-- LEFT PANE: Dense list of Areas (~260px width) -->
+<!-- RIGHT PANE: Selected Area Details (flex-1) -->
+<div class="flex items-center gap-2 flex-wrap pb-1 border-b border-border"><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>All</span><span class="text-muted">8</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Betting</span><span class="text-muted">1</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Core Improvements</span><span class="text-muted">1</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Finances</span><span class="text-muted">3</span></button><button class="px-2.5 py-1 rounded-full text-body-sm bg-bg-hover text-text-strong font-semibold border border-border-strong flex items-center gap-1.5"><span>Fredbot Platform</span><span class="text-muted font-normal">13</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Home</span><span class="text-muted">1</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Marketing</span><span class="text-muted">2</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Personal</span><span class="text-muted">2</span></button><button class="px-2.5 py-1 rounded-full text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover transition-colors flex items-center gap-1.5"><span>Verl</span><span class="text-muted">5</span></button><button class="px-2 py-1 text-body-sm font-medium text-muted hover:text-text-strong hover:bg-bg-hover rounded flex items-center gap-1 transition-colors"><span class="material-symbols-outlined" style="font-size: 15px;">add</span><span>Area</span></button></div><section class="flex-1 flex flex-col min-w-0">
+<!-- Area Header -->
+<div class="flex items-center justify-between py-2 border-b border-border mb-5 gap-4 flex-wrap"><div class="flex items-center gap-2.5 flex-wrap min-w-0"><h2 class="text-[15px] font-semibold text-text-strong leading-normal">Fredbot Platform</h2><span class="text-muted text-body-sm">·</span><p class="font-body-sm text-[13px] text-muted truncate">Platform-01, Buildings, Offices and the Backend that runs them.</p><span class="text-muted text-body-sm">·</span><div class="flex items-center gap-1.5 font-body-sm text-[13px] text-muted"><span class="text-muted">Accountable:</span><div class="w-4 h-4 rounded-full bg-[#bd4531] text-white flex items-center justify-center font-semibold text-[10px]">f</div><span class="text-text-strong font-medium">fred</span></div></div><button class="border border-border bg-card hover:bg-bg-hover text-text px-3 py-1 rounded font-body-sm text-[13px] transition-colors flex-shrink-0">New Project</button></div>
+<!-- PROJECT CARD 1 -->
+<div class="bg-card border border-border rounded-lg p-5 mb-5 shadow-none">
+<!-- Card Header -->
+<div class="flex items-start justify-between gap-4">
+<div class="flex flex-col">
+<div class="flex items-center flex-wrap gap-2">
+<h3 class="font-headline-sm text-[15px] font-semibold text-text-strong flex items-center gap-1 cursor-pointer hover:text-primary transition-colors"><span>Backend 2.0: Job Dispatcher first build</span><span class="material-symbols-outlined text-muted" style="font-size: 18px;">chevron_right</span></h3>
+<span class="bg-bg-hover text-muted font-body-sm text-body-sm px-2 py-0.5 rounded">open</span>
+<span class="bg-bg-hover text-muted font-body-sm text-body-sm px-2 py-0.5 rounded">serves #2 Fredbot runs customer Offices</span>
+</div>
+<!-- Outcome Line -->
+<p class="font-body-sm text-body-sm text-muted mt-1 mb-4">The Job Dispatcher runs a real Job end to end on the management Building.</p>
+</div>
+<!-- Session Chip -->
+<div class="flex items-center gap-1.5 bg-surface-container px-2.5 py-1 rounded-full border border-border flex-shrink-0">
+<span class="w-1.5 h-1.5 rounded-full bg-muted"></span>
+<span class="font-label-xs text-label-xs text-text">Building Manager + Job Dispatcher</span>
+</div>
+</div>
+<!-- Milestones Ordered Vertical List -->
+<div class="flex flex-col gap-4 pl-1">
+<!-- Milestone 1 (Completed) -->
+<div class="flex flex-col">
+<div class="flex items-center gap-2.5">
+<div class="w-5 h-5 rounded-full border border-border-strong bg-surface-container flex items-center justify-center text-[11px] font-semibold text-text-strong">
+                    1
+                  </div>
+<span class="material-symbols-outlined text-ok" style="font-size: 16px;">check</span>
+<span class="font-headline-sm text-headline-sm text-text-strong">Architecture decisions settled</span>
+<span class="font-body-sm text-body-sm text-muted">achieved Sep 27</span>
+</div>
+<!-- Indented Decisions -->
+<div class="ml-10 mt-2 flex flex-col gap-1.5 pl-3 border-l border-border">
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-muted">
+<span class="material-symbols-outlined text-muted" style="font-size: 14px;">call_split</span>
+<span>Verb kinds → Agentic, component and scripted verbs</span>
+</div>
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-muted">
+<span class="material-symbols-outlined text-muted" style="font-size: 14px;">call_split</span>
+<span>Secrets → Google Cloud Secret Manager</span>
+</div>
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-muted">
+<span class="material-symbols-outlined text-muted" style="font-size: 14px;">call_split</span>
+<span>Migration or first build → First build</span>
+</div>
+</div>
+</div>
+<!-- Milestone 2 (Completed) -->
+<div class="flex flex-col">
+<div class="flex items-center gap-2.5">
+<div class="w-5 h-5 rounded-full border border-border-strong bg-surface-container flex items-center justify-center text-[11px] font-semibold text-text-strong">
+                    2
+                  </div>
+<span class="material-symbols-outlined text-ok" style="font-size: 16px;">check</span>
+<span class="font-headline-sm text-headline-sm text-text-strong">Dispatcher installed on the management Building</span>
+<span class="font-body-sm text-body-sm text-muted">achieved Sep 30</span>
+</div>
+<!-- Indented Tasks -->
+<div class="ml-10 mt-2 flex flex-col gap-1.5 pl-3 border-l border-border">
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-muted">
+<span class="material-symbols-outlined text-ok" style="font-size: 14px;">check</span>
+<span class="">Bootstrap Firestore for the Dispatcher</span>
+</div>
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-muted">
+<span class="material-symbols-outlined text-ok" style="font-size: 14px;">check</span>
+<span class="">Prepare building-903 as management-test</span>
+</div>
+</div>
+</div>
+<!-- Milestone 3 (Open / In Progress) -->
+<div class="flex flex-col">
+<div class="flex items-center gap-2.5">
+<div class="w-5 h-5 rounded-full border border-border-strong bg-surface-container flex items-center justify-center text-[11px] font-semibold text-text-strong">
+                    3
+                  </div>
+<span class="material-symbols-outlined text-muted" style="font-size: 16px;">radio_button_unchecked</span>
+<span class="font-headline-sm text-headline-sm text-text-strong">First real Job runs end to end</span>
+<span class="font-body-sm text-body-sm text-muted">open · 0 of 3 Tasks done</span>
+</div>
+<!-- Indented Tasks -->
+<div class="ml-10 mt-2 flex flex-col gap-2 pl-3 border-l border-border">
+<!-- Task 1: In Progress -->
+<div class="flex items-center justify-between gap-3 py-0.5">
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-text-strong">
+<span class="material-symbols-outlined text-[#0d9488]" style="font-size: 16px;">contrast</span>
+<span class="font-medium">Authenticate the NOC backend to the API independently of Verl</span>
+<span class="bg-[#0d9488]/10 text-[#0d9488] font-label-xs text-label-xs px-1.5 py-0.2 rounded font-medium">in progress</span>
+</div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<!-- Verl Avatar -->
+<div class="w-4 h-4 rounded-full bg-border-strong flex items-center justify-center text-[9px] font-semibold text-text-strong" title="Agent Verl">
+                        V
+                      </div>
+<!-- Session Chip -->
+<div class="flex items-center gap-1 bg-surface-container px-2 py-0.5 rounded-full border border-border">
+<span class="w-1.5 h-1.5 rounded-full bg-[#0d9488]"></span>
+<span class="font-label-xs text-label-xs text-text">Build Fredbot Backend 2.0 Manager</span>
+</div>
+</div>
+</div>
+<!-- Task 2: Waiting -->
+<div class="flex items-center gap-2 font-body-sm text-body-sm py-0.5">
+<span class="material-symbols-outlined text-warn" style="font-size: 16px;">schedule</span>
+<span class="text-text">Reconnect GitHub OAuth for the Building Manager</span>
+<span class="text-warn font-label-xs text-label-xs font-medium">waiting on fred · follow up Oct 2</span>
+</div>
+<!-- Task 3: Open -->
+<div class="flex items-center gap-2 font-body-sm text-body-sm py-0.5 text-text">
+<span class="material-symbols-outlined text-muted" style="font-size: 16px;">radio_button_unchecked</span>
+<span>Run the first real Job through the Dispatcher</span>
+<span class="text-muted font-label-xs text-label-xs">open</span>
+<span class="text-muted font-label-xs text-label-xs italic">— depends on: Authenticate the NOC backend…</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Card Footer -->
+<div class="mt-4 pt-3 border-t border-border flex items-center justify-between">
+<a class="font-label-xs text-label-xs text-muted hover:text-text-strong transition-colors flex items-center gap-1" href="#">
+<span class="material-symbols-outlined" style="font-size: 14px;">description</span>
+<span>2 Findings</span>
+</a>
+</div>
+</div>
+<!-- PROJECT CARD 2 -->
+<div class="bg-card border border-border rounded-lg p-5 shadow-none">
+<!-- Card Header -->
+<div class="flex items-start justify-between gap-4">
+<div class="flex flex-col">
+<div class="flex items-center flex-wrap gap-2">
+<h3 class="font-headline-sm text-[15px] font-semibold text-text-strong">Configure, test and stamp the Platform template</h3>
+<span class="bg-bg-hover text-muted font-body-sm text-body-sm px-2 py-0.5 rounded">open</span>
+<span class="bg-bg-hover text-muted font-body-sm text-body-sm px-2 py-0.5 rounded">serves #2 Fredbot runs customer Offices</span>
+</div>
+<!-- Outcome Line -->
+<p class="font-body-sm text-body-sm text-muted mt-1 mb-4">Platform-01 is secured and qualified, and a reproducible Platform baseline exists.</p>
+</div>
+</div>
+<!-- Milestones Ordered Vertical List -->
+<div class="flex flex-col gap-4 pl-1">
+<!-- Milestone 1 (Completed) -->
+<div class="flex flex-col">
+<div class="flex items-center gap-2.5">
+<div class="w-5 h-5 rounded-full border border-border-strong bg-surface-container flex items-center justify-center text-[11px] font-semibold text-text-strong">
+                    1
+                  </div>
+<span class="material-symbols-outlined text-ok" style="font-size: 16px;">check</span>
+<span class="font-headline-sm text-headline-sm text-text-strong">Contain exposure and establish private administration</span>
+<span class="font-body-sm text-body-sm text-muted">achieved Sep 16</span>
+</div>
+</div>
+<!-- Milestone 2 (Open · 5 of 6 Tasks done) -->
+<div class="flex flex-col">
+<div class="flex items-center gap-2.5">
+<div class="w-5 h-5 rounded-full border border-border-strong bg-surface-container flex items-center justify-center text-[11px] font-semibold text-text-strong">
+                    2
+                  </div>
+<span class="material-symbols-outlined text-muted" style="font-size: 16px;">radio_button_unchecked</span>
+<span class="font-headline-sm text-headline-sm text-text-strong">Qualify Platform-01 for operation</span>
+<span class="font-body-sm text-body-sm text-muted">open · 5 of 6 Tasks done</span>
+</div>
+<!-- Indented Tasks -->
+<div class="ml-10 mt-2 flex flex-col gap-1.5 pl-3 border-l border-border">
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-muted">
+<span class="material-symbols-outlined text-ok" style="font-size: 14px;">check</span>
+<span class="">Run off-host backups for Platform-01</span>
+</div>
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-muted">
+<span class="material-symbols-outlined text-ok" style="font-size: 14px;">check</span>
+<span class="">Alert on Platform-01 health</span>
+</div>
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-muted">
+<span class="material-symbols-outlined text-ok" style="font-size: 14px;">check</span>
+<span class="">Commission certificate renewal</span>
+</div>
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-muted">
+<span class="material-symbols-outlined text-ok" style="font-size: 14px;">check</span>
+<span class="">Qualify boot and recovery</span>
+<span class="font-label-xs text-label-xs text-muted italic">(dead-disk tests waived by fred)</span>
+</div>
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-muted">
+<span class="material-symbols-outlined text-ok" style="font-size: 14px;">check</span>
+<span class="">Fix spool headroom before publication</span>
+</div>
+<div class="flex items-center gap-2 font-body-sm text-body-sm text-text">
+<span class="material-symbols-outlined text-muted" style="font-size: 14px;">radio_button_unchecked</span>
+<span>Re-evaluate the backup lifecycle after the prune failure</span>
+<span class="text-muted font-label-xs text-label-xs">open</span>
+<span class="text-muted font-label-xs text-label-xs italic">— unassigned</span>
+</div>
+</div>
+</div>
+<!-- Milestone 3 (Open) -->
+<div class="flex flex-col">
+<div class="flex items-center gap-2.5">
+<div class="w-5 h-5 rounded-full border border-border-strong bg-surface-container flex items-center justify-center text-[11px] font-semibold text-text-strong">
+                    3
+                  </div>
+<span class="material-symbols-outlined text-muted" style="font-size: 16px;">radio_button_unchecked</span>
+<span class="font-headline-sm text-headline-sm text-text-strong">Stamp and reproduce the Platform baseline</span>
+<span class="font-body-sm text-body-sm text-muted">open</span>
+</div>
+<!-- Indented Task -->
+<div class="ml-10 mt-2 flex flex-col gap-1.5 pl-3 border-l border-border">
+<div class="flex items-center gap-2 font-body-sm text-body-sm py-0.5">
+<span class="material-symbols-outlined text-warn" style="font-size: 16px;">schedule</span>
+<span class="text-text">Build and stamp the provisional Platform template</span>
+<span class="text-warn font-label-xs text-label-xs font-medium">waiting on fred · until Platform-02 hardware</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Card Footer -->
+<div class="mt-4 pt-3 border-t border-border flex items-center justify-between">
+<a class="font-label-xs text-label-xs text-muted hover:text-text-strong transition-colors flex items-center gap-1" href="#">
+<span class="material-symbols-outlined" style="font-size: 14px;">description</span>
+<span>1 Finding</span>
+</a>
+</div>
+</div>
+</section>
+</main>
+</div>
+</div>
+</body></html>

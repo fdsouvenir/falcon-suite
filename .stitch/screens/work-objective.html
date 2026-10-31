@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>OpenClaw Control UI - Work Objective</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CDN with plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration verbatim from Design System -->
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "tertiary": "#005e6d",
+            "secondary-fixed-dim": "#6bd8cb",
+            "danger": "#b91c1c",
+            "on-tertiary-container": "#d5f6ff",
+            "outline-variant": "#dfbfba",
+            "secondary-container": "#86f2e4",
+            "on-primary-container": "#ffece9",
+            "on-error-container": "#93000a",
+            "muted": "#6e6960",
+            "on-tertiary-fixed": "#001f26",
+            "on-primary-fixed": "#3f0300",
+            "surface-container-highest": "#e3e2e0",
+            "bg-content": "#f4f1ec",
+            "inverse-primary": "#ffb4a6",
+            "tertiary-fixed": "#a8edff",
+            "ok": "#166534",
+            "warn": "#92400e",
+            "surface-tint": "#a93724",
+            "on-tertiary": "#ffffff",
+            "outline": "#8c716c",
+            "tertiary-container": "#00788b",
+            "surface-variant": "#e3e2e0",
+            "inverse-surface": "#2f3130",
+            "surface-dim": "#dadad8",
+            "on-surface": "#1a1c1b",
+            "on-primary-fixed-variant": "#881f0f",
+            "primary-fixed-dim": "#ffb4a6",
+            "secondary-fixed": "#89f5e7",
+            "primary-fixed": "#ffdad4",
+            "surface-container": "#efeeec",
+            "surface-container-low": "#f4f3f1",
+            "bg-hover": "#efebe4",
+            "text": "#403c35",
+            "inverse-on-surface": "#f1f1ef",
+            "text-strong": "#211e1a",
+            "surface-container-lowest": "#ffffff",
+            "on-tertiary-fixed-variant": "#004e5b",
+            "error": "#ba1a1a",
+            "on-primary": "#ffffff",
+            "primary-container": "#bd4531",
+            "border-strong": "#d6d0c5",
+            "on-error": "#ffffff",
+            "tertiary-fixed-dim": "#7cd3e8",
+            "background": "#faf9f7",
+            "error-container": "#ffdad6",
+            "on-background": "#1a1c1b",
+            "info": "#1d4ed8",
+            "primary": "#9c2d1c",
+            "on-secondary-fixed-variant": "#005049",
+            "accent-subtle": "#bd453114",
+            "border": "#e8e4dc",
+            "on-surface-variant": "#58413d",
+            "surface": "#faf9f7",
+            "surface-bright": "#faf9f7",
+            "on-secondary": "#ffffff",
+            "card": "#ffffff",
+            "secondary": "#006a61",
+            "surface-container-high": "#e9e8e6",
+            "on-secondary-container": "#006f66",
+            "on-secondary-fixed": "#00201d"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "space-md": "0.75rem",
+            "space-lg": "1rem",
+            "space-2xl": "2rem",
+            "space-sm": "0.5rem",
+            "gutter": "1rem",
+            "space-xs": "0.25rem",
+            "space-xl": "1.5rem",
+            "margin": "2rem"
+          },
+          "fontFamily": {
+            "body-md": ["Instrument Sans"],
+            "label-xs": ["Instrument Sans"],
+            "headline-sm": ["Instrument Sans"],
+            "headline-md": ["Instrument Sans"],
+            "headline-lg": ["Instrument Sans"],
+            "code": ["JetBrains Mono"],
+            "body-sm": ["Instrument Sans"]
+          },
+          "fontSize": {
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "label-xs": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+            "headline-sm": ["13px", { "lineHeight": "18px", "fontWeight": "600" }],
+            "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+            "code": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }]
+          }
+        },
+      },
+    }
+  </script>
+</head>
+<body class="bg-background text-text font-body-md antialiased min-h-screen selection:bg-bg-hover">
+<!-- ========================================================================= -->
+<!-- SHARED COMPONENT: SideNavBar (Anchored via JSON & Specification)            -->
+<!-- ========================================================================= -->
+<aside class="w-60 h-screen flex flex-col fixed left-0 top-0 bg-bg-content border-r border-border justify-between z-30 select-none">
+<div class="flex flex-col flex-1 min-h-0">
+<!-- Host Agent Header Block -->
+<div class="p-space-md border-b border-border flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="relative w-7 h-7 rounded-full bg-border flex items-center justify-center font-headline-sm text-headline-sm font-semibold text-text-strong">
+            V
+            <span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-secondary ring-2 ring-bg-content" title="Online"></span>
+</div>
+<div class="flex flex-col leading-none">
+<span class="font-headline-sm text-headline-sm font-semibold text-text-strong">Verl</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-muted text-base cursor-pointer hover:text-text-strong transition-colors duration-150">more_vert</span>
+</div>
+<!-- CTA: New Session -->
+<div class="px-space-md py-space-sm">
+<button class="w-full flex items-center justify-center gap-1.5 py-1.5 px-space-md bg-card border border-border-strong rounded-xl text-text-strong font-body-md text-body-md font-medium hover:bg-bg-hover transition-colors duration-150 shadow-none">
+<span class="material-symbols-outlined text-base">add</span>
+<span>New Session</span>
+</button>
+</div>
+<!-- Navigation Tabs & Subsections -->
+<div class="flex-1 overflow-y-auto px-space-sm py-space-xs space-y-4">
+<!-- PAGES Tab Cluster -->
+<div>
+<div class="px-3 pb-1 text-label-xs font-label-xs font-semibold text-muted">Pages</div><nav class="space-y-0.5 font-body-md text-body-md">
+<!-- Home -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-3 py-1.5 flex items-center gap-2 transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-base">home</span>
+<span>Home</span>
+</a>
+<!-- Automations -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-3 py-1.5 flex items-center gap-2 transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-base">smart_toy</span>
+<span>Automations</span>
+</a>
+<!-- Plugins -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-3 py-1.5 flex items-center gap-2 transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-base">extension</span>
+<span>Plugins</span>
+</a>
+<!-- Portals -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-3 py-1.5 flex items-center gap-2 transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-base">sensor_window</span>
+<span>Portals</span>
+</a>
+<!-- Dashboards -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-3 py-1.5 flex items-center gap-2 transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-base">dashboard</span>
+<span>Dashboards</span>
+</a>
+<!-- Work (Active Target per JSON and Context) -->
+<a class="bg-bg-hover text-text-strong font-semibold rounded-lg px-3 py-1.5 flex items-center gap-2 transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-base" data-weight="fill">checklist</span>
+<span>Work</span>
+</a>
+<!-- Vault -->
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-3 py-1.5 flex items-center gap-2 transition-colors duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined text-base">lock</span>
+<span>Vault</span>
+</a>
+</nav>
+</div>
+<!-- SESSIONS List Cluster -->
+<div>
+<div class="px-3 pb-1 text-label-xs font-label-xs font-semibold text-muted">Sessions</div>
+<div class="space-y-0.5 font-body-sm text-body-sm">
+<a class="flex items-center gap-2 px-3 py-1 text-text-strong hover:bg-bg-hover rounded-lg transition-colors" href="#">
+<span class="w-2 h-2 rounded-full bg-secondary shrink-0"></span>
+<span class="truncate">Falcon Dash</span>
+</a>
+<a class="flex items-center gap-2 px-3 py-1 text-muted hover:text-text-strong hover:bg-bg-hover rounded-lg transition-colors" href="#">
+<span class="w-2 h-2 rounded-full bg-border-strong shrink-0"></span>
+<span class="truncate">Building Manager + Job Dispatcher</span>
+</a>
+<a class="flex items-center gap-2 px-3 py-1 text-text-strong hover:bg-bg-hover rounded-lg transition-colors" href="#">
+<span class="w-2 h-2 rounded-full bg-secondary shrink-0"></span>
+<span class="truncate">Build Fredbot Backend 2.0 Manager</span>
+</a>
+<a class="flex items-center gap-2 px-3 py-1 text-muted hover:text-text-strong hover:bg-bg-hover rounded-lg transition-colors" href="#">
+<span class="w-2 h-2 rounded-full bg-border-strong shrink-0"></span>
+<span class="truncate">Portal Fix</span>
+</a>
+<a class="flex items-center gap-2 px-3 py-1 text-muted hover:text-text-strong hover:bg-bg-hover rounded-lg transition-colors" href="#">
+<span class="w-2 h-2 rounded-full bg-border-strong shrink-0"></span>
+<span class="truncate">OpenAI application watch</span>
+</a>
+<a class="flex items-center gap-2 px-3 py-1 text-muted hover:text-text-strong hover:bg-bg-hover rounded-lg transition-colors" href="#">
+<span class="w-2 h-2 rounded-full bg-border-strong shrink-0"></span>
+<span class="truncate">Morning Brief</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Footer Account Tab -->
+<div class="p-space-md border-t border-border flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-6 h-6 rounded-full bg-border-strong flex items-center justify-center font-label-xs text-text-strong font-semibold">
+            F
+          </div>
+<span class="font-body-md text-body-md font-medium text-text-strong">Fred</span>
+</div>
+<button class="text-muted hover:text-text-strong transition-colors" title="Settings">
+<span class="material-symbols-outlined text-base">settings</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- ========================================================================= -->
+<!-- MAIN WORKSPACE CONTAINER (Offset left by SideNav width = 15rem / 240px)     -->
+<!-- ========================================================================= -->
+<div class="pl-60 min-h-screen flex flex-col bg-background">
+<!-- TopNavBar (Shared Component aligned to dense work header specification) -->
+<header class="sticky top-0 z-20 bg-surface border-b border-border flex items-center justify-between px-space-xl h-14 select-none"><h1 class="font-headline-lg text-headline-lg font-semibold text-text-strong tracking-tight">Work</h1><div class="flex items-center gap-3"><div class="relative w-64"><span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-muted text-lg pointer-events-none">search</span><input class="w-full h-8 pl-8 pr-3 bg-surface-container-lowest border border-border rounded-xl font-body-sm text-body-sm text-text placeholder-muted focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container" placeholder="Search work..." type="text"/></div><div class="relative"><button class="inline-flex items-center gap-1.5 h-8 px-2.5 bg-card border border-border rounded-xl text-body-sm font-body-sm text-text hover:text-text-strong hover:bg-bg-hover transition-colors"><span>All agents</span><span class="material-symbols-outlined text-sm text-muted">expand_more</span></button></div><button class="inline-flex items-center gap-1 h-8 px-3 bg-primary-container hover:bg-primary text-on-primary rounded-xl font-body-sm font-semibold transition-colors duration-150"><span class="material-symbols-outlined text-sm">add</span><span>New</span></button></div></header>
+<!-- Sub-navigation links inside Work context -->
+<div class="px-space-xl border-b border-border bg-surface flex items-center gap-6 font-body-sm text-body-sm">
+<a class="border-b-2 border-transparent text-muted pb-2 pt-2.5 hover:text-text-strong transition-colors" href="#"><span>Overview</span><span class="inline-flex items-center px-1.5 py-0.2 rounded-full bg-surface-container text-muted text-label-xs font-label-xs ml-1.5 font-medium">13</span></a>
+<a class="border-b-2 border-primary text-primary font-semibold pb-2 pt-2.5" href="#">Objectives</a>
+<a class="border-b-2 border-transparent text-muted pb-2 pt-2.5 hover:text-text-strong transition-colors" href="#">Areas &amp; Projects</a>
+<a class="border-b-2 border-transparent text-muted pb-2 pt-2.5 hover:text-text-strong transition-colors" href="#">Activity</a>
+</div>
+<!-- MAIN BODY CONTENT CANVAS -->
+<main class="flex-1 p-space-xl max-w-[1200px] w-full">
+<!-- Breadcrumb Link -->
+<nav class="flex items-center gap-1.5 text-body-sm font-body-sm text-muted mb-space-md">
+<a class="inline-flex items-center hover:text-text-strong transition-colors" href="#">
+<span class="material-symbols-outlined text-base">chevron_left</span>
+<span>Back</span>
+</a>
+<span class="text-border-strong">/</span>
+<a class="hover:text-text-strong transition-colors" href="#">Work</a>
+<span class="text-border-strong">›</span>
+<a class="hover:text-text-strong transition-colors" href="#">Objectives</a>
+<span class="text-border-strong">›</span>
+<span class="text-text-strong font-medium truncate max-w-md">Home AI Solutions reaches $10K monthly revenue</span>
+</nav>
+<!-- OBJECTIVE HEADER BLOCK -->
+<div class="flex flex-col gap-2 mb-space-lg">
+<div class="flex items-start justify-between gap-4">
+<div class="flex items-center gap-2.5 flex-wrap">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-lg border border-border-strong bg-card text-muted font-code text-code font-medium">#1</span>
+<h2 class="font-headline-lg text-headline-lg font-semibold text-text-strong">
+              Home AI Solutions reaches $10K monthly revenue
+            </h2>
+<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container/30 text-secondary border border-secondary/20 text-label-xs font-label-xs font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+              active
+            </span>
+</div>
+<!-- Header Actions -->
+<div class="flex items-center gap-2 shrink-0">
+<button class="h-8 px-3 bg-card border border-border-strong rounded-xl text-body-sm font-body-sm text-text-strong hover:bg-bg-hover transition-colors">
+              Edit
+            </button>
+<button class="h-8 px-3 bg-card border border-border-strong rounded-xl text-body-sm font-body-sm text-text-strong hover:bg-bg-hover transition-colors">
+              Pause
+            </button>
+<button class="h-8 px-2 text-muted hover:text-danger rounded-xl text-body-sm font-body-sm transition-colors">
+              Retire
+            </button>
+</div>
+</div>
+<!-- Meta Attribute Row -->
+<div class="flex items-center gap-3 text-body-sm font-body-sm text-muted flex-wrap">
+<div class="flex items-center gap-1.5">
+<span>Owner:</span>
+<div class="w-4 h-4 rounded-full bg-border-strong flex items-center justify-center font-label-xs text-text-strong">f</div>
+<span class="text-text font-medium">fred</span>
+</div>
+<span class="text-border-strong">·</span>
+<div>
+<span>Autonomy:</span>
+<span class="text-text font-medium ml-1">propose</span>
+</div>
+<span class="text-border-strong">·</span>
+<div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-card border border-border text-body-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span class="text-text-strong font-medium">Falcon Dash</span>
+<span class="text-muted text-body-sm">(running, reviews posted here)</span>
+</div>
+</div>
+</div>
+<!-- TWO-COLUMN WORK GRID (65% / 35%) -->
+<div class="grid grid-cols-12 gap-space-xl items-start">
+<!-- LEFT PRIMARY COLUMN (~65% = 8 columns) -->
+<div class="col-span-12 lg:col-span-8 space-y-space-lg">
+<!-- STATEMENT BLOCK -->
+<div class="space-y-1.5">
+<span class="font-headline-sm text-headline-sm font-semibold text-muted">Statement</span>
+<div class="p-3.5 bg-card border border-border rounded-xl">
+<p class="font-body-md text-body-md text-text-strong font-normal leading-relaxed">
+                Home AI Solutions sustains at least $10,000 in monthly revenue for two consecutive months.
+              </p>
+</div>
+</div>
+<!-- WARNING ROW -->
+<div class="flex items-start gap-2.5 p-3 bg-[#fef7ee] border border-[#fbd38d]/50 rounded-xl text-warn">
+<span class="material-symbols-outlined text-base mt-0.5 shrink-0" data-weight="fill">warning</span>
+<div class="font-body-sm text-body-sm leading-snug">
+<span class="font-semibold text-warn">Objective without progress —</span>
+<span>no completed Task has served it since it was set on Aug 19.</span>
+</div>
+</div>
+<!-- SECTION: KPIs -->
+<div class="space-y-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-headline-sm font-semibold text-muted">KPIs</span>
+</div>
+<button class="font-body-sm text-body-sm text-primary hover:underline font-medium">
+                + KPI
+              </button>
+</div>
+<!-- KPI Row Card -->
+<div class="p-3.5 bg-card border border-border rounded-xl space-y-2.5">
+<div class="flex items-center justify-between">
+<span class="font-body-sm text-body-sm text-muted">Monthly revenue · target ≥ $10,000 · direction up</span>
+<button class="font-body-sm text-body-sm text-primary hover:underline">Add reading</button>
+</div>
+<div class="flex items-center gap-3">
+<span class="font-body-md text-body-md text-muted italic">unmeasured</span>
+<!-- Empty progress track (0% fill, hairline border, no color fill) -->
+<div class="flex-1 h-2 bg-surface-container border border-border rounded-full overflow-hidden">
+<div class="h-full w-0 bg-transparent"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- SECTION: Latest review -->
+<div class="p-4 bg-card border border-border rounded-xl space-y-3">
+<div class="flex items-center justify-between border-b border-border pb-2.5">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-base text-muted">rate_review</span>
+<span class="font-headline-sm text-headline-sm font-semibold text-text-strong">Latest review — Oct 1, verl</span>
+</div>
+</div>
+<!-- 3 Structured review points -->
+<div class="space-y-2.5 text-body-sm font-body-sm">
+<div class="flex items-start gap-3">
+<span class="font-semibold text-text-strong w-16 shrink-0">Moved:</span>
+<span class="text-text">Nothing. No Work serving this Objective has recorded activity since it was set on Aug 19.</span>
+</div>
+<div class="flex items-start gap-3">
+<span class="font-semibold text-text-strong w-16 shrink-0">Stalled:</span>
+<span class="text-text">Every recorded hour in the last six weeks went to the Fredbot Platform and to running me. The Territory Engine is waiting on one Question (Territory 1) that has been open since early September.</span>
+</div>
+<div class="flex items-start gap-3">
+<span class="font-semibold text-text-strong w-16 shrink-0">Proposed:</span>
+<span class="text-text">Decide the first concrete step: answer the Territory 1 Question, or have me draft the pilot offer so the thesis milestone can move.</span>
+</div>
+</div>
+<!-- Sources metadata pill & Bottom link -->
+<div class="pt-2 border-t border-border flex items-center justify-between">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container border border-border text-label-xs font-label-xs text-muted">
+                Recorded activity, Aug 19 – Oct 1
+              </span>
+<a class="font-body-sm text-body-sm text-primary hover:underline font-medium" href="#">All reviews (1)</a>
+</div>
+</div>
+<!-- SECTION: Serving this Objective -->
+<div class="space-y-2.5">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm font-semibold text-muted">Serving this Objective</span>
+<button class="font-body-sm text-body-sm text-primary hover:underline font-medium">
+                + Link a Project or Task
+              </button>
+</div>
+<div class="space-y-2">
+<!-- Card 1: Project Home AI Solutions -->
+<div class="p-3.5 bg-card border border-border rounded-xl space-y-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-base text-muted">topic</span>
+<span class="font-headline-sm text-headline-sm font-semibold text-text-strong">Project "Home AI Solutions: first paid pilot"</span>
+<span class="text-label-xs font-label-xs text-muted px-1.5 py-0.2 bg-surface-container rounded">Marketing</span>
+</div>
+</div>
+<!-- Milestones checklist -->
+<div class="flex items-center gap-4 text-body-sm font-body-sm text-muted">
+<span class="text-label-xs font-medium text-text-strong">Milestones:</span>
+<div class="flex items-center gap-1.5">
+<span class="w-3.5 h-3.5 rounded-full border border-border-strong inline-block"></span>
+<span>Thesis written</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-3.5 h-3.5 rounded-full border border-border-strong inline-block"></span>
+<span>Offer defined</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-3.5 h-3.5 rounded-full border border-border-strong inline-block"></span>
+<span>First paid pilot</span>
+</div>
+</div>
+<div class="text-body-sm font-body-sm text-muted italic pt-1">
+                  No Tasks yet
+                </div>
+</div>
+<!-- Card 2: Project Territory Engine -->
+<div class="p-3.5 bg-card border border-border rounded-xl space-y-2.5">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-base text-muted">topic</span>
+<span class="font-headline-sm text-headline-sm font-semibold text-text-strong">Project "Territory Engine"</span>
+<span class="text-label-xs font-label-xs text-muted px-1.5 py-0.2 bg-surface-container rounded">Marketing</span>
+</div>
+</div>
+<!-- Milestone indicator -->
+<div class="flex items-center gap-2 text-body-sm font-body-sm text-text">
+<span class="text-label-xs font-medium text-muted">Milestone:</span>
+<div class="flex items-center gap-1.5">
+<span class="w-3.5 h-3.5 rounded-full border border-border-strong inline-block"></span>
+<span>Territory 1 ready to sell</span>
+</div>
+</div>
+<!-- Tasks list inside card -->
+<div class="pl-3 border-l-2 border-border space-y-1.5 font-body-sm text-body-sm"><div class="flex items-center justify-between"><div class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full border border-border-strong inline-block shrink-0"></span><span class="text-text-strong">Build the household list for Territory 1</span></div><span class="text-label-xs font-label-xs px-1.5 py-0.5 rounded bg-surface-container text-muted">ready</span></div><div class="flex items-center justify-between"><div class="flex items-center gap-2"><span class="w-3.5 h-3.5 rounded-full border border-border-strong inline-block shrink-0"></span><div class="flex items-center gap-1.5"><span class="text-text-strong">Plan the walking route for Territory 1</span><span class="text-muted text-label-xs">— depends on: Build the household list</span></div></div><span class="text-label-xs font-label-xs px-1.5 py-0.5 rounded bg-surface-container text-muted">ready</span></div></div>
+<!-- Alert row for stalled state -->
+<div class="flex items-center gap-1.5 text-warn text-body-sm pt-1">
+<span class="material-symbols-outlined text-sm" data-weight="fill">error</span>
+<span>Held by an open Question</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- RIGHT SIDEBAR COLUMN (~35% = 4 columns) -->
+<div class="col-span-12 lg:col-span-4 space-y-space-lg">
+<!-- 1. CARD "Needs you" -->
+<div class="p-4 bg-card border border-border rounded-xl space-y-4 shadow-none">
+<div class="flex items-center justify-between border-b border-border pb-2">
+<span class="font-headline-sm text-headline-sm font-semibold text-muted">Needs you</span>
+</div>
+<!-- Item 1: Decision -->
+<div class="space-y-2 pb-3 border-b border-border">
+<div class="flex items-center gap-1.5 text-primary text-label-xs font-label-xs font-semibold">
+<span class="material-symbols-outlined text-sm">call_split</span>
+<span>Decision</span>
+</div>
+<h3 class="font-headline-md text-headline-sm font-semibold text-text-strong leading-snug">
+                What should I do next for Home AI Solutions?
+              </h3>
+<!-- 3 Option Pills (Unselected secondary options) -->
+<div class="space-y-1.5 pt-1">
+<button class="w-full text-left p-2 rounded-lg border border-border hover:border-border-strong hover:bg-bg-hover transition-colors flex flex-col gap-0.5">
+<div class="font-body-sm text-body-sm text-text-strong font-medium">
+                    Draft the thesis and pilot offer for your review
+                  </div>
+<span class="text-label-xs font-label-xs text-secondary font-semibold">(recommended)</span>
+</button>
+<button class="w-full text-left p-2 rounded-lg border border-border hover:border-border-strong hover:bg-bg-hover transition-colors">
+<div class="font-body-sm text-body-sm text-text-strong font-medium">
+                    Wait for Territory 1 and push the Territory Engine
+                  </div>
+</button>
+<button class="w-full text-left p-2 rounded-lg border border-border hover:border-border-strong hover:bg-bg-hover transition-colors">
+<div class="font-body-sm text-body-sm text-text-strong font-medium">
+                    Pause this Objective while the Platform is the priority
+                  </div>
+</button>
+</div>
+</div>
+<!-- Item 2: Question -->
+<div class="space-y-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5 text-tertiary text-label-xs font-label-xs font-semibold">
+<span class="material-symbols-outlined text-sm">help_outline</span>
+<span>Question</span>
+</div>
+<span class="text-label-xs font-label-xs text-muted">Open since Sep 2</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm font-semibold text-text-strong">
+                Which area is Territory 1?
+              </h3>
+<!-- Input row -->
+<div class="flex items-center gap-2 pt-1">
+<input class="flex-1 h-8 px-2.5 bg-surface-container-lowest border border-border-strong rounded-lg font-body-sm text-body-sm text-text placeholder-muted focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container" placeholder="Type an answer…" type="text"/>
+<button class="h-8 px-3 bg-card border border-border-strong rounded-lg text-body-sm font-body-sm text-text-strong font-medium hover:bg-bg-hover transition-colors shrink-0">
+                  Answer
+                </button>
+</div>
+</div>
+</div>
+<!-- 2. CARD "Autonomy" -->
+<div class="p-4 bg-card border border-border rounded-xl space-y-3">
+<span class="font-headline-sm text-headline-sm font-semibold text-muted block">Autonomy</span>
+<p class="font-body-sm text-body-sm text-text leading-normal">
+<strong class="font-semibold text-text-strong">propose</strong> — Verl suggests next steps as Decisions for you.
+            </p>
+<button class="w-full h-8 px-3 bg-card border border-border-strong rounded-lg text-body-sm font-body-sm text-text-strong font-medium hover:bg-bg-hover transition-colors text-center">
+              Allow Verl to act…
+            </button>
+</div>
+<!-- 3. CARD "History" -->
+<div class="p-4 bg-card border border-border rounded-xl space-y-3">
+<span class="font-headline-sm text-headline-sm font-semibold text-muted block">History</span>
+<!-- Timeline stream (Newest first) -->
+<div class="relative pl-4 space-y-3 font-body-sm text-body-sm before:content-[''] before:absolute before:left-1 before:top-2 before:bottom-2 before:w-0.5 before:bg-border">
+<!-- Item 1 -->
+<div class="relative">
+<span class="absolute -left-[15px] top-1.5 w-2 h-2 rounded-full bg-border-strong"></span>
+<div class="text-text-strong">Review written</div>
+<div class="text-label-xs font-label-xs text-muted">Oct 1 · verl</div>
+</div>
+<!-- Item 2 -->
+<div class="relative">
+<span class="absolute -left-[15px] top-1.5 w-2 h-2 rounded-full bg-border-strong"></span>
+<div class="text-text-strong">Decision raised: What should I do next…</div>
+<div class="text-label-xs font-label-xs text-muted">Oct 1 · verl</div>
+</div>
+<!-- Item 3 -->
+<div class="relative">
+<span class="absolute -left-[15px] top-1.5 w-2 h-2 rounded-full bg-border-strong"></span>
+<div class="text-text-strong">Objective created</div>
+<div class="text-label-xs font-label-xs text-muted">Aug 19 · fred</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

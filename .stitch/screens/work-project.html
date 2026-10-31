@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Falcon Work - Project Page</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Instrument Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            bg: '#faf9f7',
+            'bg-content': '#f4f1ec',
+            'bg-elevated': '#ffffff',
+            card: '#ffffff',
+            'bg-hover': '#efebe4',
+            text: '#403c35',
+            'text-strong': '#211e1a',
+            muted: '#6e6960',
+            border: '#e8e4dc',
+            'border-strong': '#d6d0c5',
+            accent: '#bd4531',
+            'accent-subtle': '#bd453114',
+            'accent-2': '#0d9488',
+            ok: '#166534',
+            warn: '#92400e',
+            danger: '#b91c1c',
+            info: '#1d4ed8'
+          },
+          boxShadow: {
+            subtle: '0 1px 2px rgba(60, 42, 24, 0.05)',
+            panel: '-4px 0 16px rgba(0, 0, 0, 0.05)'
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body {
+      font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+      background-color: #faf9f7;
+      color: #403c35;
+      -webkit-font-smoothing: antialiased;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+    }
+    .material-symbols-outlined.fill {
+      font-variation-settings: 'FILL' 1;
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #e8e4dc;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #d6d0c5;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex bg-bg text-text text-[13px] leading-normal select-none">
+<!-- LEFT SIDEBAR (Identical to OpenClaw Control UI) -->
+<aside class="w-60 flex-shrink-0 bg-bg-content border-r border-border flex flex-col justify-between h-full z-10">
+<div class="flex flex-col">
+<!-- Agent Identity Header -->
+<div class="p-3.5 pb-2 flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-7 h-7 rounded-full bg-[#d9e0db] text-text-strong flex items-center justify-center font-medium text-xs relative">
+            V
+            <span class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#16a34a] border-2 border-bg-content"></span>
+</div>
+<div>
+<div class="font-semibold text-text-strong text-[13px] leading-tight">Verl</div>
+</div>
+</div>
+</div>
+<!-- New Session CTA Button -->
+<div class="px-3.5 py-1.5">
+<button class="w-full py-1.5 px-3 bg-white border border-border hover:bg-bg-hover text-text-strong rounded-[6px] flex items-center justify-center gap-1.5 text-xs font-medium shadow-subtle transition-colors">
+<span class="material-symbols-outlined text-[16px]">add</span>
+<span>New Session</span>
+</button>
+</div>
+<!-- Pages Navigation -->
+<div class="px-2 mt-3">
+<div class="px-2.5 py-1 text-[11px] font-semibold text-muted tracking-wider uppercase">Pages</div>
+<nav class="space-y-0.5 mt-0.5">
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">home</span>
+<span>Home</span>
+</a>
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">smart_toy</span>
+<span>Automations</span>
+</a>
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">extension</span>
+<span>Plugins</span>
+</a>
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">sensor_window</span>
+<span>Portals</span>
+</a>
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">dashboard</span>
+<span>Dashboards</span>
+</a>
+<!-- Work (Active) -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-text-strong bg-bg-hover font-semibold rounded-[6px] text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px] fill">checklist</span>
+<span>Work</span>
+</a>
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">lock</span>
+<span>Vault</span>
+</a>
+</nav>
+</div>
+<!-- Sessions List -->
+<div class="px-2 mt-5">
+<div class="px-2.5 py-1 text-[11px] font-semibold text-muted tracking-wider uppercase">Sessions</div>
+<div class="space-y-0.5 mt-0.5">
+<!-- Falcon Dash (Teal dot / running) -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors truncate" href="#">
+<span class="w-2 h-2 rounded-full bg-[#0d9488] flex-shrink-0"></span>
+<span class="truncate">Falcon Dash</span>
+</a>
+<!-- Building Manager + Job Dispatcher (Grey dot / idle) -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors truncate" href="#">
+<span class="w-2 h-2 rounded-full bg-[#a39f99] flex-shrink-0"></span>
+<span class="truncate">Building Manager + Job Dispatc...</span>
+</a>
+<!-- Build Fredbot Backend 2.0 Manager (Teal dot / running) -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors truncate" href="#">
+<span class="w-2 h-2 rounded-full bg-[#0d9488] flex-shrink-0"></span>
+<span class="truncate">Build Fredbot Backend 2.0 Man...</span>
+</a>
+<!-- Portal Fix (Grey dot) -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors truncate" href="#">
+<span class="w-2 h-2 rounded-full bg-[#a39f99] flex-shrink-0"></span>
+<span class="truncate">Portal Fix</span>
+</a>
+<!-- OpenAI application watch (Grey dot) -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors truncate" href="#">
+<span class="w-2 h-2 rounded-full bg-[#a39f99] flex-shrink-0"></span>
+<span class="truncate">OpenAI application watch</span>
+</a>
+<!-- Morning Brief (Grey dot) -->
+<a class="flex items-center gap-2.5 px-2.5 py-1.5 text-muted hover:text-text-strong hover:bg-bg-hover rounded-[6px] text-xs transition-colors truncate" href="#">
+<span class="w-2 h-2 rounded-full bg-[#a39f99] flex-shrink-0"></span>
+<span class="truncate">Morning Brief</span>
+</a>
+</div>
+</div>
+</div>
+<!-- User Profile Footer -->
+<div class="p-3 border-t border-border flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-[#b24838] text-white flex items-center justify-center font-medium text-[11px]">
+          F
+        </div>
+<div>
+<div class="font-semibold text-text-strong text-xs leading-none">Fred</div>
+<div class="text-[11px] text-[#16a34a] leading-none mt-0.5">online</div>
+</div>
+</div>
+<button class="text-muted hover:text-text-strong p-1 rounded hover:bg-bg-hover transition-colors">
+<span class="material-symbols-outlined text-[16px]">settings</span>
+</button>
+</div>
+</aside>
+<!-- MAIN VIEWPORT CONTAINER -->
+<div class="flex-1 flex flex-col h-full overflow-hidden min-w-0 bg-bg relative">
+<!-- TOP HEADER ROW (Matching standard Work page header) -->
+<header class="h-14 border-b border-border px-6 flex items-center justify-between flex-shrink-0 bg-bg">
+<div class="flex items-center gap-4">
+<h1 class="text-xl font-semibold text-text-strong tracking-tight">Work</h1>
+</div>
+<div class="flex items-center gap-3">
+<!-- Search field -->
+<div class="relative w-64">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-muted">search</span>
+<input class="w-full bg-white border border-border rounded-[6px] pl-8 pr-3 py-1.5 text-xs text-text placeholder-muted focus:outline-none focus:border-border-strong shadow-subtle" placeholder="Search work..." type="text"/>
+</div>
+<!-- Agent filter -->
+<div class="relative">
+<button class="px-2.5 py-1.5 bg-white border border-border rounded-[6px] text-xs text-text-strong flex items-center gap-1.5 hover:bg-bg-hover shadow-subtle">
+<span class="material-symbols-outlined text-[16px] text-muted">tune</span>
+<span>All agents</span>
+<span class="material-symbols-outlined text-[14px] text-muted">expand_more</span>
+</button>
+</div>
+<!-- Primary New Button -->
+<button class="px-3.5 py-1.5 bg-accent hover:bg-[#a83b29] text-white rounded-[6px] text-xs font-semibold flex items-center gap-1 shadow-subtle transition-colors">
+<span class="material-symbols-outlined text-[16px]">add</span>
+<span>New</span>
+</button>
+</div>
+</header>
+<!-- CONTENT AND RIGHT PANEL WRAPPER -->
+<div class="flex-1 flex overflow-hidden min-h-0 relative">
+<!-- MAIN SCROLLABLE CONTENT AREA (fills width, accounts for panel overlay/offset) -->
+<main class="flex-1 overflow-y-auto px-8 py-5 min-w-0 pb-20 pr-[448px]">
+<!-- Breadcrumb & Back Row -->
+<div class="flex items-center gap-2 text-xs text-muted mb-3">
+<a class="inline-flex items-center gap-0.5 text-muted hover:text-text-strong font-medium transition-colors" href="#">
+<span>‹ Back</span>
+</a>
+<span class="text-border-strong">/</span>
+<div class="flex items-center gap-1.5">
+<a class="hover:text-text-strong transition-colors" href="#">Work</a>
+<span class="text-muted/60">›</span>
+<a class="hover:text-text-strong transition-colors" href="#">Fredbot Platform</a>
+<span class="text-muted/60">›</span>
+<span class="text-text-strong font-medium">Backend 2.0: Job Dispatcher first build</span>
+</div>
+</div>
+<!-- Project Title & Header Block -->
+<div class="mb-5">
+<div class="flex items-center justify-between gap-4 mb-2">
+<div class="flex items-center gap-3">
+<h2 class="text-2xl font-semibold text-text-strong tracking-tight">Backend 2.0: Job Dispatcher first build</h2>
+<span class="px-2 py-0.5 text-[11px] font-medium rounded-full bg-bg-hover text-muted border border-border">open</span>
+</div>
+<!-- Header Actions -->
+<div class="flex items-center gap-2 flex-shrink-0">
+<button class="px-2.5 py-1 bg-white border border-border hover:bg-bg-hover text-text-strong rounded-[6px] text-xs font-medium shadow-subtle transition-colors">
+                Edit
+              </button>
+<button class="px-2.5 py-1 bg-white border border-border hover:bg-bg-hover text-text-strong rounded-[6px] text-xs font-medium shadow-subtle transition-colors">
+                Change session
+              </button>
+<button class="px-2 py-1 text-muted hover:text-danger text-xs font-medium transition-colors ml-1">
+                Abandon
+              </button>
+</div>
+</div>
+<!-- Meta Line -->
+<div class="flex items-center flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted">
+<a class="text-accent hover:underline flex items-center gap-1 font-medium" href="#">
+<span>serves #2 Fredbot runs customer Offices on its own platform</span>
+</a>
+<span class="text-border-strong">•</span>
+<div class="flex items-center gap-1.5">
+<span>Accountable:</span>
+<div class="w-4 h-4 rounded-full bg-[#b24838] text-white flex items-center justify-center text-[9px] font-bold">f</div>
+<span class="text-text-strong font-medium">fred</span>
+</div>
+<!-- Session Chip -->
+<div class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white border border-border rounded-full text-xs text-text shadow-subtle">
+<span class="w-1.5 h-1.5 rounded-full bg-[#a39f99]"></span>
+<span>Building Manager + Job Dispatcher</span>
+<span class="text-[11px] text-muted">idle</span>
+</div>
+</div>
+</div>
+<!-- Outcome Block -->
+<div class="bg-white border border-border rounded-[10px] p-3.5 mb-6 shadow-subtle">
+<div class="text-[12px] font-semibold text-muted mb-1">Outcome</div>
+<div class="text-text text-[13px] leading-relaxed">
+            The Job Dispatcher runs a real Job end to end on the management Building, under the Backend 2.0 design.
+          </div>
+</div>
+<!-- SECTION: Milestones -->
+<section class="mb-7">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-1.5 text-[13px] font-semibold text-text-strong">
+<span class="w-1.5 h-1.5 rounded-full bg-accent"></span>
+<span>Milestones</span>
+</div>
+</div>
+<div class="space-y-3">
+<!-- Milestone 1 (Achieved) -->
+<div class="bg-white border border-border rounded-[10px] p-4 shadow-subtle">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3">
+<!-- Check badge -->
+<div class="w-5 h-5 rounded-full bg-[#ecfdf5] border border-[#a7f3d0] text-ok flex items-center justify-center flex-shrink-0 mt-0.5 text-xs">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</div>
+<div>
+<div class="flex items-baseline gap-2">
+<span class="text-xs font-mono text-muted">1</span>
+<h4 class="font-semibold text-text-strong text-[14px]">Architecture decisions settled</h4>
+<span class="text-xs text-muted">achieved Sep 27</span>
+</div>
+<!-- Success condition & achieved basis -->
+<div class="mt-2 space-y-1 text-xs">
+<div>
+<span class="text-muted font-medium">Success condition:</span>
+<span class="text-muted ml-1">Verb kinds, system contract, data store and secrets are decided and in the spec.</span>
+</div>
+<div>
+<span class="text-muted font-medium">Achieved basis:</span>
+<span class="text-text ml-1">D37–D40 accepted by Sep 21; secret store superseded by Google Secret Manager on Sep 27.</span>
+</div>
+</div>
+<!-- Evidence Chips -->
+<div class="mt-3 flex items-center gap-2">
+<span class="text-[11px] text-muted">Evidence:</span>
+<span class="inline-flex items-center px-1.5 py-0.5 bg-bg-hover border border-border rounded text-[11px] font-mono text-text">
+                        fredbot-backend#330
+                      </span>
+<span class="inline-flex items-center px-1.5 py-0.5 bg-bg-hover border border-border rounded text-[11px] font-mono text-text">
+                        fredbot-backend#289
+                      </span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Milestone 2 (Achieved) -->
+<div class="bg-white border border-border rounded-[10px] p-4 shadow-subtle">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 w-full">
+<!-- Check badge -->
+<div class="w-5 h-5 rounded-full bg-[#ecfdf5] border border-[#a7f3d0] text-ok flex items-center justify-center flex-shrink-0 mt-0.5 text-xs">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</div>
+<div class="flex-1">
+<div class="flex items-baseline gap-2">
+<span class="text-xs font-mono text-muted">2</span>
+<h4 class="font-semibold text-text-strong text-[14px]">Dispatcher installed on the management Building</h4>
+<span class="text-xs text-muted">achieved Sep 30</span>
+</div>
+<div class="mt-2 text-xs">
+<span class="text-muted font-medium">Basis:</span>
+<span class="text-text ml-1">Release 20260930-idle-5771a1b9f68b installed on VM1003 (management-test).</span>
+</div>
+<div class="mt-2.5 flex items-center gap-2">
+<span class="text-[11px] text-muted">Evidence:</span>
+<span class="inline-flex items-center px-1.5 py-0.5 bg-bg-hover border border-border rounded text-[11px] font-mono text-text">
+                        fredbot-backend#378
+                      </span>
+</div>
+<!-- Tasks List -->
+<div class="mt-3.5 pt-3 border-t border-border/70 space-y-1.5">
+<div class="text-[12px] font-semibold text-muted">Completed tasks (2)</div>
+<div class="flex items-center gap-2 text-xs text-muted">
+<span class="material-symbols-outlined text-[14px] text-ok">check</span>
+<span>Bootstrap Firestore for the Dispatcher</span>
+</div>
+<div class="flex items-center gap-2 text-xs text-muted">
+<span class="material-symbols-outlined text-[14px] text-ok">check</span>
+<span>Prepare building-903 as management-test</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Milestone 3 (Open - with Selected Task) -->
+<div class="bg-white border border-border rounded-[10px] p-4 shadow-subtle">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-start gap-3 w-full">
+<!-- Open circle badge -->
+<div class="w-5 h-5 rounded-full border-2 border-border-strong text-muted flex items-center justify-center flex-shrink-0 mt-0.5 text-xs">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong"></span>
+</div>
+<div class="flex-1">
+<div class="flex items-center justify-between">
+<div class="flex items-baseline gap-2">
+<span class="text-xs font-mono text-muted">3</span>
+<h4 class="font-semibold text-text-strong text-[14px]">First real Job runs end to end</h4>
+<span class="px-1.5 py-0.2 text-[10px] font-medium rounded bg-bg-hover text-muted">open</span>
+<span class="text-xs text-muted">• 0 of 3 Tasks done</span>
+</div>
+<!-- Mark Achieved Button (Disabled with Reason) -->
+<div class="flex items-center gap-2">
+<span class="text-xs text-muted italic">3 Tasks still open</span>
+<button class="px-2.5 py-1 bg-bg-hover text-muted/60 border border-border rounded-[6px] text-xs font-medium cursor-not-allowed" disabled="">
+                          Mark achieved
+                        </button>
+</div>
+</div>
+<!-- Success Condition -->
+<div class="mt-2 text-xs">
+<span class="text-muted font-medium">Success condition:</span>
+<span class="text-text ml-1">A Job is accepted, gated by Jev, executed and reported back with a completion report.</span>
+</div>
+<!-- Task List under Milestone 3 -->
+<div class="mt-4 space-y-1.5">
+<div class="text-[12px] font-semibold text-muted">Tasks (3)</div>
+<!-- Task 1: SELECTED ROW -->
+<div class="p-2.5 rounded-[8px] bg-accent-subtle border border-accent/30 flex items-center justify-between cursor-pointer transition-colors">
+<div class="flex items-center gap-2.5 min-w-0">
+<!-- In progress teal half-circle / pie -->
+<div class="w-4 h-4 rounded-full border-2 border-[#0d9488] flex items-center justify-center relative flex-shrink-0">
+<div class="w-2 h-4 bg-[#0d9488] absolute left-0 rounded-l-full"></div>
+</div>
+<span class="font-semibold text-text-strong text-xs truncate">Authenticate the NOC backend to the API independently of Verl</span>
+</div>
+<div class="flex items-center gap-2 flex-shrink-0 ml-2">
+<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#ccfbf1] text-[#0f766e]">in progress</span>
+<div class="w-4 h-4 rounded-full bg-[#d9e0db] text-text-strong flex items-center justify-center text-[9px] font-semibold" title="verl">v</div>
+<span class="material-symbols-outlined text-[16px] text-accent">chevron_right</span>
+</div>
+</div>
+<!-- Task 2: Waiting on fred -->
+<div class="p-2.5 rounded-[8px] hover:bg-bg-hover border border-transparent hover:border-border flex items-center justify-between cursor-pointer transition-colors">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-[16px] text-muted flex-shrink-0">radio_button_unchecked</span>
+<span class="text-text-strong text-xs truncate">Reconnect GitHub OAuth for the Building Manager</span>
+</div>
+<div class="flex items-center gap-1.5 text-xs text-warn flex-shrink-0 ml-2">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="text-[11px]">waiting on fred · follow up Oct 2</span>
+</div>
+</div>
+<!-- Task 3: Open / depends on -->
+<div class="p-2.5 rounded-[8px] hover:bg-bg-hover border border-transparent hover:border-border flex items-center justify-between cursor-pointer transition-colors">
+<div class="flex items-center gap-2.5 min-w-0">
+<span class="material-symbols-outlined text-[16px] text-muted flex-shrink-0">radio_button_unchecked</span>
+<span class="text-text-strong text-xs truncate">Run the first real Job through the Dispatcher</span>
+</div>
+<div class="flex items-center gap-2 text-xs text-muted flex-shrink-0 ml-2">
+<span class="px-1.5 py-0.5 rounded text-[10px] bg-bg-hover text-muted border border-border">open</span>
+<span class="text-[11px] italic">— depends on: Authenticate the NOC backend…</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION: Decisions, Questions and Findings -->
+<section class="mb-7">
+<div class="flex items-center gap-1.5 text-[13px] font-semibold text-text-strong mb-3">
+<span class="w-1.5 h-1.5 rounded-full bg-[#d97706]"></span>
+<span>Decisions, Questions and Findings</span>
+</div>
+<div class="bg-white border border-border rounded-[10px] divide-y divide-border shadow-subtle overflow-hidden">
+<!-- Decision 1 -->
+<div class="p-3 hover:bg-[#fbfaf8] flex items-baseline justify-between gap-4 transition-colors">
+<div class="flex items-baseline gap-2.5">
+<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wider bg-bg-hover text-muted">Decision</span>
+<span class="text-xs text-muted">decided Sep 20</span>
+<span class="text-xs font-semibold text-text-strong">“What kinds of verbs does Backend 2.0 have?”</span>
+</div>
+<div class="text-xs text-text font-medium flex items-center gap-1 text-right flex-shrink-0">
+<span class="text-muted">→</span>
+<span>Agentic, component and scripted verbs</span>
+</div>
+</div>
+<!-- Decision 2 -->
+<div class="p-3 hover:bg-[#fbfaf8] flex items-baseline justify-between gap-4 transition-colors">
+<div class="flex items-baseline gap-2.5">
+<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wider bg-bg-hover text-muted">Decision</span>
+<span class="text-xs text-muted">decided Sep 27</span>
+<span class="text-xs font-semibold text-text-strong">“Where do Backend 2.0 secrets live?”</span>
+</div>
+<div class="text-xs text-text font-medium flex items-center gap-1 text-right flex-shrink-0">
+<span class="text-muted">→</span>
+<span>Google Cloud Secret Manager</span>
+</div>
+</div>
+<!-- Decision 3 -->
+<div class="p-3 hover:bg-[#fbfaf8] flex items-baseline justify-between gap-4 transition-colors">
+<div class="flex items-baseline gap-2.5">
+<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wider bg-bg-hover text-muted">Decision</span>
+<span class="text-xs text-muted">decided Sep 28</span>
+<span class="text-xs font-semibold text-text-strong">“Migration or first build?”</span>
+</div>
+<div class="text-xs text-text font-medium flex items-center gap-1 text-right flex-shrink-0">
+<span class="text-muted">→</span>
+<span>First build</span>
+</div>
+</div>
+<!-- Finding 1 -->
+<div class="p-3 hover:bg-[#fbfaf8] flex items-baseline justify-between gap-4 transition-colors">
+<div class="flex items-baseline gap-2.5">
+<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wider bg-bg-hover text-muted">Finding</span>
+<span class="text-xs text-muted">Sep 26</span>
+<span class="text-xs text-text">“The reference Office template still grants operator.admin, contrary to D44.”</span>
+</div>
+</div>
+<!-- Finding 2 -->
+<div class="p-3 hover:bg-[#fbfaf8] flex items-baseline justify-between gap-4 transition-colors">
+<div class="flex items-baseline gap-2.5">
+<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wider bg-bg-hover text-muted">Finding</span>
+<span class="text-xs text-muted">Sep 26</span>
+<span class="text-xs text-text">“The sole executor runs on platform-01, so platform-01 cannot repair itself through it.”</span>
+</div>
+</div>
+</div>
+</section>
+<!-- SECTION: History (collapsed preview) -->
+<section class="mb-8">
+<div class="flex items-center gap-1.5 text-[13px] font-semibold text-text-strong mb-3">
+<span class="w-1.5 h-1.5 rounded-full bg-muted"></span>
+<span>History</span>
+</div>
+<div class="bg-white border border-border rounded-[10px] p-3 space-y-2 text-xs shadow-subtle">
+<div class="flex items-center gap-2 text-muted">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong"></span>
+<span>Sep 30 · Milestone achieved: Dispatcher installed on the management Building · <span class="text-text-strong font-medium">verl</span></span>
+</div>
+<div class="flex items-center gap-2 text-muted">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong"></span>
+<span>Sep 30 · Task completed: Prepare building-903 as management-test · <span class="text-text-strong font-medium">verl</span></span>
+</div>
+<div class="flex items-center gap-2 text-muted">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong"></span>
+<span>Sep 28 · Decision made: First build · <span class="text-text-strong font-medium">fred</span></span>
+</div>
+<div class="pt-2 border-t border-border/70">
+<a class="text-accent hover:underline font-medium text-xs" href="#">Show all history →</a>
+</div>
+</div>
+</section>
+</main>
+<!-- RIGHT SIDE PANEL (420px, white, hairline left border, overlaying right part of page) -->
+<aside class="w-[420px] bg-white border-l border-border h-full flex flex-col absolute right-0 top-0 bottom-0 shadow-panel z-20">
+<!-- Panel Header -->
+<div class="px-5 py-3.5 border-b border-border flex items-center justify-between flex-shrink-0 bg-white">
+<div class="flex items-center gap-2">
+<span class="px-1.5 py-0.5 rounded text-[12px] font-semibold bg-bg-hover text-muted">Task</span>
+<a class="text-xs text-accent hover:underline font-medium" href="#">Open as page</a>
+</div>
+<button class="text-muted hover:text-text-strong p-1 rounded hover:bg-bg-hover transition-colors">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<!-- Panel Body (Scrollable) -->
+<div class="flex-1 overflow-y-auto px-5 py-4 space-y-5 text-xs">
+<!-- Title and Status Pill -->
+<div>
+<div class="flex items-start justify-between gap-2">
+<h3 class="text-[17px] font-semibold text-text-strong leading-snug">Authenticate the NOC backend to the API independently of Verl</h3>
+</div>
+<div class="mt-2.5 flex items-center gap-2"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-[#ccfbf1] text-[#0f766e]"><span class="w-1.5 h-1.5 rounded-full bg-[#0d9488]"></span><span>in progress</span></span></div>
+</div>
+<!-- Metadata -->
+<div class="p-3 bg-bg rounded-[8px] border border-border space-y-2">
+<div class="flex items-center gap-2"><span class="text-muted">Agent:</span><div class="flex items-center gap-1.5"><div class="w-4 h-4 rounded-full bg-[#d9e0db] text-text-strong flex items-center justify-center text-[9px] font-semibold">v</div><span class="text-text font-medium">verl</span></div></div>
+<div class="flex items-start gap-1.5">
+<span class="text-muted">Milestone:</span>
+<span class="text-text font-medium">Milestone 3: First real Job runs end to end</span>
+</div>
+</div>
+<!-- Session Row -->
+<div>
+<div class="text-[12px] font-semibold text-muted mb-1.5">Session</div>
+<div class="p-2.5 bg-bg border border-border rounded-[8px] flex items-center justify-between">
+<div class="flex items-center gap-2 min-w-0"><span class="w-2 h-2 rounded-full bg-[#0d9488] flex-shrink-0"></span><span class="font-medium text-text-strong text-xs truncate">Build Fredbot Backend 2.0 Manager</span><span class="text-[11px] text-[#0f766e] flex-shrink-0">running</span></div>
+<a class="text-accent hover:underline font-medium text-xs flex-shrink-0 ml-2" href="#">Open session</a>
+</div>
+</div>
+<!-- Done when -->
+<div>
+<div class="text-[12px] font-semibold text-muted mb-1">Done when</div>
+<div class="text-text leading-relaxed p-2.5 bg-bg rounded-[6px] border border-border/80">
+              The NOC backend calls the API with its own credential and the call is audited.
+            </div>
+</div>
+<!-- Description -->
+<div>
+<div class="text-[12px] font-semibold text-muted mb-1">Description</div>
+<div class="text-text leading-relaxed">
+              Permanent NOC-backend → API authentication that does not route through my session.
+            </div>
+</div>
+<!-- Blocks -->
+<div><div class="text-[12px] font-semibold text-muted mb-1">Needed by</div><div class="flex items-center gap-2 text-text font-medium p-2 bg-bg rounded-[6px] border border-border/80"><span class="material-symbols-outlined text-[15px] text-muted">arrow_forward</span><span>Run the first real Job through the Dispatcher</span></div></div>
+<!-- Activity -->
+<div>
+<div class="text-[12px] font-semibold text-muted mb-1.5">Activity (captured automatically)</div>
+<div class="p-2.5 bg-bg rounded-[6px] border border-border/80 text-muted space-y-1">
+<div class="flex items-start gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong mt-1.5 flex-shrink-0"></span>
+<span class="leading-relaxed"><strong class="text-text-strong font-medium">Oct 1</strong> · session · Worker <code class="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-border text-text">70823ee0</code> implementing NOC-backend authentication</span>
+</div>
+</div>
+</div>
+<!-- Result -->
+<div>
+<div class="text-[12px] font-semibold text-muted mb-1">Result</div>
+<div class="text-muted italic">
+              No Result recorded yet.
+            </div>
+</div>
+</div>
+<!-- Panel Footer Actions -->
+<div class="px-5 py-3 border-t border-border flex items-center justify-between flex-shrink-0 bg-white">
+<div class="flex items-center gap-2">
+<button class="px-3 py-1.5 bg-white border border-border hover:bg-bg-hover text-text-strong rounded-[6px] text-xs font-medium shadow-subtle transition-colors">
+              Edit
+            </button>
+<button class="px-3 py-1.5 bg-white border border-border hover:bg-bg-hover text-text-strong rounded-[6px] text-xs font-medium shadow-subtle transition-colors">
+              Wait…
+            </button>
+</div>
+<button class="text-muted hover:text-danger text-xs font-medium px-2 py-1 transition-colors">
+            Abandon
+          </button>
+</div>
+</aside>
+</div>
+</div>
+</body>
+</html>

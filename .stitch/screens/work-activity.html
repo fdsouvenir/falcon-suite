@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Falcon Work - Activity | OpenClaw Control UI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "secondary-fixed": "#89f5e7",
+            "outline": "#8c716c",
+            "on-tertiary-container": "#d5f6ff",
+            "error": "#ba1a1a",
+            "surface-container-highest": "#e3e2e0",
+            "tertiary-fixed-dim": "#7cd3e8",
+            "tertiary-container": "#00788b",
+            "info": "#1d4ed8",
+            "on-secondary": "#ffffff",
+            "surface-dim": "#dadad8",
+            "surface-container-low": "#f4f3f1",
+            "on-error": "#ffffff",
+            "outline-variant": "#dfbfba",
+            "accent-subtle": "#bd453114",
+            "warn": "#92400e",
+            "on-secondary-fixed-variant": "#005049",
+            "primary-container": "#bd4531",
+            "on-background": "#1a1c1b",
+            "primary": "#9c2d1c",
+            "on-surface-variant": "#58413d",
+            "surface": "#faf9f7",
+            "on-error-container": "#93000a",
+            "on-tertiary-fixed": "#001f26",
+            "on-primary-container": "#ffece9",
+            "text-strong": "#211e1a",
+            "on-secondary-container": "#006f66",
+            "on-primary": "#ffffff",
+            "text": "#403c35",
+            "on-tertiary-fixed-variant": "#004e5b",
+            "on-secondary-fixed": "#00201d",
+            "surface-variant": "#e3e2e0",
+            "primary-fixed-dim": "#ffb4a6",
+            "primary-fixed": "#ffdad4",
+            "background": "#faf9f7",
+            "surface-tint": "#a93724",
+            "muted": "#6e6960",
+            "inverse-on-surface": "#f1f1ef",
+            "surface-container": "#efeeec",
+            "inverse-primary": "#ffb4a6",
+            "danger": "#b91c1c",
+            "tertiary": "#005e6d",
+            "on-primary-fixed": "#3f0300",
+            "tertiary-fixed": "#a8edff",
+            "surface-bright": "#faf9f7",
+            "on-surface": "#1a1c1b",
+            "card": "#ffffff",
+            "secondary-container": "#86f2e4",
+            "surface-container-high": "#e9e8e6",
+            "on-primary-fixed-variant": "#881f0f",
+            "error-container": "#ffdad6",
+            "border-strong": "#d6d0c5",
+            "on-tertiary": "#ffffff",
+            "bg-hover": "#efebe4",
+            "secondary": "#006a61",
+            "border": "#e8e4dc",
+            "bg-content": "#f4f1ec",
+            "inverse-surface": "#2f3130",
+            "secondary-fixed-dim": "#6bd8cb",
+            "surface-container-lowest": "#ffffff",
+            "ok": "#166534"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "space-2xl": "2rem",
+            "margin": "2rem",
+            "gutter": "1rem",
+            "space-sm": "0.5rem",
+            "space-md": "0.75rem",
+            "space-xs": "0.25rem",
+            "space-xl": "1.5rem",
+            "space-lg": "1rem"
+          },
+          "fontFamily": {
+            "headline-md": ["Instrument Sans"],
+            "headline-sm": ["Instrument Sans"],
+            "code": ["JetBrains Mono"],
+            "headline-lg": ["Instrument Sans"],
+            "body-md": ["Instrument Sans"],
+            "label-xs": ["Instrument Sans"],
+            "body-sm": ["Instrument Sans"]
+          },
+          "fontSize": {
+            "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+            "headline-sm": ["13px", { "lineHeight": "18px", "fontWeight": "600" }],
+            "code": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "label-xs": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }]
+          }
+        },
+      },
+    }
+  </script>
+</head>
+<body class="bg-background text-text font-body-md text-body-md antialiased min-h-screen selection:bg-primary-fixed selection:text-on-primary-fixed flex">
+<!-- LEFT SIDEBAR: Shared Component (SideNavBar) -->
+<aside class="w-60 h-screen flex flex-col fixed left-0 top-0 bg-bg-content border-r border-border z-30 select-none">
+<!-- Agent header -->
+<div class="px-space-md py-space-md flex items-center justify-between border-b border-border">
+<div class="flex items-center gap-2">
+<div class="relative flex items-center justify-center w-7 h-7 rounded-full bg-border-strong text-text-strong font-code text-body-sm font-semibold">
+          v
+          <span class="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-secondary ring-2 ring-bg-content"></span>
+</div>
+<span class="font-headline-sm text-headline-sm font-semibold text-text-strong">Verl</span>
+</div>
+</div>
+<!-- New Session CTA Button -->
+<div class="px-space-md pt-space-md pb-space-sm">
+<button class="w-full h-8 px-space-sm bg-card hover:bg-bg-hover text-text-strong border border-border rounded-lg text-body-sm font-medium flex items-center justify-center gap-1.5 transition-colors duration-150 shadow-none">
+<span class="material-symbols-outlined text-base">add</span>
+<span>New Session</span>
+</button>
+</div>
+<!-- Navigation List: Pages -->
+<div class="flex-1 overflow-y-auto px-space-md py-space-xs space-y-4">
+<div>
+<div class="px-2 py-1 text-label-xs font-label-xs text-muted tracking-wide">Pages</div>
+<nav class="space-y-0.5 mt-0.5">
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]">home</span>
+<span class="text-body-sm">Home</span>
+</a>
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]">smart_toy</span>
+<span class="text-body-sm">Automations</span>
+</a>
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]">extension</span>
+<span class="text-body-sm">Plugins</span>
+</a>
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]">sensor_window</span>
+<span class="text-body-sm">Portals</span>
+</a>
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]">dashboard</span>
+<span class="text-body-sm">Dashboards</span>
+</a>
+<!-- ACTIVE TAB: Work -->
+<a class="bg-bg-hover text-text-strong font-semibold rounded-lg px-2.5 py-1.5 flex items-center gap-2 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px] text-primary" data-weight="fill" style="font-variation-settings: 'FILL' 1;">checklist</span>
+<span class="text-body-sm">Work</span>
+</a>
+<a class="text-muted hover:bg-bg-hover hover:text-text-strong rounded-lg px-2.5 py-1.5 flex items-center gap-2 transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[18px]">lock</span>
+<span class="text-body-sm">Vault</span>
+</a>
+</nav>
+</div>
+<!-- Navigation List: Sessions -->
+<div>
+<div class="px-2 py-1 text-label-xs font-label-xs text-muted tracking-wide">Sessions</div>
+<div class="space-y-0.5 mt-0.5 text-body-sm"><div class="px-2.5 py-1.5 rounded-lg hover:bg-bg-hover flex items-center gap-2 text-text cursor-pointer transition-colors duration-150"><span class="w-1.5 h-1.5 rounded-full bg-[#0d9488] flex-shrink-0"></span><span class="truncate">Falcon Dash</span></div><div class="px-2.5 py-1.5 rounded-lg hover:bg-bg-hover flex items-center gap-2 text-muted cursor-pointer transition-colors duration-150"><span class="w-1.5 h-1.5 rounded-full bg-muted flex-shrink-0"></span><span class="truncate">Building Manager + Job Dispatcher</span></div><div class="px-2.5 py-1.5 rounded-lg hover:bg-bg-hover flex items-center gap-2 text-text cursor-pointer transition-colors duration-150"><span class="w-1.5 h-1.5 rounded-full bg-[#0d9488] flex-shrink-0"></span><span class="truncate">Build Fredbot Backend 2.0 Manager</span></div><div class="px-2.5 py-1.5 rounded-lg hover:bg-bg-hover flex items-center gap-2 text-muted cursor-pointer transition-colors duration-150"><span class="w-1.5 h-1.5 rounded-full bg-muted flex-shrink-0"></span><span class="truncate">Portal Fix</span></div><div class="px-2.5 py-1.5 rounded-lg hover:bg-bg-hover flex items-center gap-2 text-muted cursor-pointer transition-colors duration-150"><span class="w-1.5 h-1.5 rounded-full bg-muted flex-shrink-0"></span><span class="truncate">OpenAI application watch</span></div><div class="px-2.5 py-1.5 rounded-lg hover:bg-bg-hover flex items-center gap-2 text-muted cursor-pointer transition-colors duration-150"><span class="w-1.5 h-1.5 rounded-full bg-muted flex-shrink-0"></span><span class="truncate">Morning Brief</span></div></div>
+</div>
+</div>
+<!-- User Fred Footer -->
+<div class="p-space-md border-t border-border flex items-center justify-between bg-bg-content">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-text-strong text-surface flex items-center justify-center font-code text-body-sm font-semibold">
+          F
+        </div>
+<span class="text-body-sm font-semibold text-text-strong">Fred</span>
+</div>
+<button class="text-muted hover:text-text-strong p-1 rounded-lg hover:bg-bg-hover transition-colors">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+</button>
+</div>
+</aside>
+<!-- MAIN CANVAS & HEADER -->
+<main class="ml-60 flex-1 min-h-screen flex flex-col bg-background">
+<!-- STICKY TOP APP BAR: Shared Component (TopNavBar) -->
+<header class="sticky top-0 z-20 bg-surface border-b border-border">
+<!-- Title & Utility Toolbar -->
+<div class="px-space-xl pt-space-lg pb-space-sm flex items-center justify-between">
+<h1 class="font-headline-lg text-headline-lg font-semibold text-text-strong">Work</h1>
+<!-- Trailing actions: Search, dropdown, button -->
+<div class="flex items-center gap-2">
+<!-- Search input -->
+<div class="relative w-64">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-muted text-[18px]">search</span>
+<input class="w-full h-8 pl-8 pr-3 text-body-sm bg-card border border-border rounded-lg text-text-strong placeholder:text-muted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-150" placeholder="Search work…" type="text"/>
+</div>
+<!-- All agents dropdown -->
+<div class="relative">
+<button class="h-8 px-2.5 bg-card border border-border rounded-lg text-body-sm text-text-strong flex items-center gap-1.5 hover:bg-bg-hover transition-colors duration-150">
+<span>All agents</span>
+<span class="material-symbols-outlined text-[16px] text-muted">arrow_drop_down</span>
+</button>
+</div>
+<!-- Filter list and Notification icons from TopNavBar spec -->
+<!-- Primary + New CTA -->
+<button class="h-8 px-3 bg-primary-container hover:bg-primary text-on-primary rounded-lg text-body-sm font-medium flex items-center gap-1 transition-colors duration-150 shadow-none">
+<span class="material-symbols-outlined text-[16px]">add</span>
+<span>New</span>
+</button>
+</div>
+</div>
+<!-- Navigation Links Row -->
+<nav class="px-space-xl flex items-center gap-6 text-body-sm">
+<a class="pb-2 text-muted hover:text-text-strong transition-colors flex items-center gap-1.5" href="#">
+<span>Overview</span>
+<span class="px-1.5 py-0.2 rounded-full bg-border text-muted font-code text-[11px] leading-tight">13</span>
+</a>
+<a class="pb-2 text-muted hover:text-text-strong transition-colors" href="#">
+<span>Objectives</span>
+</a>
+<a class="pb-2 text-muted hover:text-text-strong transition-colors" href="#">
+<span>Areas &amp; Projects</span>
+</a>
+<!-- Active Tab: Activity -->
+<a class="border-b-2 border-primary-container text-primary font-semibold pb-2 transition-colors" href="#">
+<span>Activity</span>
+</a>
+</nav>
+</header>
+<!-- SUB-HEADER FILTER BAR -->
+<section class="px-space-xl py-3 border-b border-border flex items-center justify-between bg-surface">
+<!-- Filter Chips -->
+<div class="flex items-center gap-1.5">
+<button class="h-7 px-3 bg-bg-hover text-text-strong rounded-full text-body-sm font-semibold transition-colors">
+          All
+        </button>
+<button class="h-7 px-3 bg-transparent hover:bg-bg-hover text-muted hover:text-text-strong rounded-full text-body-sm transition-colors">
+          Changes
+        </button>
+<button class="h-7 px-3 bg-transparent hover:bg-bg-hover text-muted hover:text-text-strong rounded-full text-body-sm transition-colors">
+          Agent activity
+        </button>
+<button class="h-7 px-2.5 bg-transparent hover:bg-bg-hover text-muted hover:text-text-strong rounded-full text-body-sm flex items-center gap-1.5 transition-colors">
+<span>Untracked</span>
+<span class="px-1.5 py-0.5 rounded-full bg-warn/10 text-warn font-code text-[10px] leading-none font-semibold">4</span>
+</button>
+</div>
+<!-- Right area selector -->
+<button class="h-7 px-2.5 bg-card border border-border hover:bg-bg-hover text-text-strong rounded-lg text-body-sm flex items-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined text-[16px] text-muted">tune</span>
+<span>Any Area</span>
+<span class="material-symbols-outlined text-[16px] text-muted">arrow_drop_down</span>
+</button>
+</section>
+<!-- ACTIVITY FEED CONTENT CANVAS -->
+<div class="flex-1 px-space-xl py-space-lg max-w-6xl w-full">
+<!-- Group: Oct 1 -->
+<section class="mb-6">
+<div class="font-headline-sm text-headline-sm font-semibold text-text-strong mb-2 flex items-center gap-2">
+<span>Oct 1</span>
+<span class="h-px bg-border flex-1"></span>
+</div>
+<div class="bg-card border border-border rounded-lg overflow-hidden divide-y divide-border">
+<!-- Item 1 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">16:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-muted">
+<span class="material-symbols-outlined text-[16px]">terminal</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Worker 70823ee0 implementing NOC-backend authentication
+            </div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<span class="px-2 py-0.5 rounded bg-surface-container text-muted text-body-sm border border-border">Task: Authenticate the NOC backend…</span>
+<span class="text-label-xs font-label-xs text-muted">captured</span>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">15:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-muted">
+<span class="material-symbols-outlined text-[16px]">add</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Created Task in Backend 2.0: Job Dispatcher first build
+            </div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<span class="px-2 py-0.5 rounded bg-surface-container text-muted text-body-sm border border-border">Task: Authenticate the NOC backend…</span>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">14:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-muted">
+<span class="material-symbols-outlined text-[16px]">description</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Wrote the daily review
+            </div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<span class="px-2 py-0.5 rounded bg-surface-container text-muted text-body-sm border border-border">Objective #1 Home AI Solutions…</span>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">14:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-muted">
+<span class="material-symbols-outlined text-[16px]">call_split</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Raised a Decision: What should I do next for Home AI Solutions?
+            </div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<span class="px-2 py-0.5 rounded bg-surface-container text-muted text-body-sm border border-border">Decision</span>
+</div>
+</div>
+<!-- Item 5 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">14:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-muted">
+<span class="material-symbols-outlined text-[16px]">cancel</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Abandoned Task: Run the August 6 ESPN morning ingestion
+            </div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<span class="px-2 py-0.5 rounded bg-surface-container text-muted text-body-sm border border-border">Area: Betting</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Group: Sep 30 -->
+<section class="mb-6">
+<div class="font-headline-sm text-headline-sm font-semibold text-text-strong mb-2 flex items-center gap-2">
+<span>Sep 30</span>
+<span class="h-px bg-border flex-1"></span>
+</div>
+<div class="bg-card border border-border rounded-lg overflow-hidden divide-y divide-border">
+<!-- Item 6 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">22:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-ok">
+<span class="material-symbols-outlined text-[16px] text-ok" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Achieved Milestone: Dispatcher installed on the management Building
+            </div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<span class="font-code text-code text-muted px-2 py-0.5 rounded bg-surface-container border border-border">fredbot-backend#378</span>
+</div>
+</div>
+<!-- Item 7 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">18:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-ok">
+<span class="material-symbols-outlined text-[16px] text-ok" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Completed Task: Prepare building-903 as management-test
+            </div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<span class="font-code text-code text-muted px-2 py-0.5 rounded bg-surface-container border border-border">fredbot-backend#378</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Group: Sep 28 -->
+<section class="mb-6">
+<div class="font-headline-sm text-headline-sm font-semibold text-text-strong mb-2 flex items-center gap-2">
+<span>Sep 28</span>
+<span class="h-px bg-border flex-1"></span>
+</div>
+<div class="bg-card border border-border rounded-lg overflow-hidden divide-y divide-border">
+<!-- Item 8 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">17:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-ok">
+<span class="material-symbols-outlined text-[16px] text-ok" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Completed Task: Bootstrap Firestore for the Dispatcher
+            </div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<span class="font-code text-code text-muted px-2 py-0.5 rounded bg-surface-container border border-border">5be4a2d</span>
+</div>
+</div>
+<!-- Item 9 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">15:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-text-strong text-surface font-code text-[10px] flex items-center justify-center font-semibold">f</span>
+<span class="text-body-sm text-text-strong font-medium">fred</span>
+</div>
+<div class="w-5 flex items-center justify-center text-muted">
+<span class="material-symbols-outlined text-[16px]">call_split</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Decided: Migration or first build? → First build
+            </div>
+</div>
+</div>
+</section>
+<!-- Group: Sep 27 -->
+<section class="mb-6">
+<div class="font-headline-sm text-headline-sm font-semibold text-text-strong mb-2 flex items-center gap-2">
+<span>Sep 27</span>
+<span class="h-px bg-border flex-1"></span>
+</div>
+<div class="bg-card border border-border rounded-lg overflow-hidden divide-y divide-border">
+<!-- Item 10: Untracked Row -->
+<div class="px-space-md py-2.5 flex items-center gap-3 bg-[#fdf8f0] hover:bg-[#faebd7]/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">16:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-warn">
+<span class="material-symbols-outlined text-[16px]">draft</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate flex items-center gap-2">
+<span class="px-1.5 py-0.2 rounded text-[11px] font-medium bg-warn/10 text-warn">untracked</span>
+<span>Changed USER.md to send images as attachments</span>
+</div>
+<div class="flex items-center gap-2 flex-shrink-0">
+<button class="text-body-sm font-medium text-primary-container hover:text-primary transition-colors flex items-center gap-1">
+<span>Create Task from this</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Item 11 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">13:36</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-text-strong text-surface font-code text-[10px] flex items-center justify-center font-semibold">f</span>
+<span class="text-body-sm text-text-strong font-medium">fred</span>
+</div>
+<div class="w-5 flex items-center justify-center text-muted">
+<span class="material-symbols-outlined text-[16px]">call_split</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Decided: Where do Backend 2.0 secrets live? → Google Cloud Secret Manager
+            </div>
+</div>
+</div>
+</section>
+<!-- Group: Sep 24 -->
+<section class="mb-6">
+<div class="font-headline-sm text-headline-sm font-semibold text-text-strong mb-2 flex items-center gap-2">
+<span>Sep 24</span>
+<span class="h-px bg-border flex-1"></span>
+</div>
+<div class="bg-card border border-border rounded-lg overflow-hidden divide-y divide-border">
+<!-- Item 12: Untracked Row -->
+<div class="px-space-md py-2.5 flex items-center gap-3 bg-[#fdf8f0] hover:bg-[#faebd7]/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">17:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-warn">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate flex items-center gap-2">
+<span class="px-1.5 py-0.2 rounded text-[11px] font-medium bg-warn/10 text-warn">untracked</span>
+<span>Refreshed 14 Cloudflare skills and added the cloudflare-docs MCP</span>
+</div>
+<div class="flex items-center gap-2.5 flex-shrink-0">
+<span class="font-code text-code text-muted px-2 py-0.5 rounded bg-surface-container border border-border">6dc7604</span>
+<button class="text-body-sm font-medium text-primary-container hover:text-primary transition-colors flex items-center gap-1">
+<span>Create Task from this</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Item 13 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">16:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-ok">
+<span class="material-symbols-outlined text-[16px] text-ok" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Completed Task: Advise on the Shough + Lemon for Deebo + Allgeier trade
+            </div>
+</div>
+<!-- Item 14 -->
+<div class="px-space-md py-2.5 flex items-center gap-3 hover:bg-bg-hover/40 transition-colors duration-150">
+<span class="font-code text-code text-muted w-11 flex-shrink-0">15:00</span>
+<div class="flex items-center gap-1.5 w-16 flex-shrink-0">
+<span class="w-4 h-4 rounded-full bg-border text-text font-code text-[10px] flex items-center justify-center font-medium">v</span>
+<span class="text-body-sm text-muted">verl</span>
+</div>
+<div class="w-5 flex items-center justify-center text-ok">
+<span class="material-symbols-outlined text-[16px] text-ok" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="flex-1 text-body-md text-text-strong truncate">
+              Completed Task: Trim USER.md below the load limit
+            </div>
+</div>
+</div>
+</section>
+<!-- Bottom Load More -->
+<div class="pt-2 pb-12 flex justify-center">
+<button class="h-8 px-4 bg-card hover:bg-bg-hover text-muted hover:text-text-strong border border-border rounded-lg text-body-sm font-medium flex items-center gap-2 transition-colors duration-150">
+<span class="material-symbols-outlined text-[16px]">history</span>
+<span>Load older activity</span>
+</button>
+</div>
+</div>
+</main>
+</body></html>

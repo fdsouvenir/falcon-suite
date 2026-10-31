@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=390, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>OpenClaw Vault</title>
+<!-- Fonts: Instrument Sans & JetBrains Mono -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "bg": "#faf9f7",
+            "bg-content": "#f4f1ec",
+            "bg-elevated": "#ffffff",
+            "bg-hover": "#efebe4",
+            "text": "#403c35",
+            "text-strong": "#211e1a",
+            "muted": "#6e6960",
+            "border": "#e8e4dc",
+            "border-strong": "#d6d0c5",
+            "accent": "#bd4531",
+            "accent-subtle": "#bd453114",
+            "accent-2": "#0d9488",
+            "ok": "#166534",
+            "warn": "#92400e",
+            "danger": "#b91c1c",
+            "info": "#1d4ed8"
+          },
+          fontFamily: {
+            sans: ["Instrument Sans", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    body {
+      font-family: 'Instrument Sans', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background-color: #faf9f7;
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    * {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+</head>
+<body class="bg-[#faf9f7] text-[#403c35] min-h-screen flex justify-center selection:bg-[#ffdad4] selection:text-[#3f0300]">
+<!-- Mobile Screen Container (390px) -->
+<div class="w-full max-w-[390px] min-h-screen bg-[#faf9f7] flex flex-col justify-between border-x border-[#e8e4dc] relative shadow-none">
+<div>
+<!-- Top Mobile App Bar (54px) -->
+<header class="h-[54px] px-4 bg-[#faf9f7] border-b border-[#e8e4dc] flex items-center justify-between sticky top-0 z-30">
+<!-- Left: Hamburger icon (Control UI sidebar) -->
+<button aria-label="Open navigation menu" class="w-9 h-9 flex items-center justify-center rounded-lg text-[#211e1a] hover:bg-[#efebe4] active:bg-[#e8e4dc] transition-colors focus:outline-none" type="button">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewbox="0 0 24 24">
+<line x1="4" x2="20" y1="6" y2="6"></line>
+<line x1="4" x2="20" y1="12" y2="12"></line>
+<line x1="4" x2="20" y1="18" y2="18"></line>
+</svg>
+</button>
+<!-- Center: Title -->
+<h1 class="text-[19px] font-semibold text-[#211e1a] tracking-tight select-none">
+          Vault
+        </h1>
+<!-- Right: '+' button in brick red #bd4531 -->
+<button aria-label="New entry" class="w-8 h-8 flex items-center justify-center rounded-md bg-[#bd4531] text-white hover:bg-[#9c2d1c] active:opacity-90 transition-colors shadow-none focus:outline-none" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" viewbox="0 0 24 24">
+<line x1="12" x2="12" y1="5" y2="19"></line>
+<line x1="5" x2="19" y1="12" y2="12"></line>
+</svg>
+</button>
+</header>
+<!-- Main Content Area -->
+<main class="p-4 space-y-3.5">
+<!-- Full-width Search Input -->
+<div class="relative w-full">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6e6960]">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<circle cx="11" cy="11" r="8"></circle>
+<line x1="21" x2="16.65" y1="21" y2="16.65"></line>
+</svg>
+</div>
+<input class="w-full h-10 pl-9 pr-3.5 bg-white text-[#211e1a] placeholder:text-[#6e6960] text-[14px] rounded-lg border border-[#d6d0c5] focus:outline-none focus:ring-1 focus:ring-[#bd4531] focus:border-[#bd4531] transition-all font-normal" placeholder="Search 108 entries" type="text"/>
+</div>
+<!-- Filter / Group Bar Row -->
+<div class="flex items-center justify-between gap-2 pt-0.5">
+<!-- Group selector button -->
+<button class="rounded-md border border-[#e8e4dc] bg-white px-3 py-1.5 text-xs font-medium text-[#211e1a] flex items-center gap-1.5 hover:bg-[#faf9f7] active:bg-[#f4f1ec] transition-colors" type="button">
+<span>Services / Cloudflare</span>
+<svg class="w-3.5 h-3.5 text-[#6e6960]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="6 9 12 15 18 9"></polyline>
+</svg>
+</button>
+<!-- Warn badge/pill -->
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#fbf4ee] text-[#92400e] border border-[#f5decb] text-[11px] font-medium tracking-tight"><span class="w-1.5 h-1.5 rounded-full bg-[#92400e] shrink-0"></span><span>1 needs a value</span></div>
+</div>
+<!-- Entry List Card (White card, hairline borders) -->
+<div class="rounded-[10px] bg-white border border-[#e8e4dc] overflow-hidden divide-y divide-[#e8e4dc] shadow-[0_1px_2px_#3c2a180d]">
+<!-- Row 1: API token — DNS edit -->
+<div class="flex items-center justify-between py-3 px-3.5 min-h-[48px] hover:bg-[#faf9f7] active:bg-[#f4f1ec] transition-colors cursor-pointer group" role="button" tabindex="0">
+<div class="flex flex-col min-w-0 pr-3">
+<span class="text-[14px] font-semibold text-[#211e1a] tracking-tight truncate group-hover:text-[#bd4531] transition-colors">API token — DNS edit</span>
+<span class="text-[12px] font-normal text-[#6e6960] truncate mt-0.5">ops@example.com · dash.cloudflare.com</span>
+</div>
+<svg class="w-4 h-4 text-[#a8a29e] shrink-0 group-hover:text-[#6e6960] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+<!-- Row 2: API token — Workers deploy -->
+<div class="flex items-center justify-between py-3 px-3.5 min-h-[48px] hover:bg-[#faf9f7] active:bg-[#f4f1ec] transition-colors cursor-pointer group" role="button" tabindex="0">
+<div class="flex flex-col min-w-0 pr-3">
+<span class="text-[14px] font-semibold text-[#211e1a] tracking-tight truncate group-hover:text-[#bd4531] transition-colors">API token — Workers deploy</span>
+<span class="text-[12px] font-normal text-[#6e6960] truncate mt-0.5">deploy-bot@company.internal · dash.cloudflare.com</span>
+</div>
+<svg class="w-4 h-4 text-[#a8a29e] shrink-0 group-hover:text-[#6e6960] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+<!-- Row 3: Account login -->
+<div class="flex items-center justify-between py-3 px-3.5 min-h-[48px] hover:bg-[#faf9f7] active:bg-[#f4f1ec] transition-colors cursor-pointer group" role="button" tabindex="0">
+<div class="flex flex-col min-w-0 pr-3">
+<span class="text-[14px] font-semibold text-[#211e1a] tracking-tight truncate group-hover:text-[#bd4531] transition-colors">Account login</span>
+<span class="text-[12px] font-normal text-[#6e6960] truncate mt-0.5">fred@example.com · dash.cloudflare.com</span>
+</div>
+<svg class="w-4 h-4 text-[#a8a29e] shrink-0 group-hover:text-[#6e6960] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+<!-- Row 4: Tunnel credentials — home -->
+<div class="flex items-center justify-between py-3 px-3.5 min-h-[48px] hover:bg-[#faf9f7] active:bg-[#f4f1ec] transition-colors cursor-pointer group" role="button" tabindex="0">
+<div class="flex flex-col min-w-0 pr-3">
+<span class="text-[14px] font-semibold text-[#211e1a] tracking-tight truncate group-hover:text-[#bd4531] transition-colors">Tunnel credentials — home</span>
+<span class="text-[12px] font-normal text-[#6e6960] truncate mt-0.5">tunnel-id-948271 · api.cloudflare.com</span>
+</div>
+<svg class="w-4 h-4 text-[#a8a29e] shrink-0 group-hover:text-[#6e6960] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+<!-- Row 5: Tunnel credentials — office -->
+<div class="flex items-center justify-between py-3 px-3.5 min-h-[48px] hover:bg-[#faf9f7] active:bg-[#f4f1ec] transition-colors cursor-pointer group" role="button" tabindex="0">
+<div class="flex flex-col min-w-0 pr-3">
+<span class="text-[14px] font-semibold text-[#211e1a] tracking-tight truncate group-hover:text-[#bd4531] transition-colors">Tunnel credentials — office</span>
+<span class="text-[12px] font-normal text-[#6e6960] truncate mt-0.5">tunnel-id-381029 · api.cloudflare.com</span>
+</div>
+<svg class="w-4 h-4 text-[#a8a29e] shrink-0 group-hover:text-[#6e6960] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+<!-- Row 6: R2 access key -->
+<div class="flex items-center justify-between py-3 px-3.5 min-h-[48px] hover:bg-[#faf9f7] active:bg-[#f4f1ec] transition-colors cursor-pointer group" role="button" tabindex="0">
+<div class="flex flex-col min-w-0 pr-3">
+<span class="text-[14px] font-semibold text-[#211e1a] tracking-tight truncate group-hover:text-[#bd4531] transition-colors">R2 access key</span>
+<span class="text-[12px] font-normal text-[#6e6960] truncate mt-0.5">r2-sync-agent · r2.cloudflarestorage.com</span>
+</div>
+<svg class="w-4 h-4 text-[#a8a29e] shrink-0 group-hover:text-[#6e6960] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+<!-- Row 7: R2 secret key -->
+<div class="flex items-center justify-between py-3 px-3.5 min-h-[48px] hover:bg-[#faf9f7] active:bg-[#f4f1ec] transition-colors cursor-pointer group" role="button" tabindex="0">
+<div class="flex flex-col min-w-0 pr-3">
+<span class="text-[14px] font-semibold text-[#211e1a] tracking-tight truncate group-hover:text-[#bd4531] transition-colors">R2 secret key</span>
+<span class="text-[12px] font-normal text-[#6e6960] truncate mt-0.5">r2-sync-agent · r2.cloudflarestorage.com</span>
+</div>
+<svg class="w-4 h-4 text-[#a8a29e] shrink-0 group-hover:text-[#6e6960] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+<!-- Row 8: Zero Trust service token -->
+<div class="flex items-center justify-between py-3 px-3.5 min-h-[48px] hover:bg-[#faf9f7] active:bg-[#f4f1ec] transition-colors cursor-pointer group" role="button" tabindex="0">
+<div class="flex flex-col min-w-0 pr-3">
+<span class="text-[14px] font-semibold text-[#211e1a] tracking-tight truncate group-hover:text-[#bd4531] transition-colors">Zero Trust service token</span>
+<span class="text-[12px] font-normal text-[#6e6960] truncate mt-0.5">cf-access-client · one.dash.cloudflare.com</span>
+</div>
+<svg class="w-4 h-4 text-[#a8a29e] shrink-0 group-hover:text-[#6e6960] group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+</div>
+</div>
+</main>
+</div>
+<!-- Footer Status / Safe Area Bar -->
+</div>
+</body>
+</html>

@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Falcon Work · OpenClaw Control</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "tertiary-container": "#00788b",
+            "on-error": "#ffffff",
+            "surface-dim": "#dadad8",
+            "border-strong": "#d6d0c5",
+            "primary-container": "#bd4531",
+            "border": "#e8e4dc",
+            "tertiary-fixed-dim": "#7cd3e8",
+            "surface-container-lowest": "#ffffff",
+            "surface": "#faf9f7",
+            "secondary": "#006a61",
+            "primary-fixed-dim": "#ffb4a6",
+            "on-primary-fixed": "#3f0300",
+            "inverse-primary": "#ffb4a6",
+            "text-strong": "#211e1a",
+            "on-tertiary-container": "#d5f6ff",
+            "surface-tint": "#a93724",
+            "on-tertiary-fixed-variant": "#004e5b",
+            "on-background": "#1a1c1b",
+            "error": "#ba1a1a",
+            "primary-fixed": "#ffdad4",
+            "on-tertiary": "#ffffff",
+            "bg-content": "#f4f1ec",
+            "surface-container-high": "#e9e8e6",
+            "inverse-on-surface": "#f1f1ef",
+            "card": "#ffffff",
+            "inverse-surface": "#2f3130",
+            "accent-subtle": "#bd453114",
+            "on-tertiary-fixed": "#001f26",
+            "error-container": "#ffdad6",
+            "surface-container-low": "#f4f3f1",
+            "bg-hover": "#efebe4",
+            "primary": "#9c2d1c",
+            "on-secondary": "#ffffff",
+            "tertiary": "#005e6d",
+            "on-surface": "#1a1c1b",
+            "secondary-fixed-dim": "#6bd8cb",
+            "secondary-fixed": "#89f5e7",
+            "surface-container-highest": "#e3e2e0",
+            "surface-bright": "#faf9f7",
+            "on-primary-container": "#ffece9",
+            "surface-container": "#efeeec",
+            "on-secondary-fixed": "#00201d",
+            "on-primary-fixed-variant": "#881f0f",
+            "warn": "#92400e",
+            "on-primary": "#ffffff",
+            "on-secondary-container": "#006f66",
+            "on-error-container": "#93000a",
+            "info": "#1d4ed8",
+            "danger": "#b91c1c",
+            "secondary-container": "#86f2e4",
+            "muted": "#6e6960",
+            "text": "#403c35",
+            "background": "#faf9f7",
+            "outline": "#8c716c",
+            "on-secondary-fixed-variant": "#005049",
+            "ok": "#166534",
+            "surface-variant": "#e3e2e0",
+            "tertiary-fixed": "#a8edff",
+            "on-surface-variant": "#58413d",
+            "outline-variant": "#dfbfba"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "space-lg": "1rem",
+            "space-2xl": "2rem",
+            "margin": "2rem",
+            "space-md": "0.75rem",
+            "space-xl": "1.5rem",
+            "gutter": "1rem",
+            "space-sm": "0.5rem",
+            "space-xs": "0.25rem"
+          },
+          "fontFamily": {
+            "headline-md": ["Instrument Sans", "sans-serif"],
+            "code": ["JetBrains Mono", "monospace"],
+            "headline-sm": ["Instrument Sans", "sans-serif"],
+            "body-md": ["Instrument Sans", "sans-serif"],
+            "label-xs": ["Instrument Sans", "sans-serif"],
+            "body-sm": ["Instrument Sans", "sans-serif"],
+            "headline-lg": ["Instrument Sans", "sans-serif"]
+          },
+          "fontSize": {
+            "headline-md": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+            "code": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "headline-sm": ["13px", { "lineHeight": "18px", "fontWeight": "600" }],
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "label-xs": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+            "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+            "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }]
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      font-size: 18px;
+      line-height: 1;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .material-symbols-outlined.filled {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+    }
+    /* Hide scrollbars cleanly while preserving touch/trackpad navigation */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="h-full bg-background text-text font-body-md antialiased overflow-hidden selection:bg-primary selection:text-on-primary">
+<!-- ========================================================================= -->
+<!-- LEFT HOST SIDEBAR (Anchor: SideNavBar with custom additions per prompt)   -->
+<!-- ========================================================================= -->
+<aside class="fixed top-0 left-0 h-screen w-64 bg-surface-container-low border-r border-border flex flex-col justify-between py-space-lg px-space-sm z-30">
+<!-- Top & Navigation Cluster -->
+<div class="flex flex-col gap-y-5 overflow-y-auto no-scrollbar">
+<!-- Operator / Host Title: 'Verl' with status dot -->
+<div class="px-3 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary inline-block"></span>
+<span class="font-headline-md text-headline-md text-text-strong font-semibold tracking-tight">Verl</span>
+</div>
+<span class="font-code text-[11px] text-muted tracking-wide">op-host</span>
+</div>
+<!-- Action Button: '+ New Session' -->
+<div class="px-1">
+<button class="w-full flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg bg-surface hover:bg-bg-hover text-text-strong border border-border transition-colors duration-150 font-label-xs text-label-xs font-semibold" type="button">
+<span class="material-symbols-outlined text-[16px] text-text-strong" data-icon="add">add</span>
+<span>New Session</span>
+</button>
+</div>
+<!-- Section: Pages -->
+<div class="flex flex-col">
+<div class="px-3 pb-1.5 font-label-xs text-[11px] tracking-wider text-muted font-semibold uppercase">
+          Pages
+        </div>
+<nav class="flex flex-col gap-0.5">
+<!-- Inactive Tab: Home -->
+<a class="flex items-center gap-2.5 h-7.5 py-1 text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150 font-medium pl-3.5 rounded-lg text-body-sm font-body-sm" href="#">
+<span class="material-symbols-outlined text-[17px] text-muted" data-icon="home">home</span>
+<span>Home</span>
+</a>
+<!-- Inactive Tab: Agents -->
+<a class="flex items-center gap-2.5 h-7.5 py-1 text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150 font-medium pl-3.5 rounded-lg text-body-sm font-body-sm" href="#">
+<span class="material-symbols-outlined text-[17px] text-muted" data-icon="smart_toy">smart_toy</span>
+<span>Agents</span>
+</a>
+<!-- Inactive Tab: Dashboards -->
+<a class="flex items-center gap-2.5 h-7.5 py-1 text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150 font-medium pl-3.5 rounded-lg text-body-sm font-body-sm" href="#">
+<span class="material-symbols-outlined text-[17px] text-muted" data-icon="dashboard">dashboard</span>
+<span>Dashboards</span>
+</a>
+<!-- Inactive Tab: Systems -->
+<a class="flex items-center gap-2.5 h-7.5 py-1 text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150 font-medium pl-3.5 rounded-lg text-body-sm font-body-sm" href="#">
+<span class="material-symbols-outlined text-[17px] text-muted" data-icon="dns">dns</span>
+<span>Systems</span>
+</a>
+<!-- Inactive Tab: Automations -->
+<a class="flex items-center gap-2.5 h-7.5 py-1 text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150 font-medium pl-3.5 rounded-lg text-body-sm font-body-sm" href="#">
+<span class="material-symbols-outlined text-[17px] text-muted" data-icon="precision_manufacturing">precision_manufacturing</span>
+<span>Automations</span>
+</a>
+<!-- Inactive Tab: Plugins -->
+<a class="flex items-center gap-2.5 h-7.5 py-1 text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150 font-medium pl-3.5 rounded-lg text-body-sm font-body-sm" href="#">
+<span class="material-symbols-outlined text-[17px] text-muted" data-icon="extension">extension</span>
+<span>Plugins</span>
+</a>
+<!-- Inactive Tab: Vault -->
+<a class="flex items-center gap-2.5 h-7.5 py-1 text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150 font-medium pl-3.5 rounded-lg text-body-sm font-body-sm" href="#">
+<span class="material-symbols-outlined text-[17px] text-muted" data-icon="lock">lock</span>
+<span>Vault</span>
+</a>
+<!-- ACTIVE Tab: Work (style_active_navigation mapping) -->
+<a class="flex items-center gap-2.5 h-7.5 py-1 bg-surface-container-high text-text-strong font-semibold border-l-2 border-primary pl-3 rounded-r-lg text-body-sm font-body-sm" href="#">
+<span class="material-symbols-outlined text-[17px] text-primary" data-icon="checklist">checklist</span>
+<span>Work</span>
+</a>
+</nav>
+</div>
+<!-- Section: Sessions -->
+<div class="flex flex-col pt-1">
+<div class="px-3 pb-1.5 font-label-xs text-[11px] tracking-wider text-muted font-semibold uppercase">
+          Sessions
+        </div>
+<nav class="flex flex-col gap-0.5">
+<!-- Session 1: Falcon Dash (teal dot) -->
+<a class="flex items-center gap-2.5 px-3 py-1 rounded-lg text-body-sm font-body-sm text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary inline-block shrink-0"></span>
+<span class="truncate">Falcon Dash</span>
+</a>
+<!-- Session 2: Building Manager + Job Dispatcher (grey dot) -->
+<a class="flex items-center gap-2.5 px-3 py-1 rounded-lg text-body-sm font-body-sm text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong inline-block shrink-0"></span>
+<span class="truncate">Building Manager + Job Dispatcher</span>
+</a>
+<!-- Session 3: Build Fredbot Backend 2.0 Manager (teal dot) -->
+<a class="flex items-center gap-2.5 px-3 py-1 rounded-lg text-body-sm font-body-sm text-text-strong font-medium bg-bg-hover transition-colors duration-150" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary inline-block shrink-0"></span>
+<span class="truncate">Build Fredbot Backend 2.0 Manager</span>
+</a>
+<!-- Session 4: Portal Fix (grey dot) -->
+<a class="flex items-center gap-2.5 px-3 py-1 rounded-lg text-body-sm font-body-sm text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong inline-block shrink-0"></span>
+<span class="truncate">Portal Fix</span>
+</a>
+<!-- Session 5: OpenAI application watch (grey dot) -->
+<a class="flex items-center gap-2.5 px-3 py-1 rounded-lg text-body-sm font-body-sm text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong inline-block shrink-0"></span>
+<span class="truncate">OpenAI application watch</span>
+</a>
+<!-- Session 6: Morning Brief (grey dot) -->
+<a class="flex items-center gap-2.5 px-3 py-1 rounded-lg text-body-sm font-body-sm text-text hover:bg-bg-hover hover:text-text-strong transition-colors duration-150" href="#">
+<span class="w-1.5 h-1.5 rounded-full bg-border-strong inline-block shrink-0"></span>
+<span class="truncate">Morning Brief</span>
+</a>
+</nav>
+</div>
+</div>
+<!-- Bottom Operator Account Cluster: Fred with settings gear -->
+<div class="pt-2 border-t border-border mt-2">
+<div class="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-bg-hover transition-colors duration-150 cursor-pointer">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-[22px] text-muted" data-icon="account_circle">account_circle</span>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-text-strong leading-none">Fred</span>
+<span class="font-label-xs text-[10px] text-muted tracking-tight">Operator root</span>
+</div>
+</div>
+<button aria-label="Settings" class="text-muted hover:text-text-strong transition-colors" type="button">
+<span class="material-symbols-outlined text-[18px]" data-icon="settings">settings</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- ========================================================================= -->
+<!-- TOP SECONDARY APP BAR (Anchor: TopNavBar styling & navigation links)       -->
+<!-- ========================================================================= -->
+<header class="fixed top-0 left-64 right-0 h-14 bg-surface border-b border-border z-20 flex items-center justify-between px-space-xl">
+<!-- Left: Title 'Work' and Tab Navigation -->
+<div class="flex items-center gap-8 h-full">
+<div class="flex items-center">
+<h1 class="font-headline-md text-headline-md text-text-strong font-semibold">Work</h1>
+</div>
+<!-- Navigation Tabs (Anchor: navigation_links: Overview, Objectives, Areas & Projects, Activity) -->
+<nav class="flex items-center gap-6 h-full text-body-sm"><a class="text-muted hover:text-text-strong font-normal h-full flex items-center pt-0.5 transition-colors duration-150" href="#">
+          Overview
+        </a>
+<a class="text-muted hover:text-text-strong font-normal h-full flex items-center pt-0.5 transition-colors duration-150" href="#">
+          Objectives
+        </a>
+<a class="border-b-2 border-primary text-primary font-semibold h-full flex items-center pt-0.5 transition-colors duration-150" href="#">
+          Areas &amp; Projects
+        </a>
+<a class="text-muted hover:text-text-strong font-normal h-full flex items-center pt-0.5 transition-colors duration-150" href="#">
+          Activity
+        </a></nav>
+</div>
+<!-- Right: Clean Search input (No bell, no filter, clean toolbar) -->
+<div class="w-64">
+<div class="relative flex items-center">
+<span class="material-symbols-outlined text-[16px] text-muted absolute left-2.5 pointer-events-none" data-icon="search">search</span>
+<input class="w-full h-8 pl-8 pr-3 text-body-sm font-body-sm bg-surface-container-lowest border border-border rounded-lg text-text-strong placeholder-muted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" placeholder="Search work…" type="text" value=""/>
+</div>
+</div>
+</header>
+<!-- ========================================================================= -->
+<!-- MAIN LAYOUT WRAPPER (Full Height below 56px TopBar, offset 256px LeftNav) -->
+<!-- ========================================================================= -->
+<div class="ml-64 mt-14 h-[calc(100vh-3.5rem)] flex overflow-hidden">
+<!-- ======================================================================= -->
+<!-- LEFT: MAIN PROJECT WORKSPACE (Fluid Canvas)                            -->
+<!-- ======================================================================= -->
+<main class="flex-1 overflow-y-auto p-space-2xl bg-surface">
+<div class="max-w-3xl flex flex-col gap-y-7">
+<!-- Header Info Cluster: Breadcrumbs & Project Title -->
+<div class="flex flex-col gap-1.5">
+<nav aria-label="Breadcrumb" class="flex items-center gap-1.5 font-label-xs text-[11px] text-muted tracking-tight">
+<span>Work</span>
+<span class="material-symbols-outlined text-[12px] text-muted" data-icon="chevron_right">chevron_right</span>
+<span>Fredbot Platform</span>
+<span class="material-symbols-outlined text-[12px] text-muted" data-icon="chevron_right">chevron_right</span>
+<span class="text-text font-medium">Fredbot Backend 2.0</span>
+</nav>
+<div class="pt-1">
+<span class="font-label-xs text-[10px] tracking-wider text-muted font-bold uppercase">PROJECT</span>
+<h2 class="font-headline-lg text-headline-lg text-text-strong font-semibold tracking-tight mt-0.5">
+              Fredbot Backend 2.0
+            </h2>
+</div>
+</div>
+<!-- Milestone 1 Section -->
+<div class="flex flex-col gap-y-3">
+<!-- Section Milestone Header -->
+<div class="flex items-center justify-between pb-1.5 border-b border-border">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[17px] text-muted" data-icon="flag">flag</span>
+<h3 class="font-headline-sm text-headline-sm text-text-strong font-semibold">
+                Milestone 1: Ready to test Building provisioning via API
+              </h3>
+</div>
+<span class="font-code text-[11px] text-muted">0 of 3 Tasks done</span>
+</div>
+<!-- Task Rows Stack -->
+<div class="flex flex-col rounded-lg border border-border bg-card divide-y divide-border overflow-hidden"><!-- TASK 1: IN PROGRESS -->
+<div class="flex items-center justify-between p-3 bg-card hover:bg-surface transition-colors cursor-pointer">
+<div class="flex items-center gap-3 min-w-0">
+<span class="w-2 h-2 rounded-full bg-secondary inline-block shrink-0" title="In progress"></span>
+<span class="material-symbols-outlined text-[17px] text-secondary" data-icon="progress_activity">progress_activity</span>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-text-strong font-medium truncate">
+                    Implement the agreed provisioning contract and build path
+                  </span>
+</div>
+</div>
+<div class="flex items-center gap-3 shrink-0">
+<span class="px-2 py-0.5 rounded-lg bg-secondary/10 text-secondary text-[11px] font-label-xs font-semibold">
+                  in progress
+                </span>
+</div>
+</div>
+<!-- TASK 2: SELECTED / IN PROGRESS -->
+<div class="flex items-center justify-between p-3 bg-surface-container-low border-l-2 border-primary transition-colors cursor-pointer">
+<div class="flex items-center gap-3 min-w-0">
+<span class="w-2 h-2 rounded-full bg-secondary inline-block shrink-0" title="In progress"></span>
+<span class="material-symbols-outlined text-[17px] text-primary" data-icon="progress_activity">progress_activity</span>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-text-strong font-semibold truncate">
+                    Finish protected enrollment and live telemetry
+                  </span>
+<span class="font-label-xs text-muted text-[11px]">
+                    Depends on: Implement the agreed provisioning contract
+                  </span>
+</div>
+</div>
+<div class="flex items-center gap-3 shrink-0">
+<span class="px-2 py-0.5 rounded-lg bg-secondary/10 text-secondary text-[11px] font-label-xs font-semibold">
+                  in progress
+                </span>
+<span class="material-symbols-outlined text-[16px] text-muted" data-icon="arrow_forward">arrow_forward</span>
+</div>
+</div>
+<!-- TASK 3: WAITING -->
+<div class="flex items-center justify-between p-3 bg-card hover:bg-surface transition-colors cursor-pointer">
+<div class="flex items-center gap-3 min-w-0">
+<span class="w-2 h-2 rounded-full bg-warn inline-block shrink-0" title="Waiting"></span>
+<span class="material-symbols-outlined text-[17px] text-warn" data-icon="schedule">schedule</span>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-text font-normal truncate">
+                    Prepare and verify the API provisioning test environment
+                  </span>
+<span class="font-label-xs text-muted text-[11px]">
+                    Waiting on you: authorization for the test control plane
+                  </span>
+</div>
+</div>
+<div class="flex items-center gap-3 shrink-0">
+<span class="px-2 py-0.5 rounded-lg bg-warn/10 text-warn text-[11px] font-label-xs font-semibold">
+                  waiting
+                </span>
+</div>
+</div></div>
+</div>
+</div>
+</main>
+<!-- ======================================================================= -->
+<!-- RIGHT: TASK DETAIL DRAWER (440px wide, White Card Surface, Border-L)   -->
+<!-- ======================================================================= -->
+<aside class="w-[440px] shrink-0 bg-card border-l border-border h-full flex flex-col justify-between overflow-hidden shadow-none z-10">
+<!-- Top Scrollable Content Area -->
+<div class="flex-1 overflow-y-auto p-space-lg flex flex-col gap-5 no-scrollbar">
+<!-- Header: Kicker + Close button -->
+<div class="flex items-start justify-between">
+<div class="flex flex-col">
+<span class="font-label-xs text-[10px] tracking-wider text-muted font-bold uppercase">TASK</span>
+<h3 class="font-headline-md text-[19px] leading-snug text-text-strong font-semibold mt-1">
+              Finish protected enrollment and live telemetry
+            </h3>
+</div>
+<button aria-label="Close task panel" class="p-1 text-muted hover:text-text-strong hover:bg-bg-hover rounded-lg transition-colors ml-2" type="button">
+<span class="material-symbols-outlined text-[18px]" data-icon="close">close</span>
+</button>
+</div>
+<!-- Status & Attribution Bar -->
+<div class="flex flex-col gap-1.5 pb-2 border-b border-border">
+<div class="flex items-center gap-2">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-secondary/10 text-secondary text-label-xs font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+              In progress
+            </span>
+</div>
+<p class="font-body-sm text-[12px] text-muted">
+            Opened by Work from Building Manager Astra · Oct 9
+          </p>
+</div>
+<!-- Section: Done When -->
+<div class="flex flex-col gap-1.5">
+<h4 class="font-headline-sm text-headline-sm text-text-strong font-semibold">
+            Done when
+          </h4>
+<p class="font-body-sm text-[13px] leading-relaxed text-text">
+            A new Building enrolls in NetBird without manual steps, and the NOC shows its live telemetry across several reporting cycles after provisioning access closes.
+          </p>
+</div>
+<!-- Section: Description (Folded with quiet 'More' toggle) -->
+<div class="flex flex-col gap-1.5">
+<h4 class="font-headline-sm text-headline-sm text-text-strong font-semibold">
+            Description
+          </h4>
+<div class="font-body-sm text-[13px] text-text leading-relaxed">
+<span>Wire NetBird enrollment tokens directly through the bootstrap payload and configure periodic telemetry heartbeats...</span>
+<button class="text-primary hover:underline font-medium ml-1" type="button">More</button>
+</div>
+</div>
+<!-- Section: Timeline (The heart of the panel, newest first, compact dense list) -->
+<div class="flex flex-col gap-2.5">
+<div class="flex items-center justify-between">
+<h4 class="font-headline-sm text-headline-sm text-text-strong font-semibold">
+              Timeline
+            </h4>
+<span class="font-label-xs text-[11px] text-muted font-normal">Newest first</span>
+</div>
+<div class="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden font-body-sm">
+<!-- Timeline Item 1: Oct 9 16:42 -->
+<div class="p-2.5 flex flex-col gap-1.5">
+<div class="flex items-center justify-between text-[11px] text-muted">
+<span class="font-code">Oct 9 16:42</span>
+</div>
+<div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+<!-- Commit chip -->
+<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-surface-container-high text-text-strong text-[11px] font-code">
+<span class="material-symbols-outlined text-[13px] text-muted" data-icon="commit">commit</span>
+<span>16593e1</span>
+<span class="font-body-sm text-text ml-0.5">NetBird protected enrollment</span>
+</span>
+<!-- Action pill: Push -->
+<span class="px-1.5 py-0.5 rounded-lg bg-surface-container-high text-text text-[11px] font-label-xs">
+                  Push
+                </span>
+<!-- Message pill -->
+<span class="px-1.5 py-0.5 rounded-lg bg-surface-container-high text-text text-[11px] font-label-xs flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px] text-muted" data-icon="chat_bubble_outline">chat_bubble_outline</span>
+                  Comment on #336
+                </span>
+</div>
+<button class="flex items-center gap-1 text-[11px] text-muted hover:text-text-strong pt-1 w-fit transition-colors" type="button">
+<span class="material-symbols-outlined text-[12px]" data-icon="chevron_right">chevron_right</span>
+<span>What happened</span>
+</button>
+</div>
+<!-- Timeline Item 2: Oct 9 16:20 -->
+<div class="p-2.5 flex flex-col gap-1.5">
+<div class="flex items-center justify-between text-[11px] text-muted">
+<span class="font-code">Oct 9 16:20</span>
+</div>
+<div class="flex items-center justify-between pt-0.5">
+<span class="text-[12px] text-muted">3 turns of discussion</span>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-surface-container-high text-text text-[11px] font-label-xs">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                  Building Manager Astra
+                </span>
+</div>
+</div>
+<!-- Timeline Item 3: Oct 9 15:58 (EXPANDED DISCLOSURE) -->
+<div class="p-2.5 flex flex-col gap-2">
+<div class="flex items-center justify-between text-[11px] text-muted">
+<span class="font-code">Oct 9 15:58</span>
+</div>
+<div class="flex flex-wrap items-center gap-1.5">
+<!-- 3 files pill -->
+<span class="px-1.5 py-0.5 rounded-lg bg-surface-container-high text-text text-[11px] font-label-xs">
+                  3 files in supervisor/src
+                </span>
+<!-- Commit pill -->
+<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-surface-container-high text-text-strong text-[11px] font-code">
+<span class="material-symbols-outlined text-[13px] text-muted" data-icon="commit">commit</span>
+<span>2be4a17</span>
+<span class="font-body-sm text-text ml-0.5">Mint receipt fences reminting</span>
+</span>
+</div>
+<!-- Expanded Disclosure details -->
+<div class="pt-1 border-t border-border flex flex-col gap-1.5">
+<div class="flex items-center gap-1 text-[11px] text-text-strong font-medium">
+<span class="material-symbols-outlined text-[14px]" data-icon="expand_more">expand_more</span>
+<span>What happened</span>
+</div>
+<div class="pl-4 flex flex-col gap-2">
+<p class="text-[12px] text-text leading-relaxed">
+                    Added the one-use mint receipt so a retried build cannot mint a second enrollment key.
+                  </p>
+<button class="w-fit inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-surface-container-high hover:bg-bg-hover text-text text-[11px] font-label-xs transition-colors" type="button">
+<span class="material-symbols-outlined text-[12px] text-muted" data-icon="open_in_new">open_in_new</span>
+<span>Open session</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Timeline Item 4: Oct 9 15:40 -->
+<div class="p-2.5 flex flex-col gap-1.5">
+<div class="flex items-center justify-between text-[11px] text-muted">
+<span class="font-code">Oct 9 15:40</span>
+<span class="font-label-xs text-muted">recorded by the agent</span>
+</div>
+<div class="pt-0.5">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-body-sm bg-bg-content border border-border text-text-strong">
+<span class="text-muted font-label-xs text-[11px]">Config</span>
+<span class="font-code text-[11px] text-text-strong">dispatcher.netbird</span>
+</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Section: Result -->
+<div class="flex flex-col gap-1 pt-1 pb-3">
+<h4 class="font-headline-sm text-headline-sm text-text-strong font-semibold">
+            Result
+          </h4>
+<p class="font-body-sm text-[12px] text-muted italic">
+            No Result yet — Work writes it when the done-when is met.
+          </p>
+</div>
+</div>
+<!-- Footer at Bottom of Panel -->
+<footer class="h-11 px-space-lg bg-card border-t border-border flex items-center justify-between text-label-xs shrink-0">
+<button class="text-muted hover:text-text-strong transition-colors duration-150" type="button">
+          Move entries…
+        </button>
+<button class="text-primary hover:underline font-semibold transition-colors duration-150 flex items-center gap-1" type="button">
+<span>Open as page</span>
+<span class="material-symbols-outlined text-[13px]" data-icon="arrow_outward">arrow_outward</span>
+</button>
+</footer>
+</aside>
+</div>
+</body></html>
