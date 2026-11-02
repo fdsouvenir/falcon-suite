@@ -51,6 +51,48 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		recorded_scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
 		checked_at: '2026-10-26T18:38:13Z'
 	};
+	const signedOutAccount = {
+		...connectedAccount,
+		id: 'acct_out',
+		email: 'out@example.com',
+		state: 'disconnected',
+		requested: ['gmail:readonly'],
+		recorded_scopes: null,
+		replaces: 'existing_old',
+		connection_error: {
+			code: 'signed_out_by_reinstall',
+			message:
+				'Signed out when Google was reinstalled. Sign in again so your agents can use this account.'
+		}
+	};
+	const g = (s) => `https://www.googleapis.com/auth/${s}`;
+	const foundAccount = {
+		id: 'existing_found',
+		provider: 'google',
+		owner: null,
+		purpose: null,
+		email: 'found@example.com',
+		provider_id: null,
+		state: 'discovered',
+		requested: [],
+		granted_scopes: null,
+		external: { selection: 'found@example.com', client: 'default' },
+		recorded_scopes: [
+			'email',
+			g('gmail.modify'),
+			g('gmail.settings.basic'),
+			g('calendar'),
+			g('contacts'),
+			g('drive'),
+			g('documents'),
+			g('spreadsheets'),
+			g('chat.messages'),
+			g('chat.spaces'),
+			g('classroom.courses'),
+			g('youtube.readonly')
+		]
+	};
+	const invoked = [];
 	let opened = false;
 	const navigated = [];
 	window.open = () => {
@@ -100,6 +142,10 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 						hosted: true
 					}
 				};
+			if (payload?.actionId === 'install') {
+				invoked.push(payload);
+				return { ok: true, result: { signed_out: ['acct_new'] } };
+			}
 			if (payload?.actionId === 'viewer') return { ok: true, result: { profile_id: 'fred' } };
 			if (method === 'users.list') return { profiles: [{ id: 'fred', displayName: 'Fred' }] };
 			if (method === 'agents.list')
@@ -118,6 +164,8 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 								accounts: [
 									failedAccount,
 									connectedAccount,
+									signedOutAccount,
+									foundAccount,
 									{
 										...connectedAccount,
 										id: 'acct_empty',
@@ -132,8 +180,13 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 								integrations: ['google', 'microsoft'].map((id) => ({
 									id,
 									name: id,
+									cli: id,
 									tool: { state: 'installed', version: '1.0.0' },
-									setup: { state: 'ready' }
+									setup: { state: 'ready' },
+									// Google's CLI was installed outside Link and an update is out.
+									managed: id !== 'google',
+									installable: true,
+									update_available: id === 'google'
 								}))
 							}
 			};
@@ -196,6 +249,87 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 			/Send email|Read email/,
 			'known empty grants never fall back to sign-in choices'
 		);
+		// Access reads as one row per service, opening from a one-line summary.
+		const found = () =>
+			[...document.querySelectorAll('.fl-account')].find((c) =>
+				c.textContent.includes('found@example.com')
+			);
+		const access = found().querySelector('details.fl-access');
+		assert.ok(access, 'a long access list collapses');
+		assert.match(
+			access.querySelector('summary').textContent,
+			/^Gmail · Calendar · Contacts · Drive · Docs\+4 moreShow all$/
+		);
+		const rows = [...access.querySelectorAll('.fl-access-rows dt')].map((dt) => dt.textContent);
+		assert.deepEqual(rows, [
+			'Gmail',
+			'Calendar',
+			'Contacts',
+			'Drive',
+			'Docs',
+			'Sheets',
+			'Chat',
+			'YouTube',
+			'Classroom'
+		]);
+		assert.equal(
+			access.querySelector('.fl-access-rows dd').textContent,
+			'Read, send, organize and delete (to trash) email, Manage email settings'
+		);
+		// Owner and purpose change from the card itself and save without signing in.
+		found().querySelector('.fl-account-details').click();
+		assert.match(found().textContent, /Owner and purpose/);
+		assert.ok(found().querySelector('select[aria-label="Owner"]'));
+		assert.ok(
+			[...found().querySelectorAll('button')].some((b) => b.textContent === 'Save'),
+			'details save directly'
+		);
+		assert.equal(found().querySelector('.fl-signin'), null, 'no sign-in to change the owner');
+		[...found().querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
+		assert.doesNotMatch(document.body.textContent, /Edit details/);
+		// A signed-out account says so plainly and offers to sign in again.
+		const out = [...document.querySelectorAll('.fl-account')].find((c) =>
+			c.textContent.includes('out@example.com')
+		);
+		assert.equal(out.querySelector('.fl-account-status-error')?.textContent, 'Signed out');
+		assert.match(out.textContent, /Sign in again so your agents can use this account/);
+		assert.ok([...out.querySelectorAll('button')].some((b) => b.textContent === 'Sign in again'));
+		assert.match(
+			document.querySelector('.fl-integration').textContent,
+			/1 needs sign-in/,
+			'the sidebar counts accounts waiting for sign-in'
+		);
+		// A CLI installed outside Link is one plain fix, confirmed first because it signs out
+		// the accounts found in that CLI's own store.
+		assert.doesNotMatch(document.body.textContent, /installed outside Link/);
+		const fix = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Fix it');
+		assert.ok(fix, document.body.textContent);
+		fix.click();
+		let dialog = document.querySelector('.fl-dialog');
+		assert.ok(dialog, 'a warning appears before anything changes');
+		assert.equal(invoked.length, 0);
+		assert.match(dialog.textContent, /signs out this account:found@example\.com/);
+		assert.match(dialog.textContent, /sign in to it again/);
+		[...dialog.querySelectorAll('button')].find((b) => b.textContent === 'Cancel').click();
+		assert.equal(document.querySelector('.fl-dialog'), null);
+		assert.equal(invoked.length, 0, 'Cancel changes nothing');
+		[...document.querySelectorAll('button')].find((b) => b.textContent === 'Fix it').click();
+		dialog = document.querySelector('.fl-dialog');
+		[...dialog.querySelectorAll('button')]
+			.find((b) => b.textContent === 'Fix and sign out')
+			.click();
+		for (let i = 0; i < 50 && !invoked.length; i++) await setImmediate();
+		assert.match(JSON.stringify(invoked[0]), /"replace":true/);
+		for (
+			let i = 0;
+			i < 50 && !/up to date/.test(document.querySelector('.fl-notice').textContent);
+			i++
+		)
+			await setImmediate();
+		assert.match(
+			document.querySelector('.fl-notice').textContent,
+			/^google is up to date\. 1 account needs you to sign in again\.$/
+		);
 		const connect = [...document.querySelectorAll('button')].find(
 			(b) => b.textContent === 'Add account'
 		);
@@ -220,10 +354,11 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		const form = document.querySelector('.fl-form');
 		form.reportValidity = () => true;
 		email.value = 'fred@example.com';
-		Object.defineProperty(document.querySelector('select[aria-label="Owner"]'), 'value', {
-			value: 'human:fred',
-			configurable: true
-		});
+		assert.equal(
+			form.querySelector('select[aria-label="Owner"]'),
+			null,
+			'changing access does not ask for the owner again'
+		);
 		Object.defineProperty(document.querySelector('select[aria-label="Email"]'), 'value', {
 			value: 'gmail:readonly',
 			configurable: true

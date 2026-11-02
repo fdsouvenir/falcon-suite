@@ -177,3 +177,75 @@ test(
 		}
 	}
 );
+
+// Reinstall is the person's explicit choice to replace a CLI Link didn't install. The old
+// command is kept as a backup, and accounts found in its own store are signed out: they keep
+// their address, owner, purpose and access choices and are not listed again from that store.
+test(
+	'Reinstall replaces an outside CLI, keeps a backup and signs out the accounts found in it',
+	{ skip: process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch) },
+	async () => {
+		const home = await mkdtemp(path.join(tmpdir(), 'link-reinstall-'));
+		try {
+			const bin = path.join(home, '.local', 'bin');
+			await mkdir(bin, { recursive: true });
+			const { services } = await import('./catalogs.mjs');
+			// Both CLIs still list the account, so the test proves it is not listed again.
+			const fake = (version) =>
+				`#!${process.execPath}\nconst a=process.argv.slice(2).join(' ');\n` +
+				`if(a==='--version')console.log('${version}');\n` +
+				`else if(a.startsWith('auth list'))console.log(JSON.stringify({accounts:[{email:'found@example.com',client:'default',scopes:['https://www.googleapis.com/auth/gmail.modify','https://www.googleapis.com/auth/gmail.settings.basic']}]}));\n` +
+				`else if(a.startsWith('auth services'))console.log(${JSON.stringify(JSON.stringify({ services }))});\n`;
+			await writeFile(path.join(bin, 'gog'), fake('v0.40.0') + '// outside wrapper\n', {
+				mode: 0o755
+			});
+			await writeFile(path.join(home, 'gog'), fake('v0.47.0'), { mode: 0o755 });
+			execFileSync('tar', ['-czf', path.join(home, 'release.tar.gz'), '-C', home, 'gog']);
+			const script = `
+   import fs from 'node:fs';
+   import path from 'node:path';
+   import assert from 'node:assert/strict';
+   import {createHash} from 'node:crypto';
+   import {LinkService} from ${JSON.stringify(new URL('../dist/service.js', import.meta.url).href)};
+   const home=process.env.HOME, dir=path.join(home,'.openclaw','falcon-link');
+   const archive=fs.readFileSync(path.join(home,'release.tar.gz'));
+   const asset={name:'gogcli_0.47.0_linux_'+(process.arch==='x64'?'amd64':'arm64')+'.tar.gz',digest:'sha256:'+createHash('sha256').update(archive).digest('hex')};
+   asset.browser_download_url='https://github.com/openclaw/gogcli/releases/download/v0.47.0/'+asset.name;
+   globalThis.fetch=async url=>String(url).startsWith('https://api.github.com/')?Response.json({tag_name:'v0.47.0',assets:[asset]}):new Response(archive);
+   const l=new LinkService(dir);
+   await l.discover();
+   const found=l.accounts().find(a=>a.email==='found@example.com');
+   assert.ok(found?.external);
+   l.metadata(found.id,{kind:'human',id:'fred',name:'Fred'},{kind:'personal'});
+   await assert.rejects(()=>l.install('google'),/outside Link/);
+   const result=await l.install('google',true);
+   assert.equal(result.signed_out.length,1);
+   const command=path.join(home,'.local/bin/gog');
+   assert.match(fs.readFileSync(command,'utf8'),/v0\\.47\\.0/);
+   const backups=fs.readdirSync(path.join(dir,'tools','google')).filter(f=>f.startsWith('previous-'));
+   assert.equal(backups.length,1);
+   assert.match(fs.readFileSync(path.join(dir,'tools','google',backups[0]),'utf8'),/outside wrapper/);
+   await l.discover();
+   const list=l.accounts();
+   assert.equal(list.length,1,'the found account is not listed again');
+   const [a]=list;
+   assert.equal(a.id,result.signed_out[0]);
+   assert.equal(a.external,undefined);
+   assert.equal(a.state,'disconnected');
+   assert.equal(a.email,'found@example.com');
+   assert.deepEqual(a.owner,{kind:'human',id:'fred',name:'Fred'});
+   assert.deepEqual(a.purpose,{kind:'personal'});
+   assert.deepEqual(a.requested,['gmail:full']);
+   assert.equal(a.replaces,found.id);
+   assert.equal(a.connection_error.code,'signed_out_by_reinstall');
+   assert.match(a.connection_error.message,/^Signed out when Google was reinstalled\\. Sign in again/);
+  `;
+			execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+				env: { ...process.env, HOME: home, PATH: bin + path.delimiter + process.env.PATH },
+				stdio: 'pipe'
+			});
+		} finally {
+			await rm(home, { recursive: true, force: true });
+		}
+	}
+);

@@ -204,8 +204,14 @@ commands in `~/.local/bin` (which must be on the Office PATH). Link never runs H
 `install.sh`, which edits shell startup files. Installation checks the known repository, the expected asset name,
 GitHub's SHA-256 asset digest and size/time bounds. Link updates only a command it installed
 (its bytes match Link's installation receipt) and keeps previous copies for rollback; it
-never overwrites a tool installed some other way. The page checks for a newer release when
-it loads (cached for about an hour) and offers Update when one is available.
+never overwrites a tool installed some other way on its own. The page checks for a newer release
+when it loads (cached for about an hour) and offers Update when one is available.
+
+When the command was installed some other way and is out of date, the page offers **Fix it**
+instead. After a confirmation that names every account it affects, Link reinstalls its verified
+release over that command (keeping the old one as `previous-*` in Link's tools folder). Accounts
+found in that command's own store are signed out: each stays listed as a Signed out Link account
+with its address, owner, purpose and access choices, and signs in again into Link's own storage.
 
 The HubSpot CLI updates itself. Link doesn't pin or block that: an update is available when
 HubSpot's published SHA-256 differs from the installed binary, and Update runs

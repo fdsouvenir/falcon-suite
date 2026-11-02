@@ -117,7 +117,7 @@ export default defineFeaturePlugin({
 			},
 			install(input, context) {
 				person(context);
-				return ready().install(input.provider);
+				return ready().install(input.provider, input.replace === true);
 			}
 		};
 	}

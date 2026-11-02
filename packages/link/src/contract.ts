@@ -129,8 +129,8 @@ export const contract = defineFeatureContract({
 		install: {
 			kind: 'action',
 			description:
-				'Install or update the CLI from its published source with checksum verification (a self-updating CLI updates itself); preserve existing tools and credentials.',
-			input: obj({ provider }),
+				'Install or update the CLI from its published source with checksum verification (a self-updating CLI updates itself); preserve existing tools and credentials. With replace, reinstall over a CLI Link did not install (kept as a backup); accounts found in that CLI’s own store are signed out and must sign in again.',
+			input: obj({ provider, replace: Type.Optional(Type.Boolean()) }),
 			output: Type.Unknown()
 		}
 	}

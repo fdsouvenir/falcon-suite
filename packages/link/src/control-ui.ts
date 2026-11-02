@@ -13,7 +13,7 @@ import {
 	selectionScopes
 } from './model.js';
 import './control-ui.css';
-import { accessSummary } from './access-summary.js';
+import { accessSummary, type AccessGroup } from './access-summary.js';
 import { PROVIDER_UI, uiOf } from './providers/ui.js';
 import type { Revoke } from './providers/types.js';
 // Official provider artwork, unmodified (see assets/brand/README.md).
@@ -210,6 +210,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	// Check connection results and open Manage sections stay with their card across refreshes.
 	const checks = new Map<string, { busy: boolean; error?: string }>();
 	const managing = new Set<string>();
+	const accessOpen = new Set<string>();
 	// An account's own form or confirmation opens inside its card, replacing the card's actions.
 	let cardForm: { account: string; node: HTMLElement } | null = null;
 	const message = (s: string, error = false) => {
@@ -537,11 +538,14 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const form = el('form', undefined, account ? 'fl-form fl-card-form' : 'fl-form');
 		const title = el(
 			account ? 'h5' : 'h3',
-			metadataOnly ? 'Account details' : account ? 'Change access' : `Add a ${ui.name} account`
+			metadataOnly ? 'Owner and purpose' : account ? 'Change access' : `Add a ${ui.name} account`
 		);
 		form.append(title);
+		// Owner and purpose are details, saved without signing in; access changes ask for them
+		// only when the account has none yet.
+		const askMetadata = metadataOnly || !account?.owner || !account?.purpose;
 		const meta = metadataFields(account?.owner ?? undefined, account?.purpose ?? undefined);
-		form.append(...meta.nodes);
+		if (askMetadata) form.append(...meta.nodes);
 		const rows =
 			metadataOnly || ui.permissions !== 'catalog'
 				? null
@@ -580,9 +584,11 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			event.preventDefault();
 			if (!form.reportValidity()) return;
 			void act(submit, async () => {
-				const values = meta.values();
+				const values = askMetadata
+					? meta.values()
+					: { owner: account!.owner!, purpose: account!.purpose! };
 				if (!values.owner) throw new Error('Choose an owner.');
-				if (!rows && account) {
+				if (metadataOnly && account) {
 					await client.invoke('metadata', { account_id: account.id, ...values });
 					closeForm();
 					await load();
@@ -769,22 +775,25 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	function accountWord(a: Account) {
 		if (signingIn(a)) return 'Signing in…';
 		if (a.state === 'connected' || a.state === 'discovered') return 'Connected';
-		if (a.state === 'disconnected') return 'Not connected';
+		if (a.state === 'disconnected') return 'Signed out';
 		return 'Needs attention';
 	}
 	function attentionWord(provider: Provider) {
 		const words: string[] = accounts.filter((a) => a.provider === provider).map(accountWord);
-		return ['Needs attention', 'Not connected'].find((w) => words.includes(w)) ?? null;
+		return ['Signed out', 'Needs attention'].find((w) => words.includes(w)) ?? null;
 	}
 	const ready = (i: IntegrationStatus) =>
 		i.setup.state === 'ready' && i.tool.state !== 'not_installed' && !i.below_minimum;
 	// Plain banners only when something needs doing; otherwise no plumbing is shown.
 	function banners(i: IntegrationStatus) {
 		const list = el('div', undefined, 'fl-banners');
-		const add = (text: string, action?: HTMLButtonElement) => {
+		const add = (text: string, action?: HTMLButtonElement, lead?: string) => {
 			const b = el('div', undefined, 'fl-banner');
 			b.setAttribute('role', 'status');
-			b.append(el('p', text));
+			const p = el('p');
+			if (lead) p.append(el('strong', lead), ' ');
+			p.append(text);
+			b.append(p);
 			if (action) b.append(action);
 			list.append(b);
 		};
@@ -803,6 +812,13 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			return b;
 		};
 		const outside = `${i.cli} was installed outside Link.`;
+		// A tool Link didn't install, which Link can install: one plain fix, with a warning
+		// first when accounts will be signed out.
+		const fixable =
+			i.tool.state === 'installed' &&
+			!i.managed &&
+			i.installable &&
+			(i.below_minimum || i.update_available);
 		if (i.setup.state !== 'ready') add(i.setup.message);
 		if (i.tool.state === 'not_installed' && i.no_build)
 			add(`${i.name} doesn't publish a ${i.cli} build for this computer.`);
@@ -813,7 +829,15 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					: `Install ${i.cli} on this computer to connect ${i.name} accounts. Link can install it for you only on Linux.`,
 				i.installable ? install('Install') : undefined
 			);
-		else if (i.below_minimum)
+		else if (fixable) {
+			const fix = button('Fix it', () => confirmReinstall(i, fix), true);
+			fix.disabled = !canWrite();
+			add(
+				`This ${i.name} connection was set up outside Falcon Link, so Link can't keep it up to date.`,
+				fix,
+				`${i.name} needs a quick fix.`
+			);
+		} else if (i.below_minimum)
 			add(
 				`Update needed to connect ${i.name} accounts.${i.managed && i.installable ? '' : ' ' + outside}`,
 				i.managed && i.installable ? install('Update') : undefined
@@ -824,6 +848,79 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				i.managed && i.installable ? install('Update') : undefined
 			);
 		return list.childElementCount ? list : null;
+	}
+	// Reinstalling over a tool Link didn't install signs out the accounts found in that tool's
+	// own store. Say which, and ask, before doing it.
+	function confirmReinstall(i: IntegrationStatus, trigger: HTMLButtonElement) {
+		const affected = accounts.filter(
+			(a) => a.provider === i.id && a.external && a.state !== 'disconnected'
+		);
+		const run = async (b: HTMLButtonElement) => {
+			await act(b, async () => {
+				const result = (await client.invoke('install', { provider: i.id, replace: true })) as {
+					signed_out?: string[];
+				};
+				await load();
+				const n = result?.signed_out?.length ?? 0;
+				message(
+					n
+						? `${i.name} is up to date. ${n} account${n === 1 ? ' needs' : 's need'} you to sign in again.`
+						: `${i.name} is up to date.`
+				);
+			});
+		};
+		if (!affected.length) return void run(trigger);
+		const dialog = el('dialog', undefined, 'fl-dialog');
+		dialog.setAttribute('role', 'alertdialog');
+		const title = el(
+			'h3',
+			affected.length === 1
+				? `Reconnect this ${i.name} account afterward?`
+				: `Reconnect these ${i.name} accounts afterward?`
+		);
+		title.id = `fl-dialog-${Math.random().toString(36).slice(2)}`;
+		dialog.setAttribute('aria-labelledby', title.id);
+		const names = el('ul', undefined, 'fl-dialog-accounts');
+		for (const a of affected)
+			names.append(el('li', uiOf(a.provider).title?.(a) ?? a.email ?? `${i.name} account`));
+		const close = () => {
+			if (typeof dialog.close === 'function' && dialog.open) dialog.close();
+			dialog.remove();
+		};
+		const confirm = button(
+			'Fix and sign out',
+			async () => {
+				close();
+				await run(trigger);
+			},
+			true
+		);
+		confirm.classList.add('fl-btn-danger');
+		const actions = el('div', undefined, 'fl-actions');
+		const cancel = button('Cancel', close);
+		actions.append(cancel, confirm);
+		dialog.append(
+			title,
+			el(
+				'p',
+				affected.length === 1
+					? 'Fixing this signs out this account:'
+					: 'Fixing this signs out these accounts:'
+			),
+			names,
+			el(
+				'p',
+				affected.length === 1
+					? "You'll need to sign in to it again. It takes about a minute."
+					: "You'll need to sign in to each one again. It takes about a minute per account."
+			),
+			actions
+		);
+		dialog.addEventListener('cancel', () => dialog.remove());
+		root.append(dialog);
+		if (typeof dialog.showModal === 'function') dialog.showModal();
+		else dialog.setAttribute('open', '');
+		cancel.focus();
 	}
 	// One row for the integration's official agent skills, shared by every agent.
 	function skillsRow(i: IntegrationStatus) {
@@ -915,6 +1012,40 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		details.append(list);
 		return details;
 	}
+	// Access reads as one row per service. A long list shows its services on one line and
+	// opens to the full rows.
+	function accessList(a: Account, groups: AccessGroup[]) {
+		if (!groups.length) return null;
+		const named = groups.every((g) => g.service);
+		const rows = () => {
+			if (!named) {
+				const list = el('ul', undefined, 'fl-access-list');
+				for (const item of groups.flatMap((g) => g.items)) list.append(el('li', item));
+				return list;
+			}
+			const list = el('dl', undefined, 'fl-access-rows');
+			for (const g of groups) list.append(el('dt', g.service!), el('dd', g.items.join(', ')));
+			return list;
+		};
+		const labels = named ? groups.map((g) => g.service!) : groups.flatMap((g) => g.items);
+		const shown = named ? 5 : 3;
+		if (labels.length <= shown) return rows();
+		const details = el('details', undefined, 'fl-access');
+		details.open = accessOpen.has(a.id);
+		const summary = el('summary');
+		const more = labels.length - shown;
+		const preview = el('span', `${labels.slice(0, shown).join(' · ')}`, 'fl-access-preview');
+		const extra = el('span', `+${more} more`, 'fl-access-more');
+		const toggle = el('span', details.open ? 'Show less' : 'Show all', 'fl-access-toggle');
+		summary.append(preview, extra, toggle);
+		details.append(summary, rows());
+		details.addEventListener('toggle', () => {
+			if (details.open) accessOpen.add(a.id);
+			else accessOpen.delete(a.id);
+			toggle.textContent = details.open ? 'Show less' : 'Show all';
+		});
+		return details;
+	}
 	function accountCard(a: Account, integration: IntegrationStatus) {
 		const card = el('section', undefined, 'fl-card fl-account');
 		const identity = el('div', undefined, 'fl-account-identity');
@@ -928,9 +1059,14 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const ui = uiOf(a.provider);
 		accountName.append(el('h4', ui.title?.(a) ?? a.email ?? `${ui.name} account`));
 		const meta = el('div', undefined, 'fl-account-meta');
-		meta.append(el('span', a.owner ? `Owner: ${a.owner.name}` : 'No owner chosen'));
+		// Owner and purpose change here and save without signing in again.
+		const details = button('', () => accountForm(a, true));
+		details.className = 'fl-account-details';
+		details.disabled = !canWrite();
+		details.setAttribute('aria-label', 'Change owner and purpose');
+		details.append(el('span', a.owner ? `Owner: ${a.owner.name}` : 'No owner chosen'));
 		if (a.purpose)
-			meta.append(
+			details.append(
 				el(
 					'span',
 					a.purpose.kind === 'other'
@@ -941,6 +1077,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					'fl-account-purpose'
 				)
 			);
+		details.append(
+			el('span', a.owner && a.purpose ? 'Change' : 'Choose', 'fl-account-details-action')
+		);
+		meta.append(details);
 		for (const tag of ui.tags?.(a) ?? []) {
 			const t = el('span', tag.label, 'fl-account-purpose');
 			t.title = tag.note;
@@ -954,7 +1094,13 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				el(
 					'span',
 					word,
-					`fl-account-status${word === 'Signing in…' ? '' : ' fl-account-status-warn'}`
+					`fl-account-status${
+						word === 'Signing in…'
+							? ''
+							: word === 'Signed out'
+								? ' fl-account-status-error'
+								: ' fl-account-status-warn'
+					}`
 				)
 			);
 		card.append(identity);
@@ -963,11 +1109,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const body = el('div', undefined, 'fl-account-access');
 		if (access) {
 			body.append(el('h5', access.title));
-			if (access.items.length) {
-				const capabilities = el('ul', undefined, 'fl-access-list');
-				for (const capability of access.items) capabilities.append(el('li', capability));
-				body.append(capabilities);
-			}
+			const list = accessList(a, access.groups);
+			if (list) body.append(list);
 			if (access.note) body.append(el('p', access.note, 'fl-muted'));
 			body.append(...notes);
 			card.append(body);
@@ -981,8 +1124,12 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			);
 			result.setAttribute('role', 'status');
 			card.append(result);
-		} else if (a.connection_error && word === 'Needs attention')
+		} else if (a.connection_error && (word === 'Needs attention' || word === 'Signed out'))
 			card.append(el('p', a.connection_error.message, 'fl-error fl-account-error'));
+		else if (word === 'Signed out')
+			card.append(
+				el('p', 'Sign in again so your agents can use this account.', 'fl-error fl-account-error')
+			);
 		const footer = el('div', undefined, 'fl-account-footer');
 		const primary = el('div', undefined, 'fl-actions');
 		const retryWith = retryInput(a);
@@ -1014,9 +1161,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			openInCard(a, confirm, title);
 		});
 		remove.disabled = !canWrite();
-		if (word === 'Needs attention' || word === 'Not connected') {
+		if (word === 'Needs attention' || word === 'Signed out') {
 			const retry = button(
-				'Try again',
+				word === 'Signed out' ? 'Sign in again' : 'Try again',
 				async () => {
 					if (a.auth === 'service_key') return keyForm(a);
 					if (!retryWith) return accountForm(a);
@@ -1027,18 +1174,18 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			retry.disabled = !canWrite() || !ready(integration) || signingIn(a);
 			primary.append(retry);
 		}
-		const change = button(a.auth === 'service_key' ? 'Replace key' : 'Change access', () =>
-			a.auth === 'service_key' ? keyForm(a) : accountForm(a)
-		);
-		change.disabled = !canWrite() || !ready(integration) || signingIn(a);
-		primary.append(change);
+		// A signed-out account has one next step: Sign in again.
+		if (word !== 'Signed out') {
+			const change = button(a.auth === 'service_key' ? 'Replace key' : 'Change access', () =>
+				a.auth === 'service_key' ? keyForm(a) : accountForm(a)
+			);
+			change.disabled = !canWrite() || !ready(integration) || signingIn(a);
+			primary.append(change);
+		}
 		// Records left disconnected by an earlier version show Remove next to Try again.
 		if (a.state === 'disconnected') primary.append(remove);
 		footer.append(primary);
 		const actions = el('div', undefined, 'fl-actions');
-		const edit = button('Edit details', () => accountForm(a, true));
-		edit.disabled = !canWrite();
-		actions.append(edit);
 		const check = button(checked?.busy ? 'Checking…' : 'Check connection', async () => {
 			checks.set(a.id, { busy: true });
 			render();
@@ -1087,6 +1234,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			b.className = `fl-integration${selected === id ? ' fl-selected' : ''}`;
 			b.setAttribute('aria-current', selected === id ? 'page' : 'false');
 			const count = accounts.filter((a) => a.provider === id).length;
+			const signedOut = accounts.filter(
+				(a) => a.provider === id && accountWord(a) === 'Signed out'
+			).length;
 			const label = el('span', undefined, 'fl-nav-copy');
 			label.append(
 				el('span', name, 'fl-integration-name'),
@@ -1094,16 +1244,22 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					'span',
 					!status
 						? 'Checking…'
-						: count
-							? `${count} account${count === 1 ? '' : 's'}`
-							: 'No accounts',
+						: signedOut
+							? `${signedOut} need${signedOut === 1 ? 's' : ''} sign-in`
+							: count
+								? `${count} account${count === 1 ? '' : 's'}`
+								: 'No accounts',
 					'fl-muted'
 				)
 			);
 			b.append(mark(id), label);
 			const attention = status ? attentionWord(id) : null;
 			if (attention) {
-				const dot = el('span', undefined, 'fl-dot fl-dot-warn');
+				const dot = el(
+					'span',
+					undefined,
+					`fl-dot ${attention === 'Signed out' ? 'fl-dot-error' : 'fl-dot-warn'}`
+				);
 				dot.setAttribute('role', 'img');
 				dot.setAttribute('aria-label', attention);
 				dot.title = attention;

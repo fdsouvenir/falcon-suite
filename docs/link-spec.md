@@ -168,6 +168,29 @@ Decisions (2026-10-30):
   on any system where gtm is already installed.
 - ZoomInfo's official agent skill is installed for every agent, like HubSpot's.
 
+## Reinstall, owner editing and grouped access (requested by Fred 2026-11-02)
+
+- **A CLI installed outside Link is one plain fix.** When the command Link uses wasn't installed
+  by Link and is out of date, the page says "<Provider> needs a quick fix. This <Provider>
+  connection was set up outside Falcon Link, so Link can't keep it up to date." with **Fix it**.
+  No CLI names or "installed outside Link" wording.
+- **Fix it reinstalls.** Link installs its verified release over the outside command and keeps
+  the old one as a backup (`tools/<id>/previous-*`). From then on Update works as usual.
+- **Warn first, then be definite.** Accounts found in that CLI's own store are listed by address
+  in a popup ("Fixing this signs out these accounts … You'll need to sign in to each one again")
+  with Cancel and **Fix and sign out**. Fixing signs them out at once: each becomes a Link account
+  in state Signed out that keeps its address, owner, purpose and access choices, and the account
+  found in the old store is not listed again. Agents no longer see it until it signs in again.
+- **Signed out is unmistakable.** Red "Signed out" on the card, the reason, one **Sign in again**
+  action (straight to the provider when owner, purpose and access are known), "1 needs sign-in" in
+  the sidebar, and "<Provider> is up to date. 1 account needs you to sign in again." after the fix.
+- **Owner and purpose are details, not sign-in.** The owner/purpose line on each card opens a
+  small form that saves directly. Change access asks only about access (and owner/purpose only if
+  the account has none yet).
+- **Access by service.** Access shows one row per service (Gmail, Calendar, …) with its
+  capabilities in plain words. A long list collapses to one line of service names with "+N more"
+  and Show all.
+
 ## Delivery tracking
 
 Parent: [Google and Microsoft onboarding #7](https://github.com/fdsouvenir/falcon-suite/issues/7).
