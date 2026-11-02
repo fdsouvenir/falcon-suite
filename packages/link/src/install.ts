@@ -111,7 +111,15 @@ async function readReceipt(file: string): Promise<Receipt | undefined> {
 }
 // Publishes a verified binary as an ordinary user-local command on the Office PATH.
 // Versioned download copies remain only for rollback, never required by the agent.
-async function activate(provider: string, base: string, file: string, version: string) {
+// `replace` is the person's explicit Reinstall: a command Link didn't install is backed up and
+// replaced instead of preserved.
+async function activate(
+	provider: string,
+	base: string,
+	file: string,
+	version: string,
+	replace = false
+) {
 	const tool = providerOf(provider).tool;
 	const selfUpdating = tool.source.kind === 'vendor';
 	const bin = path.join(homedir(), '.local', 'bin');
@@ -123,7 +131,7 @@ async function activate(provider: string, base: string, file: string, version: s
 	const nextDigest = sha256(await readFile(file));
 	try {
 		const stat = await lstat(command);
-		if (!stat.isFile())
+		if (!stat.isFile() && !(replace && stat.isSymbolicLink()))
 			throw new Error(
 				'Existing CLI is not a regular file; preserve it and ask your administrator.'
 			);
@@ -134,7 +142,7 @@ async function activate(provider: string, base: string, file: string, version: s
 			const ours =
 				previous?.binary_sha256 === currentDigest ||
 				(selfUpdating && previous?.self_updating === true && previous.path === command);
-			if (!ours)
+			if (!ours && !replace)
 				throw new Error(
 					'Existing CLI was installed or changed outside Link; it has been preserved.'
 				);
@@ -171,7 +179,7 @@ async function writeReceipt(base: string, receipt: Receipt) {
 	await rename(pending, path.join(base, 'path-install.json'));
 }
 const busy = new Set<string>();
-export async function install(dir: string, provider: string) {
+export async function install(dir: string, provider: string, replace = false) {
 	if (process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch))
 		throw new Error('Link installs CLIs on Linux x64 and arm64 only.');
 	const p = providerOf(provider);
@@ -184,19 +192,20 @@ export async function install(dir: string, provider: string) {
 		const base = path.join(dir, 'tools', provider);
 		await mkdir(base, { recursive: true, mode: 0o700 });
 		return providerOf(provider).tool.source.kind === 'vendor'
-			? await installVendor(provider, base)
-			: await installRelease(provider, base);
+			? await installVendor(provider, base, replace)
+			: await installRelease(provider, base, replace);
 	} finally {
 		busy.delete(lock);
 	}
 }
 // A self-updating CLI that Link installed updates itself with its own command. Otherwise
 // Link downloads the published binary and verifies its SHA-256.
-async function installVendor(provider: string, base: string) {
+async function installVendor(provider: string, base: string, replace: boolean) {
 	const tool = providerOf(provider).tool;
 	const s = source(provider, 'vendor');
 	const receipt = await readReceipt(path.join(base, 'path-install.json'));
 	if (
+		!replace &&
 		receipt?.self_updating &&
 		(await toolStatus(receipt.path, tool.version_prefix, tool.version_args)).version
 	) {
@@ -246,7 +255,7 @@ async function installVendor(provider: string, base: string) {
 		await rm(destination, { recursive: true, force: true });
 		await rename(stage, destination);
 		stage = undefined;
-		await activate(provider, base, path.join(destination, tool.binary), version);
+		await activate(provider, base, path.join(destination, tool.binary), version, replace);
 		return receipt;
 	} finally {
 		if (stage) await rm(stage, { recursive: true, force: true });
@@ -280,7 +289,7 @@ async function checkSums(
 	if (listed?.[1] !== sha256(archive))
 		throw new Error('Release checksum mismatch. Existing tool retained.');
 }
-async function installRelease(provider: string, base: string) {
+async function installRelease(provider: string, base: string, replace: boolean) {
 	let stage: string | undefined;
 	try {
 		const tool = providerOf(provider).tool;
@@ -320,7 +329,7 @@ async function installRelease(provider: string, base: string) {
 			if (receipt.digest === asset.digest) {
 				const output = await run(path.join(destination, t.binary), versionArgs);
 				if (!output.includes(version)) throw new Error('Installed executable failed validation.');
-				await activate(provider, base, path.join(destination, t.binary), version);
+				await activate(provider, base, path.join(destination, t.binary), version, replace);
 				return receipt;
 			}
 			throw new Error('Installed version has a different receipt.');
@@ -369,7 +378,7 @@ async function installRelease(provider: string, base: string) {
 		await rm(archive, { force: true });
 		await rename(stage, destination);
 		stage = undefined;
-		await activate(provider, base, path.join(destination, t.binary), version);
+		await activate(provider, base, path.join(destination, t.binary), version, replace);
 		return receipt;
 	} finally {
 		if (stage) await rm(stage, { recursive: true, force: true });

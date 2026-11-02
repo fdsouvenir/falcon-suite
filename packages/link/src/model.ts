@@ -19,6 +19,9 @@ export type Account = {
 	// How the account signs in, where a provider offers more than one way.
 	auth?: 'oauth' | 'service_key';
 	external?: { selection: string; client?: string; client_id?: string };
+	// A Link account that took the place of an account found in the CLI's own store when the
+	// person reinstalled the CLI; that found account is not listed again.
+	replaces?: string;
 	state: 'discovered' | 'pending' | 'connected' | 'check_failed' | 'disconnected' | 'failed';
 	checked_at: string | null;
 	created_at: string;
@@ -98,6 +101,24 @@ export function describeSelection(p: Permissions, catalog: Catalog, selected: st
 		if (!found) return catalog.saved[id] ? [catalog.saved[id].label] : [];
 		return [found.addon ? found.level.label : `${found.row.label}: ${found.level.label}`];
 	});
+}
+// The catalog choices an account's recorded scopes already cover, so signing in again asks for
+// the same access without a form. Per row, the level granting the most scopes it holds.
+export function selectionFromScopes(catalog: Catalog, scopes: string[]) {
+	const held = new Set(scopes);
+	const covered = (l: Level) => l.scopes.length > 0 && l.scopes.every((s) => held.has(s));
+	const out: string[] = [];
+	for (const row of catalog.rows) {
+		const level = row.levels.filter(covered).sort((a, b) => b.scopes.length - a.scopes.length)[0];
+		if (level) out.push(level.id);
+		if (
+			row.addon &&
+			covered(row.addon) &&
+			(!row.addon_requires || row.addon_requires === level?.id)
+		)
+			out.push(row.addon.id);
+	}
+	return out;
 }
 export function validateMetadata(owner: Owner, purpose: Purpose) {
 	if (

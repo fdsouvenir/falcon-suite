@@ -25,6 +25,28 @@ export function normalizeGoogle(selected: string[]) {
 	return out;
 }
 
+// Scope name prefixes by service, in the order services are shown.
+const GOOGLE_SERVICES: [string, string[]][] = [
+	['Gmail', ['gmail.', 'https://mail.google.com/']],
+	['Calendar', ['calendar']],
+	['Contacts', ['contacts', 'directory.']],
+	['Drive', ['drive']],
+	['Docs', ['documents']],
+	['Sheets', ['spreadsheets']],
+	['Slides', ['presentations']],
+	['Tasks', ['tasks']],
+	['Forms', ['forms.']],
+	['Meet', ['meetings.']],
+	['Chat', ['chat.']],
+	['Apps Script', ['script.']],
+	['Analytics', ['analytics']],
+	['Search Console', ['webmasters']],
+	['Google Ads', ['adwords']],
+	['AdSense', ['adsense']],
+	['YouTube', ['youtube']],
+	['Photos', ['photoslibrary', 'photospicker']],
+	['Classroom', ['classroom.']]
+];
 const ui: ProviderUi = {
 	id: 'google',
 	name: 'Google',
@@ -42,6 +64,8 @@ const ui: ProviderUi = {
 	}),
 	access: {
 		key: (scope) => scope.replace(/^https:\/\/www\.googleapis\.com\/auth\//, ''),
+		service: (key) => GOOGLE_SERVICES.find(([, p]) => p.some((x) => key.startsWith(x)))?.[0],
+		services: GOOGLE_SERVICES.map(([name]) => name),
 		// Known capabilities, not scope names, in user-facing text.
 		labels: {
 			'gmail.readonly': 'Read email',

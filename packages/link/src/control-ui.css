@@ -241,6 +241,9 @@
 .fl-dot-warn {
 	background: var(--warn);
 }
+.fl-dot-error {
+	background: var(--danger);
+}
 .fl-provider-mark img {
 	width: 19px;
 	height: 19px;
@@ -603,6 +606,82 @@
 .fl-account-status-warn {
 	color: var(--warn);
 }
+.fl-account-status-error {
+	color: var(--danger);
+	font-weight: 600;
+}
+/* Owner and purpose: the line itself opens the editor. */
+.fl-account-details {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	padding: 2px var(--space-2);
+	margin-left: calc(-1 * var(--space-2));
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+.fl-account-details:hover:not(:disabled),
+.fl-account-details:focus-visible {
+	border-color: var(--border-strong);
+	background: var(--bg-hover);
+}
+.fl-account-details:disabled {
+	cursor: default;
+}
+.fl-account-details-action {
+	color: var(--accent);
+}
+.fl-account-details:disabled .fl-account-details-action {
+	display: none;
+}
+/* Access: one row per service; long lists open from a one-line summary. */
+.fl-access summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-2);
+	cursor: pointer;
+	list-style: none;
+	color: var(--text-strong);
+}
+.fl-access summary::-webkit-details-marker {
+	display: none;
+}
+.fl-access-more {
+	color: var(--muted);
+}
+.fl-access-toggle {
+	color: var(--accent);
+	margin-left: auto;
+}
+.fl-access[open] .fl-access-preview,
+.fl-access[open] .fl-access-more {
+	display: none;
+}
+.fl-access[open] > .fl-access-rows,
+.fl-access[open] > .fl-access-list {
+	margin-top: var(--space-3);
+}
+.fl-access-rows {
+	display: grid;
+	grid-template-columns: minmax(7rem, max-content) 1fr;
+	gap: var(--space-2) var(--space-4);
+	margin: 0;
+}
+.fl-access-rows dt {
+	color: var(--text-strong);
+	font-weight: 500;
+}
+.fl-access-rows dd {
+	margin: 0;
+	color: var(--text);
+}
 .fl-account-access {
 	padding: 0 var(--space-5) var(--space-5);
 }
@@ -614,18 +693,11 @@
 	margin: 0 0 var(--space-2);
 }
 .fl-access-list {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-2);
+	display: grid;
+	gap: var(--space-1);
 	list-style: none;
 	margin: 0;
 	padding: 0;
-}
-.fl-access-list li {
-	border: 1px solid var(--border);
-	border-radius: var(--radius-sm);
-	padding: var(--space-2) var(--space-3);
-	background: var(--bg);
 	color: var(--text-strong);
 }
 .fl-account-access p {
@@ -698,8 +770,12 @@
 	.fl-card-form {
 		padding: var(--space-3) var(--space-4);
 	}
-	.fl-access-list {
-		display: grid;
+	.fl-access-rows {
+		grid-template-columns: 1fr;
+		gap: 0 0;
+	}
+	.fl-access-rows dd {
+		margin-bottom: var(--space-2);
 	}
 	.fl-account-manage[open] {
 		width: 100%;
@@ -759,4 +835,41 @@
 	.fl-single-account {
 		text-align: left;
 	}
+}
+/* Confirmation before an action that signs accounts out. */
+.fl-dialog {
+	max-width: 28rem;
+	padding: var(--space-5);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-md);
+	background: var(--bg-elevated);
+	color: var(--text);
+}
+.fl-dialog::backdrop {
+	background: rgb(0 0 0 / 0.5);
+}
+.fl-dialog h3 {
+	margin: 0 0 var(--space-3);
+	color: var(--text-strong);
+}
+.fl-dialog p {
+	margin: 0 0 var(--space-3);
+}
+.fl-dialog-accounts {
+	margin: 0 0 var(--space-3);
+	padding-left: var(--space-5);
+	color: var(--text-strong);
+	font-weight: 500;
+}
+.fl-dialog .fl-actions {
+	justify-content: flex-end;
+	margin-top: var(--space-4);
+}
+.fl-btn-danger {
+	background: var(--danger);
+	border-color: var(--danger);
+	color: #fff;
+}
+.fl-btn-danger:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--danger) 85%, black);
 }

@@ -33,6 +33,10 @@ export type ProviderUi = Permissions & {
 	access: {
 		key?(scope: string): string;
 		labels: Record<string, string>;
+		// The service a scope belongs to (for example Gmail), so access reads as one row per
+		// service. Services are shown in the order of `services`.
+		service?(key: string): string | undefined;
+		services?: string[];
 		describe?(scopes: string[]): string[];
 		unknown?(a: Account): string | null;
 		// A fact shown under the account's access.
