@@ -20,7 +20,6 @@ export function executable(dir: string, id: string): string {
 	const managed = version ? path.join(dir, 'tools', id, version, tool.binary) : '';
 	// After migration, removing the normal command must not reactivate a private copy.
 	const migrated = existsSync(path.join(dir, 'tools', id, 'path-install.json'));
-	if (!migrated && managed && existsSync(managed)) return managed;
 	// Prefer normal CLI installations. Private preview paths are legacy fallback only.
 	for (const folder of (process.env.PATH ?? '').split(path.delimiter)) {
 		if (!path.isAbsolute(folder)) continue;
@@ -30,5 +29,6 @@ export function executable(dir: string, id: string): string {
 			return candidate;
 		} catch {}
 	}
+	if (!migrated && managed && existsSync(managed)) return managed;
 	return tool.binary;
 }

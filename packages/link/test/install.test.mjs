@@ -255,3 +255,26 @@ test(
 		}
 	}
 );
+
+// An administrator's CLI on PATH wins over a private copy left by an early preview.
+test('a CLI on PATH is preferred over an unmigrated private preview copy', async () => {
+	const dir = await mkdtemp(path.join(tmpdir(), 'link-resolve-'));
+	const previous = process.env.PATH;
+	try {
+		const base = path.join(dir, 'tools', 'google');
+		await mkdir(path.join(base, '0.46.0'), { recursive: true });
+		const legacy = path.join(base, '0.46.0', 'gog');
+		await writeFile(legacy, '#!/bin/sh\necho v0.46.0\n', { mode: 0o755 });
+		await writeFile(path.join(base, 'current.json'), JSON.stringify({ version: '0.46.0' }));
+		const admin = path.join(dir, 'admin-bin');
+		await mkdir(admin);
+		await writeFile(path.join(admin, 'gog'), '#!/bin/sh\necho v0.47.0\n', { mode: 0o755 });
+		process.env.PATH = '/nonexistent';
+		assert.equal(executable(dir, 'google'), legacy, 'the private copy is only a fallback');
+		process.env.PATH = admin;
+		assert.equal(executable(dir, 'google'), path.join(admin, 'gog'));
+	} finally {
+		process.env.PATH = previous;
+		await rm(dir, { recursive: true, force: true });
+	}
+});
