@@ -178,7 +178,8 @@ Decisions (2026-10-30):
   the old one as a backup (`tools/<id>/previous-*`). From then on Update works as usual.
 - **Warn first, then be definite.** Accounts found in that CLI's own store are listed by address
   in a popup ("Fixing this signs out these accounts … You'll need to sign in to each one again")
-  with Cancel and **Fix and sign out**. Fixing signs them out at once: each becomes a Link account
+  with Cancel and **Fix and sign out**. Fixing signs them out first, for real: their saved sign-in
+  is removed from the old CLI's store (as Remove does; nothing is reinstalled if that fails): each becomes a Link account
   in state Signed out that keeps its address, owner, purpose and access choices, and the account
   found in the old store is not listed again. Agents no longer see it until it signs in again.
 - **Signed out is unmistakable.** Red "Signed out" on the card, the reason, one **Sign in again**

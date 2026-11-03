@@ -496,8 +496,9 @@ export class LinkService implements Host {
 		return result;
 	}
 	// `replace` reinstalls over a CLI Link didn't install. Accounts found in that CLI's own store
-	// are signed out: each becomes a Link account that keeps its address, owner, purpose and
-	// access choices and signs in again into Link's own storage.
+	// are signed out first: their saved sign-in is removed from that store with the existing CLI
+	// (as Remove does), and each becomes a Link account that keeps its address, owner, purpose
+	// and access choices and signs in again into Link's own storage.
 	async install(id: string, replace = false) {
 		if ([...this.logins.values()].some((l) => l.provider === id && ACTIVE.includes(l.state)))
 			throw new Error('Finish or cancel sign-in before changing the CLI.');
@@ -506,39 +507,25 @@ export class LinkService implements Host {
 			: [];
 		if (found.some((a) => this.locks.has(a.id)))
 			throw new Error('An account operation is already running.');
-		const catalog = found.length ? await this.catalog(id).catch(() => null) : null;
+		const signedOut: string[] = [];
 		try {
-			const result = await install(this.dir, id, replace);
-			const signedOut: string[] = [];
-			for (const a of found) {
-				const scopes = a.granted_scopes ?? a.recorded_scopes ?? [];
-				const next: Account = {
-					id: `acct_${randomUUID()}`,
-					provider: a.provider,
-					owner: a.owner,
-					purpose: a.purpose,
-					email: a.email,
-					provider_id: a.provider_id,
-					requested: a.requested.length
-						? a.requested
-						: catalog
-							? selectionFromScopes(catalog, scopes)
-							: [],
-					granted_scopes: null,
-					recorded_scopes: null,
-					state: 'disconnected',
-					checked_at: null,
-					created_at: new Date().toISOString(),
-					replaces: a.id,
-					connection_error: {
-						code: 'signed_out_by_reinstall',
-						message: `Signed out when ${provider(id).ui.name} was reinstalled. Sign in again so your agents can use this account.`
-					}
-				};
-				this.registry.save(next);
-				this.registry.remove(a.id);
-				signedOut.push(next.id);
+			if (found.length) {
+				const catalog = await this.catalog(id).catch(() => null);
+				for (const a of found)
+					signedOut.push(
+						await this.locked(a.id, async () => {
+							try {
+								await provider(id).remove(this, a);
+							} catch {
+								throw new Error(
+									`${a.email ?? 'An account'} could not be signed out, so nothing was reinstalled. Try again.`
+								);
+							}
+							return this.markSignedOut(a, catalog);
+						})
+					);
 			}
+			const result = await install(this.dir, id, replace);
 			// The provider's skills follow the CLI; a skills failure leaves the tool installed
 			// and shows on the skills row.
 			await followTool(this.dir, id).catch(() => {});
@@ -547,6 +534,35 @@ export class LinkService implements Host {
 			this.catalogs.delete(id);
 			this.discoveryAt = 0;
 		}
+	}
+	private markSignedOut(a: Account, catalog: Catalog | null) {
+		const scopes = a.granted_scopes ?? a.recorded_scopes ?? [];
+		const next: Account = {
+			id: `acct_${randomUUID()}`,
+			provider: a.provider,
+			owner: a.owner,
+			purpose: a.purpose,
+			email: a.email,
+			provider_id: a.provider_id,
+			requested: a.requested.length
+				? a.requested
+				: catalog
+					? selectionFromScopes(catalog, scopes)
+					: [],
+			granted_scopes: null,
+			recorded_scopes: null,
+			state: 'disconnected',
+			checked_at: null,
+			created_at: new Date().toISOString(),
+			replaces: a.id,
+			connection_error: {
+				code: 'signed_out_by_reinstall',
+				message: `Signed out when ${provider(a.provider).ui.name} was reinstalled. Sign in again so your agents can use this account.`
+			}
+		};
+		this.registry.save(next);
+		this.registry.remove(a.id);
+		return next.id;
 	}
 	skills(id: string, action: 'install' | 'remove') {
 		return action === 'install' ? installSkills(this.dir, id) : removeSkills(this.dir, id);

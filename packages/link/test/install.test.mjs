@@ -179,7 +179,8 @@ test(
 );
 
 // Reinstall is the person's explicit choice to replace a CLI Link didn't install. The old
-// command is kept as a backup, and accounts found in its own store are signed out: they keep
+// command is kept as a backup, and accounts found in its own store are signed out (their saved
+// sign-in removed from that store, as Remove does): they keep
 // their address, owner, purpose and access choices and are not listed again from that store.
 test(
 	'Reinstall replaces an outside CLI, keeps a backup and signs out the accounts found in it',
@@ -190,16 +191,20 @@ test(
 			const bin = path.join(home, '.local', 'bin');
 			await mkdir(bin, { recursive: true });
 			const { services } = await import('./catalogs.mjs');
-			// Both CLIs still list the account, so the test proves it is not listed again.
-			const fake = (version) =>
-				`#!${process.execPath}\nconst a=process.argv.slice(2).join(' ');\n` +
+			// The outside CLI's store forgets the account once `auth remove` runs. The new CLI still
+			// lists it, so the test also proves the found account is not listed again.
+			const removed = path.join(home, 'removed-from-outside-store');
+			const fake = (version, forgets) =>
+				`#!${process.execPath}\nconst fs=require('node:fs');const a=process.argv.slice(2).join(' ');\n` +
+				`const gone=${forgets}&&fs.existsSync(${JSON.stringify(removed)});\n` +
 				`if(a==='--version')console.log('${version}');\n` +
-				`else if(a.startsWith('auth list'))console.log(JSON.stringify({accounts:[{email:'found@example.com',client:'default',scopes:['https://www.googleapis.com/auth/gmail.modify','https://www.googleapis.com/auth/gmail.settings.basic']}]}));\n` +
+				`else if(a.startsWith('auth remove found@example.com')){if(${forgets})fs.writeFileSync(${JSON.stringify(removed)},'');console.log('{}')}\n` +
+				`else if(a.startsWith('auth list'))console.log(JSON.stringify({accounts:gone?[]:[{email:'found@example.com',client:'default',scopes:['https://www.googleapis.com/auth/gmail.modify','https://www.googleapis.com/auth/gmail.settings.basic']}]}));\n` +
 				`else if(a.startsWith('auth services'))console.log(${JSON.stringify(JSON.stringify({ services }))});\n`;
-			await writeFile(path.join(bin, 'gog'), fake('v0.40.0') + '// outside wrapper\n', {
+			await writeFile(path.join(bin, 'gog'), fake('v0.40.0', true) + '// outside wrapper\n', {
 				mode: 0o755
 			});
-			await writeFile(path.join(home, 'gog'), fake('v0.47.0'), { mode: 0o755 });
+			await writeFile(path.join(home, 'gog'), fake('v0.47.0', false), { mode: 0o755 });
 			execFileSync('tar', ['-czf', path.join(home, 'release.tar.gz'), '-C', home, 'gog']);
 			const script = `
    import fs from 'node:fs';
@@ -220,6 +225,7 @@ test(
    await assert.rejects(()=>l.install('google'),/outside Link/);
    const result=await l.install('google',true);
    assert.equal(result.signed_out.length,1);
+   assert.ok(fs.existsSync(path.join(home,'removed-from-outside-store')),'the saved sign-in is removed from the outside store');
    const command=path.join(home,'.local/bin/gog');
    assert.match(fs.readFileSync(command,'utf8'),/v0\\.47\\.0/);
    const backups=fs.readdirSync(path.join(dir,'tools','google')).filter(f=>f.startsWith('previous-'));
