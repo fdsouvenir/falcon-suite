@@ -210,7 +210,8 @@ when it loads (cached for about an hour) and offers Update when one is available
 When the command was installed some other way and is out of date, the page offers **Fix it**
 instead. After a confirmation that names every account it affects, Link reinstalls its verified
 release over that command (keeping the old one as `previous-*` in Link's tools folder). Accounts
-found in that command's own store are signed out: each stays listed as a Signed out Link account
+found in that command's own store are signed out first (their saved sign-in is removed from that
+store, as Remove does; nothing is reinstalled if that fails, and Google consent isn't revoked): each stays listed as a Signed out Link account
 with its address, owner, purpose and access choices, and signs in again into Link's own storage.
 
 The HubSpot CLI updates itself. Link doesn't pin or block that: an update is available when
