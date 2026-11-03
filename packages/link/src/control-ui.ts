@@ -189,23 +189,6 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	let poll: ReturnType<typeof setTimeout> | undefined;
 	let activeLogin: Login | null = null;
 	let lastStart: StartInput | null = null;
-	// Reserve the tab during the user's gesture; async provider setup can outlive popup permission.
-	let signInTab: Window | null = null;
-	let signInOpened = false;
-	function closePendingTab() {
-		signInTab?.close();
-		signInTab = null;
-	}
-	function followSignIn() {
-		if (!activeLogin) return;
-		if (activeLogin.url && signInTab) {
-			if (!signInTab.closed && new URL(activeLogin.url).protocol === 'https:') {
-				signInTab.location.replace(activeLogin.url);
-				signInOpened = true;
-			}
-			signInTab = null;
-		} else if (!['starting', 'awaiting_consent'].includes(activeLogin.state)) closePendingTab();
-	}
 	let formDisposer: (() => void) | undefined;
 	// Check connection results and open Manage sections stay with their card across refreshes.
 	const checks = new Map<string, { busy: boolean; error?: string }>();
@@ -218,6 +201,38 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		notification.classList.toggle('fl-error', error);
 	};
 	const canWrite = () => host.connection.canWrite;
+	// The provider address is offered, not opened: a login belongs to its address, not to the tab
+	// that opened it, so the person can paste it into another browser profile or device.
+	function signInLink(url: string) {
+		const box = el('div', undefined, 'fl-sign-in');
+		const open = link('Open sign-in', url);
+		open.className = 'fl-btn fl-btn-primary';
+		const copy = button('Copy link', async () => {
+			try {
+				await navigator.clipboard.writeText(url);
+				copy.textContent = 'Copied';
+				setTimeout(() => {
+					copy.textContent = 'Copy link';
+				}, 2000);
+			} catch {
+				message(
+					'The link could not be copied. Right-click Open sign-in and choose “Copy link address”.',
+					true
+				);
+			}
+		});
+		const actions = el('div', undefined, 'fl-sign-in-actions');
+		actions.append(open, copy);
+		box.append(
+			actions,
+			el(
+				'p',
+				'Open sign-in uses this browser profile. To sign in from a different browser profile or device, copy the link and open it there. This page keeps waiting.',
+				'fl-muted'
+			)
+		);
+		return box;
+	}
 	async function act<T>(b: HTMLButtonElement, action: () => Promise<T>, success?: string) {
 		b.disabled = true;
 		try {
@@ -486,30 +501,14 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		update();
 		return { node, selected: () => pickers.flatMap((p) => p()) };
 	}
+	// Sign-in never opens the provider by itself: the card offers the link to open or copy, so the
+	// person can finish in another browser profile (or device) than the one showing the Office.
 	async function startSignIn(input: StartInput) {
-		closePendingTab();
-		signInOpened = false;
-		signInTab = window.open('about:blank', '_blank');
-		if (signInTab) {
-			signInTab.opener = null;
-			signInTab.document.title = 'Opening sign-in · Falcon Link';
-			signInTab.document.body.textContent =
-				'Opening secure sign-in… Your provider will appear here shortly. Keep your Office tab open.';
-		}
-		try {
-			lastStart = input;
-			if (input.account_id) checks.delete(input.account_id);
-			const l = await client.invoke('start', input);
-			if (disposed) {
-				closePendingTab();
-				return;
-			}
-			activeLogin = l as Login;
-			followSignIn();
-		} catch (error) {
-			closePendingTab();
-			throw error;
-		}
+		lastStart = input;
+		if (input.account_id) checks.delete(input.account_id);
+		const l = await client.invoke('start', input);
+		if (disposed) return;
+		activeLogin = l as Login;
 		closeForm();
 		await load();
 		scheduleLogin();
@@ -671,7 +670,6 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				if (disposed) return;
 				const changed = JSON.stringify(next) !== JSON.stringify(activeLogin);
 				activeLogin = next;
-				followSignIn();
 				if (changed) await load();
 				scheduleLogin();
 			} catch {
@@ -700,23 +698,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			card.append(el('p', login.message));
 			const warning = login.state === 'verifying' ? null : pasteWarning(login.provider);
 			if (warning) card.append(warning);
-			// A later step needs the person to open the provider again themselves.
-			const later = (login.step?.number ?? 1) > 1;
-			if (login.url) {
-				if (!later)
-					card.append(
-						el(
-							'p',
-							signInOpened
-								? 'Sign-in opened in a new tab.'
-								: 'Your browser may have blocked the sign-in tab. Open sign-in to continue.',
-							'fl-muted'
-						)
-					);
-				const a = link(!later && signInOpened ? 'Reopen sign-in' : 'Open sign-in', login.url);
-				a.className = later ? 'fl-btn fl-btn-primary' : 'fl-btn';
-				card.append(a);
-			}
+			if (login.url) card.append(signInLink(login.url));
 			if (login.code) card.append(el('p', login.code, 'fl-device-code'));
 			if (login.url && login.paste && login.state === 'awaiting_consent') {
 				const form = el('form', undefined, 'fl-paste');
@@ -747,7 +729,6 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				const cancel = button('Cancel sign-in', async () => {
 					await act(cancel, async () => {
 						activeLogin = (await client.invoke('cancel', { id: login.id })) as Login;
-						closePendingTab();
 						await load();
 					});
 				});
@@ -1335,7 +1316,6 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		},
 		dispose() {
 			disposed = true;
-			closePendingTab();
 			clearTimeout(poll);
 			formDisposer?.();
 			root.remove();

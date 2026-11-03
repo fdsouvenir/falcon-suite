@@ -60,6 +60,12 @@ Accounts found in a CLI's own store are managed in that store with its own selec
 The hosted callback is used for them only when their OAuth client is the provisioned Link
 client; otherwise the manual or device-code flow is used.
 
+Starting a sign-in never opens the provider by itself. The sign-in card shows the provider
+address as **Open sign-in** (a new tab in the current browser profile) and **Copy link**, so the
+person can paste the address into a different browser profile or device when the account they
+want to connect is signed in there. The login belongs to its address, not to the tab that
+opened it; the page keeps polling until the sign-in finishes or expires.
+
 Cancelling sign-in leaves everything as it was. Changing access doesn't remove access
 already given; the page links to Google's or Microsoft's app-access page for that.
 
@@ -167,8 +173,9 @@ admin settings decide what it can do. Nothing needs provisioning.
   to `http://localhost:9876/callback` on the computer running gtm — the Office — so the
   person's browser ends on a page that can't be reached. Before the person goes to sign in, the
   page shows a large warning with numbered steps: the error page is expected; copy the whole
-  address from the address bar and paste it back here within 5 minutes. Sign-in opens in a new
-  tab and the warning stays next to the paste box while Link waits.
+  address from the address bar and paste it back here within 5 minutes. The sign-in address is
+  offered as Open sign-in / Copy link, and the warning stays next to the paste box while Link
+  waits.
 - **How the address gets back.** Link starts `gtm auth login` with its own `xdg-open` and
   `open` commands (which do nothing) first on its PATH, so gtm can't open a browser on the
   Office's desktop and prints the sign-in address instead; Link shows that address. When the
