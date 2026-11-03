@@ -465,6 +465,18 @@
 .fl-login .fl-btn {
 	margin-right: var(--space-2);
 }
+.fl-sign-in {
+	margin: var(--space-3) 0;
+}
+.fl-sign-in-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin-bottom: var(--space-2);
+}
+.fl-sign-in-actions .fl-btn {
+	margin-right: 0;
+}
 .fl-card h4 {
 	font-size: var(--control-ui-text-lg);
 }

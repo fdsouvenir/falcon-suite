@@ -94,30 +94,21 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 	};
 	const invoked = [];
 	let opened = false;
-	const navigated = [];
 	window.open = () => {
 		opened = true;
-		return {
-			opener: window,
-			closed: false,
-			document: parseHTML('<html><head></head><body></body></html>').document,
-			location: { replace: (url) => navigated.push(url) },
-			close() {
-				this.closed = true;
-			}
-		};
+		return null;
 	};
+	const copied = [];
+	Object.defineProperty(globalThis.navigator, 'clipboard', {
+		value: { writeText: async (text) => void copied.push(text) },
+		configurable: true
+	});
 	const host = {
 		pluginId: manifest.id,
 		signal: new AbortController().signal,
 		connection: { connected: true, canRead: true, canWrite: true },
 		request: async (method, payload) => {
 			if (payload?.actionId === 'start') {
-				assert.equal(
-					opened,
-					true,
-					'the sign-in tab opens during the original user gesture, before the async request'
-				);
 				return {
 					ok: true,
 					result: {
@@ -365,16 +356,25 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		});
 		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await setImmediate();
-		assert.equal(opened, true, document.body.textContent);
+		assert.match(document.body.textContent, /Starting sign-in/);
 		await new Promise((resolve) => setTimeout(resolve, 2200));
-		assert.deepEqual(
-			navigated,
-			['https://accounts.google.com/test-consent'],
-			'the reserved tab follows the URL when it becomes available'
+		const open = document.querySelector('.fl-sign-in a');
+		assert.equal(open?.textContent, 'Open sign-in');
+		assert.equal(open.href, 'https://accounts.google.com/test-consent');
+		assert.equal(open.target, '_blank');
+		const copy = [...document.querySelectorAll('.fl-sign-in button')].find(
+			(b) => b.textContent === 'Copy link'
 		);
-		assert.match(document.body.textContent, /Reopen sign-in/);
+		assert.ok(copy, 'the sign-in address can be copied into another browser profile');
+		copy.click();
+		await setImmediate();
+		assert.deepEqual(copied, ['https://accounts.google.com/test-consent']);
+		assert.equal(copy.textContent, 'Copied');
+		assert.match(document.body.textContent, /different browser profile or device/);
+		assert.equal(opened, false, 'sign-in is offered as a link, never opened by the page itself');
 	} finally {
 		view?.dispose();
+		delete globalThis.navigator.clipboard;
 		Object.assign(globalThis, previous);
 	}
 });

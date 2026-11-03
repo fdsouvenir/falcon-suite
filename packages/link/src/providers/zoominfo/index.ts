@@ -201,7 +201,7 @@ const zoominfo: ProviderModule = {
 		l.expires_at = new Date(Date.now() + WINDOW).toISOString();
 		l.state = 'awaiting_consent';
 		l.message =
-			'Sign in to ZoomInfo in the new tab. Then copy the whole address from that tab and paste it here within 5 minutes.';
+			'Open sign-in and sign in to ZoomInfo. Then copy the whole address from that tab and paste it here within 5 minutes.';
 	},
 	async finish(host, l, value) {
 		if (l.state !== 'awaiting_consent' || !l.prepared)
