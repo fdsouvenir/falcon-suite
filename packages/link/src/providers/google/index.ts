@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync } from 'node:fs';
+import path from 'node:path';
 import { CallbackHandoff, callbackConfig, callbackURI } from '../../callback.js';
 import { googleCatalog, googleCommand } from './catalog.js';
 import { isolatedEnvironment, json, keyringPassword, provision } from '../../cli.js';
@@ -72,6 +73,18 @@ function completionError(stderr: string): PublicError | undefined {
 	return undefined;
 }
 const selection = (a: Account) => a.external?.selection ?? a.email!;
+// gog hands back the same OAuth state for a repeated identical request for ten minutes, and
+// the sign-in return service keeps one session per state. A Link-isolated store belongs to
+// one account and Link is its only driver, so every new sign-in starts from a fresh state:
+// any pending state there is from a sign-in Link has already replaced.
+function forgetPendingStates(configDir: string | undefined) {
+	if (!configDir) return;
+	try {
+		for (const name of readdirSync(configDir))
+			if (/^oauth-manual-state-[A-Za-z0-9_-]+\.json$/.test(name))
+				rmSync(path.join(configDir, name), { force: true });
+	} catch {}
+}
 // Providers accept the hosted redirect only for the provisioned Link client. Accounts in
 // gog's own store with another client use the manual flow.
 async function hostedCallback(host: Host, a: Account) {
@@ -216,6 +229,7 @@ const google: ProviderModule = {
 				],
 				env
 			);
+		if (!a.external) forgetPendingStates(env.GOG_CONFIG_DIR);
 		const command = googleCommand(await host.catalog('google'), a.requested);
 		const args = [
 			'auth',
@@ -262,6 +276,11 @@ const google: ProviderModule = {
 			throw new Error('Provider permission request differs from the selection.');
 		}
 		if (callback) {
+			Object.assign(stage, {
+				code: 'callback_unavailable',
+				message:
+					'The sign-in return service could not register this sign-in. Try again, or contact your administrator.'
+			});
 			l.callback = await CallbackHandoff.create(callback, 'google', url.searchParams.get('state')!);
 			if (l.state !== 'starting') {
 				await l.callback.cancel();

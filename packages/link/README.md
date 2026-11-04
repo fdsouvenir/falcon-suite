@@ -52,6 +52,10 @@ Selected Microsoft permissions that Microsoft did not grant are named on the car
 When the operator configured the hosted callback (see below), Google and Microsoft sign-in
 complete automatically after consent. Otherwise Google uses gog's remote flow (paste the
 address shown in the browser after signing in) and Microsoft uses m365cli's device code.
+The callback service keeps one session per OAuth state, and gog hands back the same state for
+a repeated identical request for ten minutes, so Link clears the pending states in a
+Link-isolated gog store before each new sign-in and releases a replaced sign-in's session
+before registering the next. A callback problem is reported as one, naming the service.
 Microsoft sign-in lets m365cli detect personal or work accounts (`--audience auto`); work-only
 workloads and a provisioned tenant use the work audience.
 

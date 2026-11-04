@@ -203,7 +203,7 @@ export class LinkService implements Host {
 		return this.publicLogin(l);
 	}
 	// Checks shared by every way of connecting; returns the account being reconnected, if any.
-	private claim(providerId: string, accountId: string | undefined) {
+	private async claim(providerId: string, accountId: string | undefined) {
 		// Consent is serialized per provider. Google remote state reuse must not bind a second
 		// pending account to the first account's callback.
 		for (const l of this.logins.values()) {
@@ -212,14 +212,16 @@ export class LinkService implements Host {
 			if (l.state === 'verifying')
 				throw new Error('Finish or cancel the current sign-in for this integration first.');
 			// Starting again replaces a sign-in still waiting on the provider (for example one the
-			// provider refused on its own page, which never returns here).
+			// provider refused on its own page, which never returns here). The replaced sign-in's
+			// session at the return service is released before the new one registers, since the
+			// service holds one session per OAuth state.
 			if (l.account_id === accountId) {
 				l.state = 'cancelled';
 				l.child?.kill();
-				void l.callback?.cancel().catch(() => {});
 				l.url = null;
 				l.code = null;
 				l.paste = undefined;
+				await l.callback?.cancel().catch(() => {});
 			} else this.cancel(l.id, l.actor);
 		}
 		if (this.logins.size >= 100) {
@@ -249,7 +251,7 @@ export class LinkService implements Host {
 			selectionScopes(p.ui, catalog, input.permissions);
 		} else if (input.permissions.length) throw new Error('Select supported permissions.');
 		const prepared = p.prepare?.(this.dir, input, catalog);
-		const prior = this.claim(input.provider, input.account_id);
+		const prior = await this.claim(input.provider, input.account_id);
 		if (prior) p.validate?.(input, prior);
 		const a: Account = {
 			id: prior?.id ?? `acct_${randomUUID()}`,
@@ -365,7 +367,7 @@ export class LinkService implements Host {
 		if (!p.connectKey) throw new Error('This integration does not connect with a key.');
 		const setup = p.readiness(this.dir);
 		if (setup.state !== 'ready') throw new Error(setup.message);
-		const prior = this.claim(input.provider, input.account_id);
+		const prior = await this.claim(input.provider, input.account_id);
 		if (prior && prior.auth !== 'service_key')
 			throw new Error('This account signs in with the provider; reconnect it instead.');
 		const problem = await this.cliProblem(input.provider);

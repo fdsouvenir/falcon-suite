@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomBytes, createHash, webcrypto } from 'node:crypto';
@@ -58,7 +58,11 @@ else if(a.includes('services'))send(${JSON.stringify({ services })});
 else if(a.includes('workloads'))send(${JSON.stringify({ workloads })});
 else if(a.includes('credentials'))send({saved:true});
 else if(a.includes('--step')&&a[a.indexOf('--step')+1]==='1'){
-const u=new URL('https://accounts.google.com/o/oauth2/auth');u.search=new URLSearchParams({state:'local-state-01234567890123456789',redirect_uri:a[a.indexOf('--redirect-uri')+1],scope:'openid email https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly'}).toString();send({auth_url:u.href});
+// Like gog: a pending manual state in the config dir is reused for the same request.
+const dir=process.env.GOG_CONFIG_DIR;fs.mkdirSync(dir,{recursive:true});const pending=fs.readdirSync(dir).filter(f=>f.startsWith('oauth-manual-state-'));
+const state=pending.length?pending[0].slice('oauth-manual-state-'.length,-5):'st-'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+if(!pending.length)fs.writeFileSync(path.join(dir,'oauth-manual-state-'+state+'.json'),'{}');
+const u=new URL('https://accounts.google.com/o/oauth2/auth');u.search=new URLSearchParams({state,redirect_uri:a[a.indexOf('--redirect-uri')+1],scope:'openid email https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly'}).toString();send({auth_url:u.href,state_reused:pending.length>0});
 }else if(a.includes('--step')){fs.writeFileSync(path.join(process.env.HOME,'identity'),a[2]);send({stored:true,email:a[2]});}
 else if(a.includes('list'))send({accounts:[{email:fs.readFileSync(path.join(process.env.HOME,'identity'),'utf8'),subject:'google-subject',valid:true,scopes:['recorded']}]});
 else if(a.includes('login')){if(!a.includes('--refresh-token-env')||process.env.FALCON_LINK_LOGIN_REFRESH!=='private-refresh-fixture')process.exit(9);send({saved:true});}
@@ -98,6 +102,10 @@ else process.exit(9);`,
 				assert.equal(options.headers.Authorization, 'Bearer ' + token);
 				const v = JSON.parse(options.body);
 				const id = sha(v.state);
+				// Like the Worker: one live session per state.
+				const live = sessions.get(id);
+				if (live && !live.cancelled && !live.consumed)
+					return Response.json({ error: 'session_exists' }, { status: 409 });
 				sessions.set(id, { ...v });
 				return Response.json({ id, protocol: 1, expires_in: 600 }, { status: 201 });
 			}
@@ -226,6 +234,36 @@ test('cancelled and denied hosted sign-ins cannot become connected', () =>
 		assert.equal((await l.poll(denied.id, 'fred')).state, 'failed');
 		assert.equal(attempts(), 0);
 	}));
+test('starting a Google sign-in again gets a fresh OAuth state, and a callback problem is reported as one', () =>
+	scenario(async ({ l, owner, dir }) => {
+		const input = {
+			provider: 'google',
+			owner,
+			purpose: { kind: 'work' },
+			permissions: ['gmail-read'],
+			email: 'google@example.com'
+		};
+		const state = (login) => new URL(login.url).searchParams.get('state');
+		const first = await l.start(input, 'fred');
+		assert.equal(first.state, 'awaiting_consent', first.message);
+		// Same account and access within gog's ten-minute state window, while the return service
+		// still holds the first session: the replaced sign-in is released and the new one does not
+		// come back with the state the service already knows.
+		const again = await l.start({ ...input, account_id: first.account_id }, 'fred');
+		assert.equal(again.state, 'awaiting_consent', again.message);
+		assert.notEqual(state(again), state(first));
+		assert.equal((await l.poll(first.id, 'fred')).state, 'cancelled');
+		l.cancel(again.id, 'fred');
+		// A return-service failure after gog produced its address is named as such, not as a
+		// permission mismatch.
+		const provision = JSON.parse(await readFile(path.join(dir, 'provision.json'), 'utf8'));
+		provision.callback.version = '9.0.0';
+		await writeFile(path.join(dir, 'provision.json'), JSON.stringify(provision));
+		const broken = await l.start({ ...input, account_id: first.account_id }, 'fred');
+		assert.equal(broken.state, 'failed');
+		assert.equal(l.registry.get(first.account_id).connection_error.code, 'callback_version_mismatch');
+		assert.match(broken.message, /sign-in return service/);
+	}));
 test('a callback version mismatch fails before enrolling a session', () =>
 	scenario(async ({ dir }) => {
 		await assert.rejects(
@@ -240,6 +278,6 @@ test('a callback version mismatch fails before enrolling a session', () =>
 					'google',
 					'state-01234567890123456789'
 				),
-			/version/
+			/does not match the release/
 		);
 	}));
