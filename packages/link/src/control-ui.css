@@ -462,8 +462,14 @@
 .fl-paste {
 	margin: var(--space-4) 0;
 }
-.fl-login .fl-btn {
-	margin-right: var(--space-2);
+.fl-new h4 {
+	margin: 0 0 var(--space-4);
+}
+.fl-form-error {
+	margin: 0 0 var(--space-3);
+}
+.fl-form-error:empty {
+	display: none;
 }
 .fl-sign-in {
 	margin: var(--space-3) 0;
