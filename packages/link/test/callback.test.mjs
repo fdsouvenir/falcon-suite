@@ -261,7 +261,10 @@ test('starting a Google sign-in again gets a fresh OAuth state, and a callback p
 		await writeFile(path.join(dir, 'provision.json'), JSON.stringify(provision));
 		const broken = await l.start({ ...input, account_id: first.account_id }, 'fred');
 		assert.equal(broken.state, 'failed');
-		assert.equal(l.registry.get(first.account_id).connection_error.code, 'callback_version_mismatch');
+		assert.equal(
+			l.registry.get(first.account_id).connection_error.code,
+			'callback_version_mismatch'
+		);
 		assert.match(broken.message, /sign-in return service/);
 	}));
 test('a callback version mismatch fails before enrolling a session', () =>

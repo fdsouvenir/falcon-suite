@@ -360,7 +360,11 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 			[...form.querySelectorAll('button')].some((b) => b.textContent === 'Continue'),
 			'the form only continues; Google sign-in comes on the next screen'
 		);
-		assert.equal(form.querySelector('.fl-signin'), null, 'no Google button before a sign-in address exists');
+		assert.equal(
+			form.querySelector('.fl-signin'),
+			null,
+			'no Google button before a sign-in address exists'
+		);
 		form.reportValidity = () => true;
 		email.value = 'fred@example.com';
 		assert.equal(
