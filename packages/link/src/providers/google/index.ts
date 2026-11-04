@@ -275,6 +275,14 @@ const google: ProviderModule = {
 			});
 			throw new Error('Provider permission request differs from the selection.');
 		}
+		// gog asks Google to fold every scope this client was ever granted into the new token
+		// (include_granted_scopes). Link requests exactly the chosen access, and Google's consent
+		// step choked on the inflated request (its own re-authentication redirect carried a 9 KB
+		// address and answered 400), so the request stays exactly the selection. The typed address
+		// steers Google to that account instead of an account picker; Link still checks the
+		// account Google returns.
+		url.searchParams.delete('include_granted_scopes');
+		url.searchParams.set('login_hint', l.email);
 		if (callback) {
 			Object.assign(stage, {
 				code: 'callback_unavailable',
