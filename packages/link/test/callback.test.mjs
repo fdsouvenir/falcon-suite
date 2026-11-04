@@ -62,7 +62,7 @@ else if(a.includes('--step')&&a[a.indexOf('--step')+1]==='1'){
 const dir=process.env.GOG_CONFIG_DIR;fs.mkdirSync(dir,{recursive:true});const pending=fs.readdirSync(dir).filter(f=>f.startsWith('oauth-manual-state-'));
 const state=pending.length?pending[0].slice('oauth-manual-state-'.length,-5):'st-'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
 if(!pending.length)fs.writeFileSync(path.join(dir,'oauth-manual-state-'+state+'.json'),'{}');
-const u=new URL('https://accounts.google.com/o/oauth2/auth');u.search=new URLSearchParams({state,redirect_uri:a[a.indexOf('--redirect-uri')+1],scope:'openid email https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly'}).toString();send({auth_url:u.href,state_reused:pending.length>0});
+const u=new URL('https://accounts.google.com/o/oauth2/auth');u.search=new URLSearchParams({state,redirect_uri:a[a.indexOf('--redirect-uri')+1],include_granted_scopes:'true',scope:'openid email https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.readonly'}).toString();send({auth_url:u.href,state_reused:pending.length>0});
 }else if(a.includes('--step')){fs.writeFileSync(path.join(process.env.HOME,'identity'),a[2]);send({stored:true,email:a[2]});}
 else if(a.includes('list'))send({accounts:[{email:fs.readFileSync(path.join(process.env.HOME,'identity'),'utf8'),subject:'google-subject',valid:true,scopes:['recorded']}]});
 else if(a.includes('login')){if(!a.includes('--refresh-token-env')||process.env.FALCON_LINK_LOGIN_REFRESH!=='private-refresh-fixture')process.exit(9);send({saved:true});}
@@ -246,6 +246,9 @@ test('starting a Google sign-in again gets a fresh OAuth state, and a callback p
 		const state = (login) => new URL(login.url).searchParams.get('state');
 		const first = await l.start(input, 'fred');
 		assert.equal(first.state, 'awaiting_consent', first.message);
+		// The offered address asks for exactly the selection, steered to the typed account.
+		assert.equal(new URL(first.url).searchParams.get('include_granted_scopes'), null);
+		assert.equal(new URL(first.url).searchParams.get('login_hint'), 'google@example.com');
 		// Same account and access within gog's ten-minute state window, while the return service
 		// still holds the first session: the replaced sign-in is released and the new one does not
 		// come back with the state the service already knows.

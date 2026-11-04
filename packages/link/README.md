@@ -56,6 +56,10 @@ The callback service keeps one session per OAuth state, and gog hands back the s
 a repeated identical request for ten minutes, so Link clears the pending states in a
 Link-isolated gog store before each new sign-in and releases a replaced sign-in's session
 before registering the next. A callback problem is reported as one, naming the service.
+Link asks Google for exactly the chosen access: it removes gog's `include_granted_scopes`
+(Google otherwise folds every earlier grant into the consent step, and its re-authentication
+redirect then failed with 400 on a 9 KB address) and adds `login_hint` with the typed address
+so Google goes to that account instead of an account picker.
 Microsoft sign-in lets m365cli detect personal or work accounts (`--audience auto`); work-only
 workloads and a provisioned tenant use the work audience.
 
