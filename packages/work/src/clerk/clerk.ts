@@ -57,6 +57,8 @@ export type ClerkDeps = {
 	/** A session's visible messages (user and assistant text), in order. */
 	read: (agentId: string, sessionKey: string, sessionId?: string) => Promise<Msg[]>;
 	agents: () => string[];
+	/** Display names: the agent's, and the person's who started the session (when known). */
+	names?: (agentId: string, session: string) => { agent: string; person: string | null };
 	log: (line: string) => void;
 	logDecision?: (entry: Record<string, unknown>) => void;
 	changed: () => void;
@@ -278,6 +280,16 @@ export class Clerk {
 		return actions;
 	}
 
+	names(agentId: string, session: string): { agent: string; person: string | null } {
+		try {
+			const n = this.d.names?.(agentId, session);
+			if (n) return n;
+		} catch {
+			/* fall back to the agent id */
+		}
+		return { agent: agentId.charAt(0).toUpperCase() + agentId.slice(1), person: null };
+	}
+
 	private apply(turn: Turn, a: TurnActions) {
 		let changed = false;
 		const key = (s: string) => `clerk:${turn.run}:${s}`;
@@ -331,7 +343,7 @@ export class Clerk {
 				'raise_question',
 				{
 					prompt: a.raise,
-					impact: 'The agent asked this in the conversation and the work waits on it.',
+					impact: `${this.names(turn.agentId, turn.session).agent} asked this in the conversation and the work waits on the answer.`,
 					answerable_by: [this.w.owner],
 					session: turn.session,
 					...(about ? { targets: [{ kind: about.kind, id: about.id }] } : {})
@@ -553,6 +565,7 @@ export class Clerk {
 		}
 		const automation = automationOf(session);
 		const input = {
+			names: this.names(agentId, session),
 			reasons: reasons.length ? reasons : ['sweep'],
 			record: this.recordFor(session),
 			open_questions: this.w.views

@@ -410,3 +410,32 @@ test('a writer that repeats a completion completes the Task once, without errors
 	assert.equal(w.views.search('file')[0].state, 'completed');
 	assert.ok(!events.logs.some((l) => /rejected/.test(l)), events.logs.join('\n'));
 });
+
+test('the writer is given real names and told never to write "the agent" or "the person"', async () => {
+	const transcript = [
+		{ seq: 1, role: 'user', text: 'check the inbox', at: new Date().toISOString() },
+		{ seq: 2, role: 'assistant', text: 'Checked it.', at: new Date().toISOString() }
+	];
+	let sent;
+	const w = new Work(':memory:', OWNER);
+	const clerk = new Clerk({
+		work: w,
+		decisions: () => jev({}),
+		complete: async (_a, system, message) => ((sent = { system, message }), '{"edits":[]}'),
+		sessions: () => [],
+		read: async () => transcript,
+		agents: () => ['verl'],
+		names: () => ({ agent: 'Verl', person: 'Fred' }),
+		log: () => {},
+		changed: () => {}
+	});
+	clerk.mark('verl', 'agent:verl:dashboard:s1', ['new work']);
+	await clerk.writerPass('verl', 'agent:verl:dashboard:s1');
+	assert.deepEqual(JSON.parse(sent.message).names, { agent: 'Verl', person: 'Fred' });
+	assert.match(sent.system, /never "the agent", "the person"/);
+	assert.equal(
+		clerk.names('william', 's').agent,
+		'William',
+		'without a resolver, the agent id is the name'
+	);
+});

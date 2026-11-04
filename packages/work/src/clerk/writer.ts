@@ -55,6 +55,7 @@ Rules:
 - Update before creating: if the work is an item already in "record", use its id. Never create a duplicate.
 - A Task that grew a second deliverable becomes a Project (promote_to_project).
 - Write what the conversation shows, nothing more. Do not invent steps, results or dates.
+- Use names. "names.agent" is the agent's name and "names.person" is the person's name; write "Verl installed…" or "Fred asked…", never "the agent", "the person", "the user" or "the assistant". When a name is missing, write about the work itself without saying who did it ("Installed gcloud…").
 - Titles say what the work achieves, at most 80 characters. done_when is observable. Status lines are one plain sentence a busy person understands, saying where things stand now.
 - Raise a question for the person only when the work cannot continue without their answer, choice, approval or action, and it is not already in "open_questions". Withdraw open questions the conversation has answered or made moot; record_answer when the person answered.
 - An "entry" is one sentence on what happened in this stretch, under the item it concerns. Write one per item that moved.
@@ -78,6 +79,7 @@ Reply with one JSON object: {"edits": [ ... ]}. Each edit is one of:
 Return {"edits": []} when nothing needs recording.`;
 
 export type WriterInput = {
+	names: { agent: string; person: string | null };
 	reasons: string[];
 	record: unknown[];
 	open_questions: { id: string; prompt: string }[];

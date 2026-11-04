@@ -5,4 +5,9 @@ declare module 'openclaw/plugin-sdk/session-transcript-runtime' {
 		sessionKey: string;
 		sessionId?: string;
 	}): Promise<unknown>;
+	export function createSessionCatalogSourceActorProjector(params: {
+		pluginId: string;
+		sourceDomain: string;
+		actors: unknown[];
+	}): (actor: unknown) => { label?: string } | undefined;
 }

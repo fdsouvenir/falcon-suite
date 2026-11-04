@@ -243,6 +243,35 @@ const feature = defineFeaturePlugin({
 						.filter((m): m is Msg => !!m);
 				},
 				agents,
+				names: (agentId, sessionKey) => {
+					const cfg = (api as { config?: any }).config;
+					const a =
+						(cfg?.agents?.list ?? []).find((x: any) => x?.id === agentId) ??
+						cfg?.agents?.entries?.[agentId];
+					const agent: string =
+						a?.identity?.name ?? a?.name ?? agentId.charAt(0).toUpperCase() + agentId.slice(1);
+					let person: string | null = null;
+					try {
+						for (const { sessionKey: key, entry } of runtime.agent.session.listSessionEntries({
+							agentId
+						}))
+							if (key === sessionKey) {
+								const actor = entry?.createdActor ?? entry?.owner?.actor;
+								if (actor?.type === 'human') {
+									const project = transcripts.createSessionCatalogSourceActorProjector?.({
+										pluginId: PLUGIN_ID,
+										sourceDomain: PLUGIN_ID,
+										actors: [actor]
+									});
+									person = project?.(actor)?.label ?? actor.label ?? null;
+								}
+								break;
+							}
+					} catch {
+						/* unknown: the writer names nobody */
+					}
+					return { agent, person };
+				},
 				log,
 				logDecision,
 				changed
