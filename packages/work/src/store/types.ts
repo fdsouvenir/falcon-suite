@@ -1,7 +1,13 @@
 // Shared types for the Work store. Vocabulary: docs/work-spec.md §2.
 
-/** Who is acting. `id` is `person:<profile>` for humans and `agent:<agentId>` for agents. */
-export type Actor = { kind: 'human' | 'agent'; id: string };
+/**
+ * Who is acting. `id` is `person:<profile>` for humans, `agent:<agentId>` for agents, and
+ * `work:clerk` for Falcon Work's own clerk (spec §3).
+ */
+export type Actor = { kind: 'human' | 'agent' | 'work'; id: string };
+
+/** The clerk, when Work writes the record itself. */
+export const CLERK: Actor = { kind: 'work', id: 'work:clerk' };
 
 export type Warning = { code: string; message: string; ref?: string };
 

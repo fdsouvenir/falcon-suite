@@ -1,115 +1,102 @@
-// Work 5 schema, version 2. Mirrors docs/work-spec.md.
+// Falcon Work 2.0 schema. Mirrors docs/work-spec.md §4.
 // Ids are text. Times are ISO-8601 UTC text. Mutable objects carry an optimistic `version`.
 // JSON columns hold arrays/objects that are always read and written whole.
 
-export const SCHEMA_VERSION = 2;
+/** 2.0 databases start at 100; anything below is a Work 5 database, set aside on first start (§8). */
+export const SCHEMA_VERSION = 100;
 
 /**
- * The record keeper's tables (spec §10, The record keeper). Raw tool calls are never stored: a
- * timeline entry holds a turn's outcomes and summary and points at the session transcript.
+ * What the clerk keeps (spec §3, §4). Raw tool calls are never stored: a timeline entry holds a
+ * turn's outcomes and one sentence, and points at the session transcript.
  */
 export const RECORD_TABLES = `
 CREATE TABLE timeline_entry (
 	id TEXT PRIMARY KEY,
-	task_id TEXT REFERENCES task(id),
+	subject_kind TEXT CHECK (subject_kind IN ('task','project','job')),
+	subject_id TEXT,
 	agent TEXT NOT NULL,
 	session_key TEXT,
-	run_id TEXT UNIQUE,
+	run_id TEXT,
 	at TEXT NOT NULL,
 	outcomes TEXT NOT NULL CHECK (json_valid(outcomes)),
 	summary TEXT,
-	recorded_by TEXT NOT NULL CHECK (recorded_by IN ('work','agent'))
+	recorded_by TEXT NOT NULL CHECK (recorded_by IN ('work','agent','person')),
+	UNIQUE (run_id, subject_id)
 ) STRICT;
-CREATE INDEX timeline_task ON timeline_entry(task_id, at);
+CREATE INDEX timeline_subject ON timeline_entry(subject_id, at);
+CREATE INDEX timeline_at ON timeline_entry(at);
 
-CREATE TABLE session_task (
+-- Where an item's work happened: feeds "3 sessions" and the session chips.
+CREATE TABLE item_session (
+	item_id TEXT NOT NULL,
+	item_kind TEXT NOT NULL CHECK (item_kind IN ('task','project','job')),
+	session_key TEXT NOT NULL,
+	first_seen_at TEXT NOT NULL,
+	last_seen_at TEXT NOT NULL,
+	PRIMARY KEY (item_id, session_key)
+) STRICT;
+CREATE INDEX item_session_key ON item_session(session_key);
+
+-- The clerk's progress through each session's transcript.
+CREATE TABLE clerk_checkpoint (
 	session_key TEXT PRIMARY KEY,
-	task_id TEXT NOT NULL REFERENCES task(id),
-	set_at TEXT NOT NULL
+	agent_id TEXT NOT NULL,
+	last_seq INTEGER NOT NULL,
+	last_at TEXT,
+	marked TEXT,
+	attempts INTEGER NOT NULL DEFAULT 0,
+	updated_at TEXT NOT NULL
 ) STRICT;
 
-CREATE TABLE session_parent (
-	session_key TEXT PRIMARY KEY,
-	parent_key TEXT NOT NULL
+-- Which fields of which objects Work last wrote, so people's and agents' entries win (§3.5).
+CREATE TABLE written_by (
+	object_id TEXT NOT NULL,
+	field TEXT NOT NULL,
+	by TEXT NOT NULL CHECK (by IN ('work','agent','person')),
+	at TEXT NOT NULL,
+	PRIMARY KEY (object_id, field)
 ) STRICT;
 
-CREATE TABLE work_recorded (
-	object_id TEXT PRIMARY KEY,
-	at TEXT NOT NULL
+-- Key/value facts about the store itself (catch-up progress, last visit).
+CREATE TABLE meta (
+	key TEXT PRIMARY KEY,
+	value TEXT NOT NULL
 ) STRICT;
 `;
 
 export const SCHEMA = `
-CREATE TABLE objective (
+CREATE TABLE job (
 	id TEXT PRIMARY KEY,
 	title TEXT NOT NULL,
-	statement TEXT NOT NULL,
-	rank INTEGER,
-	status TEXT NOT NULL CHECK (status IN ('active','paused','achieved','retired')),
-	autonomy TEXT NOT NULL CHECK (autonomy IN ('propose','act')),
-	limits TEXT,
-	owner TEXT NOT NULL,
-	session_key TEXT,
-	session_set_by TEXT,
+	instructions TEXT NOT NULL,
+	status TEXT NOT NULL CHECK (status IN ('active','paused','retired')),
+	agent TEXT,
+	status_line TEXT,
+	status_line_at TEXT,
 	created_at TEXT NOT NULL,
-	version INTEGER NOT NULL,
-	CHECK (autonomy = 'propose' OR limits IS NOT NULL),
-	CHECK ((status = 'active') = (rank IS NOT NULL))
-) STRICT;
-CREATE UNIQUE INDEX objective_rank ON objective(rank) WHERE rank IS NOT NULL;
-
-CREATE TABLE kpi (
-	id TEXT PRIMARY KEY,
-	objective_id TEXT NOT NULL REFERENCES objective(id),
-	name TEXT NOT NULL,
-	unit TEXT NOT NULL,
-	direction TEXT NOT NULL CHECK (direction IN ('up','down','hold')),
-	target REAL NOT NULL,
-	target_date TEXT,
-	removed_at TEXT,
+	updated_at TEXT NOT NULL,
 	version INTEGER NOT NULL
 ) STRICT;
 
-CREATE TABLE kpi_reading (
-	id TEXT PRIMARY KEY,
-	kpi_id TEXT NOT NULL REFERENCES kpi(id),
-	value REAL NOT NULL,
-	at TEXT NOT NULL,
-	source TEXT NOT NULL,
-	recorded_by TEXT NOT NULL
+-- The OpenClaw automations that run a Job; Work never schedules anything itself.
+CREATE TABLE job_automation (
+	job_id TEXT NOT NULL REFERENCES job(id),
+	automation_id TEXT NOT NULL,
+	name TEXT,
+	PRIMARY KEY (job_id, automation_id)
 ) STRICT;
-
-CREATE TABLE review (
-	id TEXT PRIMARY KEY,
-	objective_id TEXT NOT NULL REFERENCES objective(id),
-	author TEXT NOT NULL,
-	at TEXT NOT NULL,
-	moved TEXT NOT NULL,
-	stalled TEXT NOT NULL,
-	proposed TEXT,
-	sources TEXT NOT NULL CHECK (json_array_length(sources) >= 1)
-) STRICT;
-
-CREATE TABLE area (
-	id TEXT PRIMARY KEY,
-	title TEXT NOT NULL,
-	description TEXT NOT NULL,
-	status TEXT NOT NULL CHECK (status IN ('active','retired')),
-	accountable_human TEXT NOT NULL,
-	created_at TEXT NOT NULL,
-	version INTEGER NOT NULL
-) STRICT;
+CREATE INDEX job_automation_id ON job_automation(automation_id);
 
 CREATE TABLE project (
 	id TEXT PRIMARY KEY,
 	title TEXT NOT NULL,
 	outcome TEXT NOT NULL,
-	area_id TEXT NOT NULL REFERENCES area(id),
-	accountable_human TEXT NOT NULL,
+	agent TEXT,
 	abandoned_at TEXT,
-	session_key TEXT,
-	session_set_by TEXT,
+	status_line TEXT,
+	status_line_at TEXT,
 	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
 	version INTEGER NOT NULL
 ) STRICT;
 
@@ -129,8 +116,8 @@ CREATE TABLE milestone (
 
 CREATE TABLE task (
 	id TEXT PRIMARY KEY,
-	area_id TEXT REFERENCES area(id),
 	project_id TEXT REFERENCES project(id),
+	job_id TEXT REFERENCES job(id),
 	milestone_id TEXT REFERENCES milestone(id),
 	status TEXT NOT NULL CHECK (status IN ('open','ready','in_progress','waiting','completed','abandoned')),
 	prior_status TEXT,
@@ -142,12 +129,12 @@ CREATE TABLE task (
 	resume_when TEXT,
 	follow_up_at TEXT,
 	accepted_result_id TEXT,
-	session_key TEXT,
-	session_set_by TEXT,
+	status_line TEXT,
+	status_line_at TEXT,
 	created_at TEXT NOT NULL,
 	updated_at TEXT NOT NULL,
 	version INTEGER NOT NULL,
-	CHECK ((area_id IS NULL) <> (project_id IS NULL)),
+	CHECK (project_id IS NULL OR job_id IS NULL),
 	CHECK (milestone_id IS NULL OR project_id IS NOT NULL),
 	CHECK (status <> 'in_progress' OR agent IS NOT NULL),
 	CHECK (status <> 'waiting' OR (waiting_for IS NOT NULL AND waiting_on_kind IS NOT NULL AND resume_when IS NOT NULL)),
@@ -198,6 +185,7 @@ CREATE TABLE question (
 	hypothesis TEXT,
 	hypothesis_by TEXT,
 	withdrawn_reason TEXT,
+	session_key TEXT,
 	created_by TEXT NOT NULL,
 	created_at TEXT NOT NULL,
 	version INTEGER NOT NULL
@@ -228,6 +216,7 @@ CREATE TABLE decision (
 	deferred_until TEXT,
 	superseded_by TEXT REFERENCES decision(id),
 	closed_reason TEXT,
+	session_key TEXT,
 	created_by TEXT NOT NULL,
 	created_at TEXT NOT NULL,
 	resolved_at TEXT,
@@ -247,25 +236,10 @@ CREATE TABLE finding (
 	version INTEGER NOT NULL
 ) STRICT;
 
-CREATE TABLE ask (
-	id TEXT PRIMARY KEY,
-	subject_kind TEXT NOT NULL,
-	subject_id TEXT NOT NULL,
-	addressed_to TEXT NOT NULL,
-	prompt TEXT NOT NULL,
-	status TEXT NOT NULL CHECK (status IN ('pending','answered','dismissed')),
-	session_key TEXT,
-	session_set_by TEXT,
-	dismissed_reason TEXT,
-	created_at TEXT NOT NULL,
-	resolved_at TEXT,
-	version INTEGER NOT NULL
-) STRICT;
-CREATE INDEX ask_open ON ask(addressed_to, status);
-
--- Closed relationship vocabulary (spec §2): serves, depends_on, targets.
+-- Closed relationship vocabulary: depends_on (Task → Task), targets (Question, Decision or
+-- Finding → the item it is about).
 CREATE TABLE link (
-	kind TEXT NOT NULL CHECK (kind IN ('serves','depends_on','targets')),
+	kind TEXT NOT NULL CHECK (kind IN ('depends_on','targets')),
 	source_kind TEXT NOT NULL,
 	source_id TEXT NOT NULL,
 	target_kind TEXT NOT NULL,

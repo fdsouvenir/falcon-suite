@@ -15,16 +15,13 @@ import {
 
 /** Tables that hold versioned objects, by object kind. */
 export const TABLES = {
-	objective: 'objective',
-	kpi: 'kpi',
-	area: 'area',
+	job: 'job',
 	project: 'project',
 	milestone: 'milestone',
 	task: 'task',
 	question: 'question',
 	decision: 'decision',
-	finding: 'finding',
-	ask: 'ask'
+	finding: 'finding'
 } as const;
 export type Kind = keyof typeof TABLES;
 
@@ -104,7 +101,7 @@ export class Context {
 	}
 
 	link(
-		kind: 'serves' | 'depends_on' | 'targets',
+		kind: 'depends_on' | 'targets',
 		sourceKind: string,
 		sourceId: string,
 		targetKind: string,
@@ -124,38 +121,49 @@ export class Context {
 		this.warnings.push({ code, message, ...(ref ? { ref } : {}) });
 	}
 
-	/** Create an Ask addressed to someone, inheriting the subject's discussion session. */
-	ask(
-		subjectKind: string,
-		subjectId: string,
-		addressedTo: string,
-		prompt: string,
-		session: string | null
-	): string {
-		const id = this.newId();
-		this.insert('ask', {
-			id,
-			subject_kind: subjectKind,
-			subject_id: subjectId,
-			addressed_to: addressedTo,
-			prompt,
-			status: 'pending',
-			session_key: session,
-			session_set_by: session ? this.actor.id : null,
-			created_at: this.now,
-			version: 1
-		});
-		this.event('ask', id, 1, { subject: subjectId, to: addressedTo });
-		return id;
+	/** Who wrote something, as the record shows it: Work (the clerk), an agent, or a person. */
+	get by(): 'work' | 'agent' | 'person' {
+		return this.actor.kind === 'work' ? 'work' : this.actor.kind === 'human' ? 'person' : 'agent';
 	}
 
-	/** Resolve every pending Ask about a subject. */
-	resolveAsks(subjectId: string, status: 'answered' | 'dismissed' = 'answered'): void {
-		for (const a of this.all<{ id: string }>(
-			"SELECT id FROM ask WHERE subject_id = ? AND status = 'pending'",
-			subjectId
-		))
-			this.event('ask', a.id, this.update('ask', a.id, { status, resolved_at: this.now }));
+	/**
+	 * Update descriptive fields so that people's and agents' entries win (spec §3.5): when Work
+	 * writes, a field a person or agent set is left alone. Records who wrote each field. Returns
+	 * the fields actually written (possibly none).
+	 */
+	writeFields(
+		kind: Kind,
+		id: string,
+		fields: Row,
+		extra: Row = {}
+	): { version: number | null; written: Row } {
+		const written: Row = {};
+		for (const [k, v] of Object.entries(fields)) {
+			if (v === undefined) continue;
+			if (this.by === 'work') {
+				const prior = this.one<{ by: string }>(
+					'SELECT by FROM written_by WHERE object_id = ? AND field = ?',
+					id,
+					k
+				);
+				if (prior && prior.by !== 'work') continue;
+			}
+			written[k] = v;
+		}
+		if (!Object.keys(written).length) return { version: null, written };
+		const version = this.update(kind, id, { ...written, ...extra });
+		for (const k of Object.keys(written)) this.markWritten(id, k);
+		return { version, written };
+	}
+
+	markWritten(id: string, field: string): void {
+		this.run(
+			'INSERT INTO written_by (object_id, field, by, at) VALUES (?,?,?,?) ON CONFLICT (object_id, field) DO UPDATE SET by = excluded.by, at = excluded.at',
+			id,
+			field,
+			this.by,
+			this.now
+		);
 	}
 
 	done(id: string, version: number | null, data?: unknown): void {

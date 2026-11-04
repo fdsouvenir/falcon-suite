@@ -5,8 +5,8 @@ import {
 	Id,
 	Title,
 	Text,
+	Short,
 	Reason,
-	Session,
 	Sources,
 	Who,
 	obj,
@@ -16,134 +16,37 @@ import {
 } from '../schemas.js';
 import { addPlan } from './plan.js';
 
-const UNFINISHED = "('open','ready','in_progress','waiting')";
+export const UNFINISHED = "('open','ready','in_progress','waiting')";
 
-/**
- * An agent creating Work that serves a *propose* Objective needs a decided Decision targeting that
- * Objective (spec §3, commands §10). Humans and *act* Objectives need nothing.
- */
-export function checkServes(
-	ctx: Context,
-	objectives: string[] | undefined,
-	decision: string | undefined
-) {
-	for (const id of objectives ?? []) {
-		const o = ctx.get<{ id: string; status: string; autonomy: string; owner: string }>(
-			'objective',
-			id
-		);
-		if (o.status !== 'active') reject('objective_not_active', `Objective ${id} is not active`);
-		if (ctx.actor.kind === 'human' || o.autonomy === 'act') continue;
-		const approved =
-			decision &&
-			ctx.one(
-				"SELECT 1 FROM decision d JOIN link l ON l.kind = 'targets' AND l.source_id = d.id AND l.target_id = ? WHERE d.id = ? AND d.status = 'decided'",
-				id,
-				decision
-			);
-		if (!approved)
-			reject(
-				'proposal_required',
-				`Objective "${id}" is set to propose: raise a Decision for its owner first, then pass the decided Decision as "decision"`,
-				['raise_decision']
-			);
-	}
-}
-
-export const structureCommands = [
-	defineCommand({
-		name: 'create_area',
-		summary: 'Create an Area: a standing responsibility.',
-		input: obj({ title: Title, description: Text, accountable_human: opt(Who) }),
-		run(ctx, i) {
-			const id = ctx.newId();
-			const accountable =
-				i.accountable_human ?? (ctx.actor.kind === 'human' ? ctx.actor.id : ctx.owner);
-			ctx.insert('area', {
-				id,
-				title: i.title,
-				description: i.description,
-				status: 'active',
-				accountable_human: accountable,
-				created_at: ctx.now,
-				version: 1
-			});
-			ctx.event('area', id, 1);
-			ctx.done(id, 1);
-		}
-	}),
-	defineCommand({
-		name: 'edit_area',
-		on: 'area',
-		summary: "Change an Area's title, description or accountable person.",
-		input: obj({ title: opt(Title), description: opt(Text), accountable_human: opt(Who) }),
-		run(ctx, i, a) {
-			const fields = Object.fromEntries(Object.entries(i).filter(([, v]) => v !== undefined));
-			if (!Object.keys(fields).length) reject('nothing_to_change', 'Give something to change');
-			const v = ctx.update('area', a!.id as string, fields);
-			ctx.event('area', a!.id as string, v, fields);
-			ctx.done(a!.id as string, v);
-		}
-	}),
-	defineCommand({
-		name: 'retire_area',
-		on: 'area',
-		humanOnly: true,
-		summary: 'Retire an Area that holds no unfinished Work.',
-		input: obj({ reason: Reason }),
-		run(ctx, i, a) {
-			const busy = ctx.one<{ n: number }>(
-				`SELECT count(*) AS n FROM task t LEFT JOIN project p ON p.id = t.project_id
-				 WHERE (t.area_id = ? OR p.area_id = ?) AND t.status IN ${UNFINISHED}`,
-				a!.id as string,
-				a!.id as string
-			)!.n;
-			if (busy)
-				reject('area_has_work', `${busy} unfinished Task(s) still in this Area`, [
-					'move_task',
-					'abandon'
-				]);
-			const v = ctx.update('area', a!.id as string, { status: 'retired' });
-			ctx.event('area', a!.id as string, v, { reason: i.reason });
-			ctx.done(a!.id as string, v);
-		}
-	}),
-
+export const projectCommands = [
 	defineCommand({
 		name: 'create_project',
 		summary:
-			'Create a Project in an Area, optionally with its whole plan (Milestones with their Tasks and dependencies) and the Objectives it serves.',
+			'Create a Project: a bounded outcome that takes several deliverables, optionally with its whole plan (Milestones with their Tasks and dependencies).',
 		input: obj({
 			title: Title,
 			outcome: Text,
-			area: Id,
-			serves: opt(Type.Array(Id, { maxItems: 20 })),
-			decision: opt(Id),
+			agent: opt(Who),
+			status_line: opt(Short),
 			milestones: opt(Type.Array(PlanMilestone, { maxItems: 50 })),
-			tasks: opt(Type.Array(PlanTask, { maxItems: 100 })),
-			session: opt(Session)
+			tasks: opt(Type.Array(PlanTask, { maxItems: 100 }))
 		}),
 		run(ctx, i) {
-			const area = ctx.get<{ id: string; status: string; accountable_human: string }>(
-				'area',
-				i.area
-			);
-			if (area.status !== 'active') reject('area_retired', 'That Area is retired');
-			checkServes(ctx, i.serves, i.decision);
 			const id = ctx.newId();
 			ctx.insert('project', {
 				id,
 				title: i.title,
 				outcome: i.outcome,
-				area_id: area.id,
-				accountable_human: area.accountable_human,
-				session_key: i.session ?? null,
-				session_set_by: i.session ? ctx.actor.id : null,
+				agent: i.agent ?? (ctx.actor.kind === 'agent' ? ctx.actor.id : null),
+				status_line: i.status_line ?? null,
+				status_line_at: i.status_line ? ctx.now : null,
 				created_at: ctx.now,
+				updated_at: ctx.now,
 				version: 1
 			});
-			for (const o of i.serves ?? []) ctx.link('serves', 'project', id, 'objective', o);
-			ctx.event('project', id, 1, i.decision ? { decision: i.decision } : undefined);
+			for (const f of ['title', 'outcome', ...(i.status_line ? ['status_line'] : [])])
+				ctx.markWritten(id, f);
+			ctx.event('project', id, 1);
 			const plan = addPlan(ctx, id, i.milestones, i.tasks);
 			ctx.done(id, 1, plan.tasks.length || plan.milestones.length ? plan : undefined);
 		}
@@ -152,36 +55,24 @@ export const structureCommands = [
 		name: 'edit_project',
 		on: 'project',
 		summary: "Change a Project's title or outcome.",
-		input: obj({ title: opt(Title), outcome: opt(Text), reason: Reason }),
+		input: obj({ title: opt(Title), outcome: opt(Text), reason: opt(Reason) }),
 		run(ctx, i, p) {
 			const { reason, ...rest } = i;
-			const fields = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined));
-			if (!Object.keys(fields).length) reject('nothing_to_change', 'Give a title or outcome');
-			const v = ctx.update('project', p!.id as string, fields);
-			ctx.event('project', p!.id as string, v, { ...fields, reason });
-			ctx.done(p!.id as string, v);
-		}
-	}),
-	defineCommand({
-		name: 'move_project',
-		on: 'project',
-		summary: 'Move a Project to another Area.',
-		input: obj({ area: Id, reason: Reason }),
-		run(ctx, i, p) {
-			const area = ctx.get<{ id: string; status: string }>('area', i.area);
-			if (area.status !== 'active') reject('area_retired', 'That Area is retired');
-			if (p!.area_id === area.id) return ctx.nothing(p!.id as string, p!.version as number);
-			const v = ctx.update('project', p!.id as string, { area_id: area.id });
-			ctx.event('project', p!.id as string, v, { from: p!.area_id, to: area.id, reason: i.reason });
-			ctx.done(p!.id as string, v);
+			if (rest.title === undefined && rest.outcome === undefined)
+				reject('nothing_to_change', 'Give a title or outcome');
+			const { version, written } = ctx.writeFields('project', p!.id as string, rest, {
+				updated_at: ctx.now
+			});
+			if (version === null) return ctx.nothing(p!.id as string, p!.version as number);
+			ctx.event('project', p!.id as string, version, { ...written, reason });
+			ctx.done(p!.id as string, version);
 		}
 	}),
 	defineCommand({
 		name: 'abandon_project',
 		on: 'project',
-		humanOnly: true,
 		summary:
-			'Abandon a Project (people only), deciding for each unfinished Task whether to abandon it or detach it into the Area.',
+			'Abandon a Project, deciding for each unfinished Task whether to abandon it or detach it as a standalone Task.',
 		input: obj({
 			reason: Reason,
 			dispositions: opt(
@@ -216,7 +107,6 @@ export const structureCommands = [
 					const v = ctx.update('task', t.id, {
 						project_id: null,
 						milestone_id: null,
-						area_id: p!.area_id,
 						updated_at: ctx.now
 					});
 					ctx.event('task', t.id, v, { detached_from: id });
@@ -375,75 +265,6 @@ export const structureCommands = [
 			});
 			ctx.event('milestone', m!.id as string, v, { reason: i.reason });
 			ctx.done(m!.id as string, v);
-		}
-	}),
-	defineCommand({
-		name: 'serve',
-		summary: 'Link a Project or Task to an Objective it serves.',
-		input: obj({
-			kind: Type.Union([Type.Literal('project'), Type.Literal('task')]),
-			id: Id,
-			objective: Id,
-			decision: opt(Id)
-		}),
-		run(ctx, i) {
-			const row = ctx.get(i.kind, i.id);
-			checkServes(ctx, [i.objective], i.decision);
-			ctx.link('serves', i.kind, i.id, 'objective', i.objective);
-			const v = ctx.update(i.kind, i.id, {});
-			ctx.event(i.kind, i.id, v, { serves: i.objective });
-			ctx.done(row.id as string, v);
-		}
-	}),
-	defineCommand({
-		name: 'unserve',
-		summary: 'Remove a link from a Project or Task to an Objective.',
-		input: obj({
-			kind: Type.Union([Type.Literal('project'), Type.Literal('task')]),
-			id: Id,
-			objective: Id
-		}),
-		run(ctx, i) {
-			ctx.get(i.kind, i.id);
-			ctx.run(
-				"DELETE FROM link WHERE kind = 'serves' AND source_id = ? AND target_id = ?",
-				i.id,
-				i.objective
-			);
-			const v = ctx.update(i.kind, i.id, {});
-			ctx.event(i.kind, i.id, v, { unserves: i.objective });
-			ctx.done(i.id, v);
-		}
-	}),
-	defineCommand({
-		name: 'set_session',
-		summary:
-			"Set or clear the discussion session of an Objective, Project, Task or Ask. A person's choice can only be changed by a person.",
-		input: obj({
-			kind: Type.Union([
-				Type.Literal('objective'),
-				Type.Literal('project'),
-				Type.Literal('task'),
-				Type.Literal('ask')
-			]),
-			id: Id,
-			session: Type.Union([Session, Type.Null()])
-		}),
-		run(ctx, i) {
-			const row = ctx.get(i.kind, i.id);
-			if (row.session_key === i.session) return ctx.nothing(i.id, row.version as number);
-			if (
-				ctx.actor.kind === 'agent' &&
-				typeof row.session_set_by === 'string' &&
-				row.session_set_by.startsWith('person:')
-			)
-				reject('human_choice', 'A person chose this session; only a person can change it');
-			const v = ctx.update(i.kind, i.id, {
-				session_key: i.session,
-				session_set_by: i.session ? ctx.actor.id : null
-			});
-			ctx.event(i.kind, i.id, v, { session: i.session });
-			ctx.done(i.id, v);
 		}
 	})
 ];

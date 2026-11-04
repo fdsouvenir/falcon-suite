@@ -1,640 +1,631 @@
-import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
-import type { Reads } from './reads.js';
+import type { DatabaseSync } from 'node:sqlite';
 
-// Screen projections for the native UI: each screen gets its data in one read.
-// They compose Reads; nothing here writes.
+/**
+ * What the pages show (spec §6): Home, Project, Task, Job and search. Read-only projections; every
+ * shape here is what the Control UI renders.
+ */
 
-type Row = Record<string, any>;
-const parse = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v);
+type Ref = { id: string; kind: 'task' | 'project' | 'job'; title: string };
+export type SessionRef = { key: string; last_seen_at: string };
+export type NeedsYouItem = {
+	kind: 'question' | 'decision';
+	id: string;
+	prompt: string;
+	about: Ref | null;
+	session: string | null;
+	since: string;
+	options?: { id: string; label: string }[];
+	recommendation?: string | null;
+};
+export type Card = {
+	id: string;
+	kind: 'task' | 'project' | 'job';
+	title: string;
+	status_line: string | null;
+	column: 'moving' | 'waiting';
+	waiting: string | null;
+	agent: string | null;
+	sessions: number;
+	last_activity: string;
+	tasks?: { done: number; total: number; open: number };
+	milestone?: { position: number; of: number; title: string } | null;
+	done_this_week?: number;
+};
+export type DoneRow = Ref & { at: string };
+export type Entry = {
+	id: string;
+	at: string;
+	summary: string | null;
+	agent: string;
+	by: string;
+	session: string | null;
+	outcomes: { kind: string; label: string; ref?: string }[];
+	item: Ref | null;
+};
 
-// OpenClaw refuses a reply over 4096 values or 256 KB; the feed keeps well under both.
-const FEED_BUDGET = { values: 3500, bytes: 200_000 };
-const CLIP = 1000;
-const clip = (v: unknown): unknown =>
-	typeof v === 'string'
-		? v.length > CLIP
-			? `${v.slice(0, CLIP)}…`
-			: v
-		: v && typeof v === 'object'
-			? Array.isArray(v)
-				? v.map(clip)
-				: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clip(x)]))
-			: v;
-const values = (v: unknown): number =>
-	v && typeof v === 'object' ? Object.values(v).reduce((n: number, x) => n + values(x), 1) : 1;
-
-export type SessionRef = { key: string; from: 'own' | 'project' | 'task' } | null;
+const OPEN = "('open','ready','in_progress','waiting')";
+const WEEK = 7 * 864e5;
+const json = <T>(v: unknown, fallback: T): T => {
+	try {
+		return v ? (JSON.parse(v as string) as T) : fallback;
+	} catch {
+		return fallback;
+	}
+};
 
 export class Views {
 	constructor(
 		private readonly db: DatabaseSync,
-		private readonly reads: Reads
+		private readonly owner: string,
+		private readonly now: () => string
 	) {}
 
-	private all(sql: string, ...a: SQLInputValue[]): Row[] {
-		return this.db.prepare(sql).all(...a) as Row[];
+	private all<T>(sql: string, ...a: (string | number | null)[]): T[] {
+		return this.db.prepare(sql).all(...a) as T[];
 	}
-	private one(sql: string, ...a: SQLInputValue[]): Row | undefined {
-		return this.db.prepare(sql).get(...a) as Row | undefined;
-	}
-
-	/** A Task's discussion session, falling back to its Project's (spec §9). */
-	taskSession(taskId: string): SessionRef {
-		const t = this.one('SELECT session_key, project_id FROM task WHERE id = ?', taskId);
-		if (!t) return null;
-		if (t.session_key) return { key: t.session_key, from: 'own' };
-		const p =
-			t.project_id && this.one('SELECT session_key FROM project WHERE id = ?', t.project_id);
-		return p?.session_key ? { key: p.session_key, from: 'project' } : null;
+	private one<T>(sql: string, ...a: (string | number | null)[]): T | undefined {
+		return this.db.prepare(sql).get(...a) as T | undefined;
 	}
 
-	/** Where a Task lives, for display. */
-	place(t: Row): { kind: 'area' | 'project'; id: string; title: string } {
-		if (t.project_id) {
-			const p = this.one('SELECT title FROM project WHERE id = ?', t.project_id);
-			return { kind: 'project', id: t.project_id, title: p?.title ?? '' };
-		}
-		const a = this.one('SELECT title FROM area WHERE id = ?', t.area_id);
-		return { kind: 'area', id: t.area_id, title: a?.title ?? '' };
-	}
-
-	/** What to call any recorded object in a list. */
-	private title(kind: string, id: string): string {
-		if (kind === 'task') return this.reads.taskTitle(id);
-		const table = [
-			'objective',
-			'area',
-			'project',
-			'milestone',
-			'question',
-			'decision',
-			'finding',
-			'ask',
-			'kpi'
-		].includes(kind)
-			? kind
-			: null;
-		if (!table) return '';
-		const r = this.one(`SELECT * FROM ${table} WHERE id = ?`, id);
-		return (r?.title ?? r?.prompt ?? r?.conclusion ?? r?.name ?? '') as string;
-	}
-
-	taskCard(t: Row) {
-		return {
-			id: t.id,
-			title: this.reads.taskTitle(t.id),
-			status: t.status,
-			agent: t.agent,
-			place: this.place(t),
-			session: this.taskSession(t.id),
-			blocked_by: this.reads.blockedBy(t.id),
-			waiting_for: t.waiting_for,
-			waiting_on: t.waiting_on_kind ? { kind: t.waiting_on_kind, ref: t.waiting_on_ref } : null,
-			resume_when: t.resume_when,
-			follow_up_at: t.follow_up_at,
-			updated_at: t.updated_at,
-			version: t.version
-		};
-	}
-
-	private askFor(subjectId: string, person: string) {
-		return this.one(
-			"SELECT id, session_key, version FROM ask WHERE subject_id = ? AND addressed_to = ? AND status = 'pending'",
-			subjectId,
-			person
-		);
-	}
-
-	/** Session a Question or Decision is discussed in: its Ask's, else what it targets. */
-	private knowledgeSession(id: string, person: string): SessionRef {
-		const ask = this.askFor(id, person);
-		if (ask?.session_key) return { key: ask.session_key, from: 'own' };
-		for (const l of this.all(
-			"SELECT target_kind, target_id FROM link WHERE kind = 'targets' AND source_id = ?",
+	ref(id: string | null | undefined): Ref | null {
+		if (!id) return null;
+		const t = this.one<{ title: string }>(
+			'SELECT d.title FROM task t JOIN task_definition d ON d.task_id = t.id AND d.rev = t.definition_rev WHERE t.id = ?',
 			id
-		)) {
-			if (l.target_kind === 'task') {
-				const s = this.taskSession(l.target_id);
-				if (s) return { key: s.key, from: 'task' };
-			}
-			if (l.target_kind === 'project' || l.target_kind === 'objective') {
-				const r = this.one(`SELECT session_key FROM ${l.target_kind} WHERE id = ?`, l.target_id);
-				if (r?.session_key) return { key: r.session_key, from: 'project' };
-			}
-		}
+		);
+		if (t) return { id, kind: 'task', title: t.title };
+		const p = this.one<{ title: string }>('SELECT title FROM project WHERE id = ?', id);
+		if (p) return { id, kind: 'project', title: p.title };
+		const j = this.one<{ title: string }>('SELECT title FROM job WHERE id = ?', id);
+		if (j) return { id, kind: 'job', title: j.title };
 		return null;
 	}
 
-	decisionCard(d: Row, person: string) {
-		return {
-			kind: 'decision' as const,
-			id: d.id,
-			prompt: d.prompt,
-			options: parse(d.options),
-			recommendation: parse(d.recommendation),
-			consequence_of_no_decision: d.consequence_of_no_decision,
-			status: d.status,
-			created_at: d.created_at,
-			created_by: d.created_by,
-			can_decide: (parse(d.deciders) as string[]).includes(person),
-			session: this.knowledgeSession(d.id, person),
-			version: d.version
-		};
-	}
-
-	questionCard(q: Row, person: string) {
-		return {
-			kind: 'question' as const,
-			id: q.id,
-			prompt: q.prompt,
-			impact: q.impact,
-			hypothesis: q.hypothesis,
-			hypothesis_by: q.hypothesis_by,
-			created_at: q.created_at,
-			created_by: q.created_by,
-			can_answer: (parse(q.answerable_by) as string[]).includes(person),
-			holds: this.all(
-				"SELECT count(*) AS n FROM link WHERE kind = 'targets' AND source_id = ? AND target_kind = 'task'",
-				q.id
-			)[0].n,
-			session: this.knowledgeSession(q.id, person),
-			version: q.version
-		};
-	}
-
-	/**
-	 * Everything on the Overview tab (spec §12). Needs you holds only what this person can act on,
-	 * one entry per thing: Decisions to decide, Questions to answer, and Tasks waiting on them that
-	 * no Decision or Question of theirs already covers. Happening now is the agents' work; Heads up
-	 * is the remaining Warnings, those not already shown as the age of an item above.
-	 */
-	overview(person: string, now: string) {
-		const decisions = this.all(
-			"SELECT * FROM decision WHERE status IN ('pending','deferred') ORDER BY created_at"
-		)
-			.map((d) => this.decisionCard(d, person))
-			.filter((d) => d.can_decide);
-		const questions = this.all("SELECT * FROM question WHERE status = 'open' ORDER BY created_at")
-			.map((q) => this.questionCard(q, person))
-			.filter((q) => q.can_answer);
-		// A Task held by one of this person's Decisions or Questions is covered by that item.
-		const coveredBy = new Map<string, 'decision' | 'answer'>();
-		for (const k of [...decisions, ...questions])
-			for (const l of this.all(
-				"SELECT target_id FROM link WHERE kind = 'targets' AND source_id = ? AND target_kind = 'task'",
-				k.id
-			))
-				coveredBy.set(l.target_id, k.kind === 'decision' ? 'decision' : 'answer');
-		const waitingOnYou = this.all(
-			"SELECT * FROM task WHERE status = 'waiting' AND waiting_on_kind = 'person' AND waiting_on_ref = ? ORDER BY follow_up_at IS NULL, follow_up_at, updated_at",
-			person
-		).filter((t) => !coveredBy.has(t.id));
-		const todo = [
-			...waitingOnYou.map((t) => ({
-				kind: 'task' as const,
-				id: t.id,
-				title: this.reads.taskTitle(t.id),
-				agent: t.agent,
-				waiting_for: t.waiting_for,
-				resume_when: t.resume_when,
-				follow_up_at: t.follow_up_at,
-				since: t.updated_at
-			}))
-		];
-		const todoIds = new Set(todo.map((t) => t.id));
-
-		const card = (t: Row) => ({
-			...this.taskCard(t),
-			waiting_on_you: coveredBy.get(t.id) ?? null
-		});
-		const happening = [
-			...this.all("SELECT * FROM task WHERE status = 'in_progress' ORDER BY updated_at DESC"),
-			...this.all(
-				"SELECT * FROM task WHERE status = 'waiting' ORDER BY follow_up_at IS NULL, follow_up_at"
-			).filter((t) => !todoIds.has(t.id)),
-			...this.all("SELECT * FROM task WHERE status = 'ready' ORDER BY updated_at DESC LIMIT 5")
-		].map(card);
-
-		const completed = this.all(
-			"SELECT * FROM task WHERE status = 'completed' ORDER BY updated_at DESC LIMIT 4"
-		).map((t) => {
-			const r = this.one(
-				'SELECT content, sources, at FROM task_result WHERE id = ?',
-				t.accepted_result_id
-			);
-			return {
-				...this.taskCard(t),
-				result: r ? { content: r.content, sources: parse(r.sources), at: r.at } : null
-			};
-		});
-		const heads_up = this.reads
-			.warnings(now)
-			.filter(
-				(w) =>
-					w.kind !== 'unanswered' &&
-					!(
-						w.kind === 'follow_up_overdue' &&
-						(todoIds.has(w.object.id) || coveredBy.has(w.object.id))
-					)
-			);
-		const count = decisions.length + questions.length + todo.length;
-		return {
-			summary: {
-				decide: decisions.length,
-				answer: questions.length,
-				todo: todo.length,
-				in_progress: happening.filter((t) => t.status === 'in_progress').length
-			},
-			needs_you: { decisions, questions, todo, count },
-			happening,
-			heads_up,
-			completed,
-			unfiled: {
-				count: this.one('SELECT count(*) AS n FROM timeline_entry WHERE task_id IS NULL')!.n
-			},
-			objectives: this.objectivesTab()
-		};
-	}
-
-	/** The Objectives tab: ranked Objectives with KPIs, latest review and what serves them. */
-	objectivesTab(includeInactive = false) {
-		return this.reads.objectives(includeInactive).map((o) => ({
-			...o,
-			statement: this.one('SELECT statement FROM objective WHERE id = ?', o.id)?.statement,
-			serving: {
-				projects: o.serving.projects.map((p) => ({ ...p, ...this.taskCounts('project_id', p.id) })),
-				tasks: o.serving.tasks
-			}
-		}));
-	}
-
-	private taskCounts(column: 'project_id' | 'milestone_id', id: string) {
-		const r = this.one(
-			`SELECT count(*) AS total, sum(status = 'completed') AS done FROM task WHERE ${column} = ? AND status <> 'abandoned'`,
+	/** The item a Question or Decision is about: a Task's Project or Job counts as the item. */
+	private aboutOf(id: string): Ref | null {
+		const t = this.one<{ target_kind: string; target_id: string }>(
+			"SELECT target_kind, target_id FROM link WHERE kind = 'targets' AND source_id = ? ORDER BY target_kind = 'milestone' LIMIT 1",
 			id
-		)!;
-		return { tasks_total: r.total as number, tasks_done: (r.done as number) ?? 0 };
+		);
+		if (!t) return null;
+		if (t.target_kind === 'milestone') {
+			const m = this.one<{ project_id: string }>(
+				'SELECT project_id FROM milestone WHERE id = ?',
+				t.target_id
+			);
+			return this.ref(m?.project_id);
+		}
+		return this.ref(t.target_id);
 	}
 
-	private projectCard(p: Row, person: string) {
-		const serves = this.all(
-			"SELECT o.id, o.rank, o.title FROM link l JOIN objective o ON o.id = l.target_id WHERE l.kind = 'serves' AND l.source_id = ?",
-			p.id
+	/** Open Questions and pending Decisions for the person, oldest first. */
+	needsYou(person: string = this.owner): NeedsYouItem[] {
+		const qs = this.all<{
+			id: string;
+			prompt: string;
+			session_key: string | null;
+			created_at: string;
+			answerable_by: string;
+		}>(
+			"SELECT id, prompt, session_key, created_at, answerable_by FROM question WHERE status = 'open' ORDER BY created_at"
+		)
+			.filter((q) => json<string[]>(q.answerable_by, []).includes(person))
+			.map<NeedsYouItem>((q) => ({
+				kind: 'question',
+				id: q.id,
+				prompt: q.prompt,
+				about: this.aboutOf(q.id),
+				session: q.session_key,
+				since: q.created_at
+			}));
+		const ds = this.all<{
+			id: string;
+			prompt: string;
+			session_key: string | null;
+			created_at: string;
+			deciders: string;
+			options: string;
+			recommendation: string;
+			status: string;
+			deferred_until: string | null;
+		}>("SELECT * FROM decision WHERE status IN ('pending','deferred') ORDER BY created_at")
+			.filter((d) => json<string[]>(d.deciders, []).includes(person))
+			.filter((d) => d.status === 'pending' || !d.deferred_until || d.deferred_until <= this.now())
+			.map<NeedsYouItem>((d) => ({
+				kind: 'decision',
+				id: d.id,
+				prompt: d.prompt,
+				about: this.aboutOf(d.id),
+				session: d.session_key,
+				since: d.created_at,
+				options: json<{ id: string; label: string }[]>(d.options, []).map((o) => ({
+					id: o.id,
+					label: o.label
+				})),
+				recommendation: json<{ option?: string }>(d.recommendation, {}).option ?? null
+			}));
+		return [...qs, ...ds].sort((a, b) => a.since.localeCompare(b.since));
+	}
+
+	private sessions(id: string): SessionRef[] {
+		return this.all<SessionRef>(
+			'SELECT session_key AS key, last_seen_at FROM item_session WHERE item_id = ? ORDER BY last_seen_at DESC',
+			id
 		);
-		return {
-			id: p.id,
-			title: p.title,
-			outcome: p.outcome,
-			area: p.area_id,
-			status: this.reads.projectStatus(p),
-			accountable_human: p.accountable_human,
-			serves,
-			session: p.session_key ? { key: p.session_key, from: 'own' } : null,
-			milestones: this.all(
-				'SELECT * FROM milestone WHERE project_id = ? ORDER BY position',
+	}
+
+	private lastActivity(id: string, fallback: string): string {
+		const r = this.one<{ at: string | null }>(
+			'SELECT max(at) AS at FROM timeline_entry WHERE subject_id = ? OR subject_id IN (SELECT id FROM task WHERE project_id = ? OR job_id = ?)',
+			id,
+			id,
+			id
+		);
+		return r?.at && r.at > fallback ? r.at : fallback;
+	}
+
+	private waitingText(t: {
+		waiting_for: string | null;
+		waiting_on_kind: string | null;
+		waiting_on_ref: string | null;
+		follow_up_at: string | null;
+	}): string {
+		const on =
+			t.waiting_on_kind === 'person'
+				? t.waiting_on_ref === this.owner
+					? 'you'
+					: t.waiting_on_ref
+				: t.waiting_on_ref;
+		return `Waiting on ${on ?? 'something'}${t.waiting_for ? `: ${t.waiting_for}` : ''}`;
+	}
+
+	/** The board (spec §6, Home): Jobs and Projects are one card each; only standalone Tasks get their own. */
+	board(person: string = this.owner): { moving: Card[]; waiting: Card[]; done: DoneRow[] } {
+		const now = this.now();
+		const weekAgo = new Date(Date.parse(now) - WEEK).toISOString();
+		const needs = new Set(
+			this.needsYou(person)
+				.map((n) => n.about?.id)
+				.filter(Boolean) as string[]
+		);
+		const cards: Card[] = [];
+		// Jobs.
+		for (const j of this.all<{
+			id: string;
+			title: string;
+			status: string;
+			agent: string | null;
+			status_line: string | null;
+			updated_at: string;
+		}>(
+			"SELECT id, title, status, agent, status_line, updated_at FROM job WHERE status <> 'retired'"
+		)) {
+			const counts = this.one<{ open: number; done_week: number }>(
+				`SELECT sum(status IN ${OPEN}) AS open, sum(status = 'completed' AND updated_at >= ?) AS done_week FROM task WHERE job_id = ?`,
+				weekAgo,
+				j.id
+			)!;
+			const waitingAll = this.one<{ n: number; w: number }>(
+				`SELECT count(*) AS n, sum(status = 'waiting') AS w FROM task WHERE job_id = ? AND status IN ${OPEN}`,
+				j.id
+			)!;
+			cards.push({
+				id: j.id,
+				kind: 'job',
+				title: j.title,
+				status_line: j.status_line,
+				column:
+					j.status === 'paused' || (waitingAll.n > 0 && waitingAll.w === waitingAll.n)
+						? 'waiting'
+						: 'moving',
+				waiting: j.status === 'paused' ? 'Paused' : null,
+				agent: j.agent,
+				sessions: this.sessions(j.id).length,
+				last_activity: this.lastActivity(j.id, j.updated_at),
+				tasks: { done: 0, total: 0, open: counts.open ?? 0 },
+				done_this_week: counts.done_week ?? 0
+			});
+		}
+		// Projects that are not finished.
+		for (const p of this.all<{
+			id: string;
+			title: string;
+			agent: string | null;
+			status_line: string | null;
+			updated_at: string;
+		}>(
+			'SELECT id, title, agent, status_line, updated_at FROM project WHERE abandoned_at IS NULL'
+		)) {
+			const c = this.one<{ total: number; done: number; open: number; waiting: number }>(
+				`SELECT count(*) AS total, sum(status = 'completed') AS done, sum(status IN ${OPEN}) AS open, sum(status = 'waiting') AS waiting
+				 FROM task WHERE project_id = ? AND status <> 'abandoned'`,
 				p.id
-			).map((m) => ({
-				id: m.id,
-				position: m.position,
-				title: m.title,
-				success_condition: m.success_condition,
-				status: m.status,
-				achieved_at: m.achieved_at,
-				basis: m.basis,
-				sources: parse(m.sources),
-				...this.taskCounts('milestone_id', m.id),
-				tasks: this.all('SELECT * FROM task WHERE milestone_id = ? ORDER BY created_at', m.id).map(
-					(t) => ({
-						...this.taskCard(t),
-						depends_on: this.all(
-							"SELECT target_id FROM link WHERE kind = 'depends_on' AND source_id = ?",
-							t.id
-						).map((r) => ({ id: r.target_id, title: this.reads.taskTitle(r.target_id) }))
+			)!;
+			const ms = this.all<{ title: string; position: number; status: string }>(
+				'SELECT title, position, status FROM milestone WHERE project_id = ? ORDER BY position',
+				p.id
+			);
+			const finished =
+				(c.total > 0 && c.open === 0 && ms.every((m) => m.status === 'achieved')) ||
+				(ms.length > 0 && ms.every((m) => m.status === 'achieved') && (c.open ?? 0) === 0);
+			if (finished) continue;
+			const cur = ms.find((m) => m.status === 'open');
+			const waitingTask =
+				(c.open ?? 0) > 0 && c.waiting === c.open
+					? this.one<{
+							waiting_for: string | null;
+							waiting_on_kind: string | null;
+							waiting_on_ref: string | null;
+							follow_up_at: string | null;
+						}>(
+							"SELECT waiting_for, waiting_on_kind, waiting_on_ref, follow_up_at FROM task WHERE project_id = ? AND status = 'waiting' ORDER BY updated_at DESC LIMIT 1",
+							p.id
+						)
+					: undefined;
+			cards.push({
+				id: p.id,
+				kind: 'project',
+				title: p.title,
+				status_line: p.status_line,
+				column: waitingTask ? 'waiting' : 'moving',
+				waiting: waitingTask ? this.waitingText(waitingTask) : null,
+				agent: p.agent,
+				sessions: this.sessions(p.id).length,
+				last_activity: this.lastActivity(p.id, p.updated_at),
+				tasks: { done: c.done ?? 0, total: c.total ?? 0, open: c.open ?? 0 },
+				milestone: cur ? { position: cur.position, of: ms.length, title: cur.title } : null
+			});
+		}
+		// Standalone Tasks.
+		for (const t of this.all<{
+			id: string;
+			title: string;
+			status: string;
+			agent: string | null;
+			status_line: string | null;
+			updated_at: string;
+			waiting_for: string | null;
+			waiting_on_kind: string | null;
+			waiting_on_ref: string | null;
+			follow_up_at: string | null;
+		}>(
+			`SELECT t.id, d.title, t.status, t.agent, t.status_line, t.updated_at, t.waiting_for, t.waiting_on_kind, t.waiting_on_ref, t.follow_up_at
+			 FROM task t JOIN task_definition d ON d.task_id = t.id AND d.rev = t.definition_rev
+			 WHERE t.project_id IS NULL AND t.job_id IS NULL AND t.status IN ${OPEN}`
+		))
+			cards.push({
+				id: t.id,
+				kind: 'task',
+				title: t.title,
+				status_line: t.status_line,
+				column: t.status === 'waiting' ? 'waiting' : 'moving',
+				waiting: t.status === 'waiting' ? this.waitingText(t) : null,
+				agent: t.agent,
+				sessions: this.sessions(t.id).length,
+				last_activity: this.lastActivity(t.id, t.updated_at)
+			});
+		const shown = cards
+			.filter((c) => !needs.has(c.id))
+			.sort((a, b) => b.last_activity.localeCompare(a.last_activity));
+		const done: DoneRow[] = [
+			...this.all<{ id: string; title: string; at: string }>(
+				`SELECT t.id, d.title, t.updated_at AS at FROM task t JOIN task_definition d ON d.task_id = t.id AND d.rev = t.definition_rev
+				 WHERE t.status = 'completed' AND t.project_id IS NULL AND t.job_id IS NULL AND t.updated_at >= ?`,
+				weekAgo
+			).map((r) => ({ ...r, kind: 'task' as const })),
+			...this.all<{ id: string; title: string; at: string }>(
+				`SELECT p.id, p.title, max(coalesce(m.achieved_at, p.updated_at)) AS at FROM project p LEFT JOIN milestone m ON m.project_id = p.id
+				 WHERE p.abandoned_at IS NULL AND NOT EXISTS (SELECT 1 FROM task t WHERE t.project_id = p.id AND t.status IN ${OPEN})
+				   AND EXISTS (SELECT 1 FROM milestone m2 WHERE m2.project_id = p.id)
+				   AND NOT EXISTS (SELECT 1 FROM milestone m3 WHERE m3.project_id = p.id AND m3.status = 'open')
+				 GROUP BY p.id HAVING at >= ?`,
+				weekAgo
+			).map((r) => ({ ...r, kind: 'project' as const }))
+		].sort((a, b) => b.at.localeCompare(a.at));
+		return {
+			moving: shown.filter((c) => c.column === 'moving'),
+			waiting: shown.filter((c) => c.column === 'waiting'),
+			done
+		};
+	}
+
+	private entries(where: string, args: (string | number | null)[], limit: number): Entry[] {
+		return this.all<{
+			id: string;
+			at: string;
+			summary: string | null;
+			agent: string;
+			recorded_by: string;
+			session_key: string | null;
+			outcomes: string;
+			subject_id: string | null;
+		}>(`SELECT * FROM timeline_entry ${where} ORDER BY at DESC LIMIT ?`, ...args, limit).map(
+			(e) => ({
+				id: e.id,
+				at: e.at,
+				summary: e.summary,
+				agent: e.agent,
+				by: e.recorded_by,
+				session: e.session_key,
+				outcomes: json(e.outcomes, []),
+				item: this.ref(e.subject_id)
+			})
+		);
+	}
+
+	/** What happened since a moment (spec §6, Home): entries with a sentence, newest first. */
+	happened(since: string | null, limit = 30): Entry[] {
+		return since
+			? this.entries('WHERE summary IS NOT NULL AND at > ?', [since], limit)
+			: this.entries('WHERE summary IS NOT NULL', [], limit);
+	}
+
+	home(person: string = this.owner, since: string | null = null) {
+		const catchup = this.one<{ value: string }>("SELECT value FROM meta WHERE key = 'catchup'");
+		return {
+			since,
+			catching_up: catchup
+				? json<{ read: number; total: number; done: boolean }>(catchup.value, {
+						read: 0,
+						total: 0,
+						done: true
 					})
-				),
-				decisions: this.all(
-					"SELECT d.* FROM link l JOIN decision d ON d.id = l.source_id WHERE l.kind = 'targets' AND l.target_id = ? AND d.status = 'decided'",
-					m.id
-				).map((d) => this.decisionCard(d, person))
-			})),
-			tasks: this.all(
-				'SELECT * FROM task WHERE project_id = ? AND milestone_id IS NULL ORDER BY created_at',
-				p.id
-			).map((t) => this.taskCard(t)),
-			findings: this.all(
-				"SELECT count(*) AS n FROM link l JOIN finding f ON f.id = l.source_id WHERE l.kind = 'targets' AND l.target_id = ? AND f.status = 'current'",
-				p.id
-			)[0].n,
-			version: p.version
-		};
-	}
-
-	/** Areas & Projects: the Area chips with counts, and Projects grouped by Area. */
-	/**
-	 * A Project as one row of the Areas & Projects list: its current Milestone, how many Tasks are
-	 * done, whether anything in it needs the person or has stalled, and when it last moved. The
-	 * full detail is the Project page.
-	 */
-	private projectRow(p: Row, person: string, stalled: Set<string>) {
-		const tasks = this.all(
-			"SELECT id, status, waiting_on_kind, waiting_on_ref, updated_at FROM task WHERE project_id = ? AND status <> 'abandoned'",
-			p.id
-		);
-		const ms = this.all(
-			'SELECT id, position, title, status FROM milestone WHERE project_id = ? ORDER BY position',
-			p.id
-		);
-		const current = ms.find((m) => m.status !== 'achieved');
-		const ids = [p.id, ...tasks.map((t) => t.id), ...ms.map((m) => m.id)];
-		const marks = ids.map(() => '?').join(',');
-		const needsYou =
-			tasks.some(
-				(t) =>
-					t.status === 'waiting' && t.waiting_on_kind === 'person' && t.waiting_on_ref === person
-			) ||
-			this.all(
-				`SELECT d.* FROM link l JOIN decision d ON d.id = l.source_id WHERE l.kind = 'targets' AND l.target_id IN (${marks}) AND d.status IN ('pending','deferred')`,
-				...ids
-			).some((d) => this.decisionCard(d, person).can_decide) ||
-			this.all(
-				`SELECT q.* FROM link l JOIN question q ON q.id = l.source_id WHERE l.kind = 'targets' AND l.target_id IN (${marks}) AND q.status = 'open'`,
-				...ids
-			).some((q) => this.questionCard(q, person).can_answer);
-		const lastTurn = tasks.length
-			? this.one(
-					`SELECT max(at) AS at FROM timeline_entry WHERE task_id IN (${tasks.map(() => '?').join(',')})`,
-					...tasks.map((t) => t.id)
-				)?.at
-			: null;
-		const last = [lastTurn, ...tasks.map((t) => t.updated_at), p.updated_at ?? p.created_at]
-			.filter(Boolean)
-			.sort()
-			.at(-1);
-		return {
-			id: p.id,
-			title: p.title,
-			outcome: p.outcome,
-			status: this.reads.projectStatus(p),
-			milestone: current
-				? { position: current.position, of: ms.length, title: current.title }
 				: null,
-			tasks_total: tasks.length,
-			tasks_done: tasks.filter((t) => t.status === 'completed').length,
-			needs_you: needsYou,
-			stalled: tasks.some((t) => stalled.has(t.id)),
-			last_at: last ?? null
+			needs_you: this.needsYou(person),
+			board: this.board(person),
+			happened: this.happened(since)
 		};
 	}
 
-	areas(person: string, area?: string, now: string = new Date().toISOString()) {
-		const areas = this.all("SELECT * FROM area WHERE status = 'active' ORDER BY title").map((a) => {
-			const projects = this.one(
-				'SELECT count(*) AS n FROM project WHERE area_id = ? AND abandoned_at IS NULL',
-				a.id
-			)!.n;
-			const tasks = this.one(
-				"SELECT count(*) AS n FROM task t LEFT JOIN project p ON p.id = t.project_id WHERE (t.area_id = ? OR p.area_id = ?) AND t.status NOT IN ('completed','abandoned')",
-				a.id,
-				a.id
-			)!.n;
-			return {
-				id: a.id,
-				title: a.title,
-				description: a.description,
-				accountable_human: a.accountable_human,
-				projects,
-				open_tasks: tasks,
-				version: a.version
-			};
+	private questionsAbout(ids: string[], person: string) {
+		const set = new Set(ids);
+		return this.needsYou(person).filter((n) => {
+			const targets = this.all<{ target_id: string }>(
+				"SELECT target_id FROM link WHERE kind = 'targets' AND source_id = ?",
+				n.id
+			);
+			return targets.some((t) => set.has(t.target_id)) || (n.about && set.has(n.about.id));
 		});
-		const shown = area ? areas.filter((a) => a.id === area) : areas;
-		const stalled = new Set(
-			this.reads
-				.warnings(now)
-				.filter((w) => w.kind === 'stalled_task')
-				.map((w) => w.object.id)
-		);
-		return {
-			areas,
-			groups: shown.map((a) => ({
-				area: a,
-				projects: this.all(
-					'SELECT * FROM project WHERE area_id = ? ORDER BY abandoned_at IS NOT NULL, created_at',
-					a.id
-				).map((p) => this.projectRow(p, person, stalled)),
-				tasks: this.all(
-					"SELECT * FROM task WHERE area_id = ? AND status <> 'abandoned' ORDER BY status = 'completed', updated_at DESC",
-					a.id
-				).map((t) => this.taskCard(t))
-			}))
-		};
 	}
 
-	/** About-links: Questions, Decisions and Findings targeting any of these ids. */
-	private about(ids: string[], person: string) {
+	private findings(ids: string[]) {
 		if (!ids.length) return [];
-		const marks = ids.map(() => '?').join(',');
-		const links = this.all(
-			`SELECT DISTINCT source_kind, source_id FROM link WHERE kind = 'targets' AND target_id IN (${marks})`,
+		return this.all<{ id: string; conclusion: string; confidence: string; created_at: string }>(
+			`SELECT DISTINCT f.id, f.conclusion, f.confidence, f.created_at FROM finding f JOIN link l ON l.kind = 'targets' AND l.source_id = f.id
+			 WHERE f.status = 'current' AND l.target_id IN (${ids.map(() => '?').join(',')}) ORDER BY f.created_at DESC`,
 			...ids
 		);
-		return links
-			.map((l) => {
-				if (l.source_kind === 'decision') {
-					const d = this.one('SELECT * FROM decision WHERE id = ?', l.source_id);
-					return (
-						d && {
-							...this.decisionCard(d, person),
-							chosen: d.chosen_option,
-							decided_by: d.decided_by,
-							resolved_at: d.resolved_at
-						}
-					);
-				}
-				if (l.source_kind === 'question') {
-					const q = this.one('SELECT * FROM question WHERE id = ?', l.source_id);
-					return q && { ...this.questionCard(q, person), status: q.status };
-				}
-				const f = this.one('SELECT * FROM finding WHERE id = ?', l.source_id);
-				return (
-					f && {
-						kind: 'finding' as const,
-						id: f.id,
-						conclusion: f.conclusion,
-						confidence: f.confidence,
-						sources: parse(f.sources),
-						status: f.status,
-						created_at: f.created_at
-					}
-				);
-			})
-			.filter(Boolean);
 	}
 
-	project(id: string, person: string) {
-		const p = this.one('SELECT * FROM project WHERE id = ?', id);
+	private taskRow(id: string) {
+		return this.one<{
+			id: string;
+			title: string;
+			description: string;
+			done_when: string;
+			status: string;
+			agent: string | null;
+			status_line: string | null;
+			project_id: string | null;
+			milestone_id: string | null;
+			job_id: string | null;
+			waiting_for: string | null;
+			waiting_on_kind: string | null;
+			waiting_on_ref: string | null;
+			follow_up_at: string | null;
+			created_at: string;
+			updated_at: string;
+			accepted_result_id: string | null;
+			definition_rev: number;
+		}>(
+			`SELECT t.*, d.title, d.description, d.done_when FROM task t JOIN task_definition d ON d.task_id = t.id AND d.rev = t.definition_rev WHERE t.id = ?`,
+			id
+		);
+	}
+
+	private taskLine(id: string) {
+		const t = this.taskRow(id)!;
+		return {
+			id,
+			title: t.title,
+			status: t.status,
+			status_line: t.status_line,
+			waiting: t.status === 'waiting' ? this.waitingText(t) : null,
+			sessions: this.sessions(id),
+			updated_at: t.updated_at
+		};
+	}
+
+	task(id: string, person: string = this.owner) {
+		const t = this.taskRow(id);
+		if (!t) return null;
+		const plan = this.one<{ content: string; at: string }>(
+			'SELECT content, at FROM task_plan WHERE task_id = ? ORDER BY rev DESC LIMIT 1',
+			id
+		);
+		const result = t.accepted_result_id
+			? this.one<{ content: string; sources: string; at: string }>(
+					'SELECT content, sources, at FROM task_result WHERE id = ?',
+					t.accepted_result_id
+				)
+			: undefined;
+		return {
+			kind: 'task' as const,
+			id,
+			title: t.title,
+			description: t.description,
+			done_when: t.done_when,
+			status: t.status,
+			status_line: t.status_line,
+			waiting: t.status === 'waiting' ? this.waitingText(t) : null,
+			agent: t.agent,
+			created_at: t.created_at,
+			last_activity: this.lastActivity(id, t.updated_at),
+			belongs_to: this.ref(t.project_id ?? t.job_id),
+			milestone: t.milestone_id
+				? (this.one<{ title: string; position: number }>(
+						'SELECT title, position FROM milestone WHERE id = ?',
+						t.milestone_id
+					) ?? null)
+				: null,
+			plan: plan ?? null,
+			result: result
+				? { content: result.content, sources: json(result.sources, []), at: result.at }
+				: null,
+			needs_you: this.questionsAbout([id], person),
+			sessions: this.sessions(id),
+			findings: this.findings([id]),
+			happened: this.entries('WHERE subject_id = ?', [id], 50)
+		};
+	}
+
+	project(id: string, person: string = this.owner) {
+		const p = this.one<{
+			id: string;
+			title: string;
+			outcome: string;
+			agent: string | null;
+			status_line: string | null;
+			abandoned_at: string | null;
+			created_at: string;
+			updated_at: string;
+		}>('SELECT * FROM project WHERE id = ?', id);
 		if (!p) return null;
-		const area = this.one('SELECT id, title FROM area WHERE id = ?', p.area_id);
-		const taskIds = this.all('SELECT id FROM task WHERE project_id = ?', id).map((r) => r.id);
-		const milestoneIds = this.all('SELECT id FROM milestone WHERE project_id = ?', id).map(
-			(r) => r.id
+		const tasks = this.all<{ id: string; milestone_id: string | null }>(
+			"SELECT id, milestone_id FROM task WHERE project_id = ? AND status <> 'abandoned' ORDER BY created_at",
+			id
+		);
+		const ms = this.all<{
+			id: string;
+			title: string;
+			success_condition: string;
+			position: number;
+			status: string;
+			achieved_at: string | null;
+			basis: string | null;
+		}>(
+			'SELECT id, title, success_condition, position, status, achieved_at, basis FROM milestone WHERE project_id = ? ORDER BY position',
+			id
+		);
+		const current = ms.find((m) => m.status === 'open')?.id ?? null;
+		const done = this.one<{ n: number }>(
+			"SELECT count(*) AS n FROM task WHERE project_id = ? AND status = 'completed'",
+			id
+		)!.n;
+		return {
+			kind: 'project' as const,
+			id,
+			title: p.title,
+			outcome: p.outcome,
+			status_line: p.status_line,
+			agent: p.agent,
+			abandoned: !!p.abandoned_at,
+			created_at: p.created_at,
+			last_activity: this.lastActivity(id, p.updated_at),
+			tasks_done: done,
+			tasks_total: tasks.length,
+			milestones: ms.map((m) => ({
+				...m,
+				state: m.status === 'achieved' ? 'achieved' : m.id === current ? 'current' : 'upcoming',
+				tasks: tasks.filter((t) => t.milestone_id === m.id).map((t) => this.taskLine(t.id))
+			})),
+			other_tasks: tasks.filter((t) => !t.milestone_id).map((t) => this.taskLine(t.id)),
+			needs_you: this.questionsAbout(
+				[id, ...tasks.map((t) => t.id), ...ms.map((m) => m.id)],
+				person
+			),
+			sessions: this.sessions(id),
+			findings: this.findings([id, ...tasks.map((t) => t.id)]),
+			happened: this.entries(
+				`WHERE summary IS NOT NULL AND (subject_id = ? OR subject_id IN (SELECT id FROM task WHERE project_id = ?))`,
+				[id, id],
+				50
+			)
+		};
+	}
+
+	job(id: string, person: string = this.owner) {
+		const j = this.one<{
+			id: string;
+			title: string;
+			instructions: string;
+			status: string;
+			agent: string | null;
+			status_line: string | null;
+			created_at: string;
+			updated_at: string;
+		}>('SELECT * FROM job WHERE id = ?', id);
+		if (!j) return null;
+		const weekAgo = new Date(Date.parse(this.now()) - WEEK).toISOString();
+		const open = this.all<{ id: string }>(
+			`SELECT id FROM task WHERE job_id = ? AND status IN ${OPEN} ORDER BY updated_at DESC`,
+			id
+		);
+		const doneWeek = this.all<{ id: string }>(
+			"SELECT id FROM task WHERE job_id = ? AND status = 'completed' AND updated_at >= ? ORDER BY updated_at DESC",
+			id,
+			weekAgo
 		);
 		return {
-			...this.projectCard(p, person),
-			area: area,
-			about: this.about([id, ...taskIds, ...milestoneIds], person),
-			history: this.all(
-				`SELECT seq, at, actor, command, object_kind, object_id FROM event WHERE object_id IN (${[id, ...taskIds, ...milestoneIds].map(() => '?').join(',')}) ORDER BY seq DESC LIMIT 20`,
-				id,
-				...taskIds,
-				...milestoneIds
-			).map((e) => ({
-				...e,
-				title: this.title(e.object_kind, e.object_id)
-			}))
-		};
-	}
-
-	objective(id: string, person: string) {
-		const o = this.one('SELECT * FROM objective WHERE id = ?', id);
-		if (!o) return null;
-		const projects = this.all(
-			"SELECT p.* FROM link l JOIN project p ON p.id = l.source_id WHERE l.kind = 'serves' AND l.target_id = ?",
-			id
-		).map((p) => ({
-			...this.projectCard(p, person),
-			area_title: this.one('SELECT title FROM area WHERE id = ?', p.area_id)?.title
-		}));
-		const tasks = this.all(
-			"SELECT t.* FROM link l JOIN task t ON t.id = l.source_id WHERE l.kind = 'serves' AND l.target_id = ? AND t.project_id IS NULL",
-			id
-		).map((t) => this.taskCard(t));
-		const related = [
+			kind: 'job' as const,
 			id,
-			...projects.map((p) => p.id),
-			...projects.flatMap((p) => p.milestones.flatMap((m) => m.tasks.map((t) => t.id))),
-			...tasks.map((t) => t.id)
-		];
-		const about = this.about(related, person);
-		return {
-			id: o.id,
-			rank: o.rank,
-			title: o.title,
-			statement: o.statement,
-			status: o.status,
-			autonomy: o.autonomy,
-			limits: o.limits,
-			owner: o.owner,
-			session: o.session_key ? { key: o.session_key, from: 'own' } : null,
-			last_progress: this.reads.lastProgress(id),
-			created_at: o.created_at,
-			kpis: this.all('SELECT * FROM kpi WHERE objective_id = ? AND removed_at IS NULL', id).map(
-				(k) => ({
-					...k,
-					readings: this.all(
-						'SELECT value, at, source FROM kpi_reading WHERE kpi_id = ? ORDER BY at',
-						k.id
-					)
-				})
-			),
-			reviews: this.all('SELECT * FROM review WHERE objective_id = ? ORDER BY at DESC', id).map(
-				(r) => ({ ...r, sources: parse(r.sources) })
-			),
-			serving: { projects, tasks },
-			needs_you: about.filter(
-				(x: any) =>
-					(x.kind === 'decision' && x.status !== 'decided' && x.can_decide) ||
-					(x.kind === 'question' && x.status === 'open' && x.can_answer)
-			),
-			warnings: this.reads.warnings(new Date().toISOString()).filter((w) => w.object.id === id),
-			history: this.all(
-				'SELECT seq, at, actor, command FROM event WHERE object_id = ? ORDER BY seq DESC LIMIT 20',
+			title: j.title,
+			instructions: j.instructions,
+			status: j.status,
+			status_line: j.status_line,
+			agent: j.agent,
+			created_at: j.created_at,
+			last_activity: this.lastActivity(id, j.updated_at),
+			automations: this.all<{ automation_id: string; name: string | null }>(
+				'SELECT automation_id, name FROM job_automation WHERE job_id = ? ORDER BY name',
 				id
 			),
-			version: o.version
+			open_tasks: open.map((t) => this.taskLine(t.id)),
+			done_this_week: doneWeek.map((t) => this.taskLine(t.id)),
+			needs_you: this.questionsAbout([id, ...open.map((t) => t.id)], person),
+			sessions: this.sessions(id),
+			happened: this.entries(
+				`WHERE summary IS NOT NULL AND (subject_id = ? OR subject_id IN (SELECT id FROM task WHERE job_id = ?))`,
+				[id, id],
+				50
+			)
 		};
 	}
 
-	/**
-	 * The Activity tab: every Task's timeline, newest first (spec §10, Timeline). Each entry is one
-	 * turn: its outcomes, its summary, and the session it happened in.
-	 */
-	feed(f: { filter?: 'all' | 'unfiled'; agent?: string; limit?: number; before?: string }) {
-		const t = this.reads.timeline({
-			unfiled: f.filter === 'unfiled',
-			agent: f.agent,
-			limit: Math.min(f.limit ?? 100, 200),
-			before: f.before
-		});
-		// Long text is clipped (the full record stays on the object); the newest entries that fit are kept.
-		const kept: unknown[] = [];
-		let used = { values: 4, bytes: 64 };
-		for (const item of t.entries) {
-			const c = clip(item as unknown as Row);
-			const next = {
-				values: used.values + values(c),
-				bytes: used.bytes + Buffer.byteLength(JSON.stringify(c)) + 1
-			};
-			if (next.values > FEED_BUDGET.values || next.bytes > FEED_BUDGET.bytes) break;
-			kept.push(c);
-			used = next;
-		}
-		return {
-			unfiled_count: this.one('SELECT count(*) AS n FROM timeline_entry WHERE task_id IS NULL')!.n,
-			items: kept,
-			next_before: kept.length < t.entries.length ? null : t.next_before,
-			truncated: kept.length < t.entries.length
-		};
+	/** Find Jobs, Projects and Tasks by words in their title or status line. */
+	search(q: string, limit = 30): (Ref & { status_line: string | null; state: string })[] {
+		const like = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+		return [
+			...this.all<{ id: string; title: string; status_line: string | null; state: string }>(
+				"SELECT id, title, status_line, status AS state FROM job WHERE title LIKE ? ESCAPE '\\' OR status_line LIKE ? ESCAPE '\\'",
+				like,
+				like
+			).map((r) => ({ ...r, kind: 'job' as const })),
+			...this.all<{ id: string; title: string; status_line: string | null; state: string }>(
+				"SELECT id, title, status_line, CASE WHEN abandoned_at IS NULL THEN 'open' ELSE 'abandoned' END AS state FROM project WHERE title LIKE ? ESCAPE '\\' OR outcome LIKE ? ESCAPE '\\' OR status_line LIKE ? ESCAPE '\\'",
+				like,
+				like,
+				like
+			).map((r) => ({ ...r, kind: 'project' as const })),
+			...this.all<{ id: string; title: string; status_line: string | null; state: string }>(
+				"SELECT t.id, d.title, t.status_line, t.status AS state FROM task t JOIN task_definition d ON d.task_id = t.id AND d.rev = t.definition_rev WHERE d.title LIKE ? ESCAPE '\\' OR d.description LIKE ? ESCAPE '\\' OR t.status_line LIKE ? ESCAPE '\\'",
+				like,
+				like,
+				like
+			).map((r) => ({ ...r, kind: 'task' as const }))
+		].slice(0, limit);
 	}
 
-	/** Detail for the side panel: a Task, Question, Decision or Finding. */
-	/** Targets with the titles a person reads. */
-	private titled(targets: { kind: string; id: string }[] = []) {
-		return targets.map((t) => ({
-			...t,
-			title:
-				t.kind === 'task'
-					? this.reads.taskTitle(t.id)
-					: (this.one(`SELECT title FROM ${t.kind} WHERE id = ?`, t.id)?.title ?? t.id)
-		}));
-	}
-
-	panel(id: string, person: string) {
-		const d = this.reads.get(id);
-		if (!d) return null;
-		if (d.kind === 'task') {
-			const t = this.one('SELECT * FROM task WHERE id = ?', id)!;
-			const milestone = t.milestone_id
-				? this.one('SELECT id, title, position FROM milestone WHERE id = ?', t.milestone_id)
-				: null;
-			return {
-				...d,
-				card: this.taskCard(t),
-				milestone,
-				needed_by: (d.needed_by as string[]).map((x) => ({
-					id: x,
-					title: this.reads.taskTitle(x)
-				})),
-				depends_on: (d.depends_on as string[]).map((x) => ({
-					id: x,
-					title: this.reads.taskTitle(x)
-				})),
-				accepted_result: d.results.find((r: Row) => r.id === t.accepted_result_id) ?? null,
-				about: this.about([id], person)
-			};
+	/** Compact facts about one object for agents (falcon_work_read get). */
+	get(id: string) {
+		const kind = this.ref(id)?.kind;
+		if (kind === 'task') return this.task(id);
+		if (kind === 'project') return this.project(id);
+		if (kind === 'job') return this.job(id);
+		for (const t of ['question', 'decision', 'finding', 'milestone'] as const) {
+			const r = this.one<Record<string, unknown>>(`SELECT * FROM ${t} WHERE id = ?`, id);
+			if (r) return { kind: t, ...r };
 		}
-		if (d.kind === 'decision')
-			return {
-				...d,
-				card: this.decisionCard(this.one('SELECT * FROM decision WHERE id = ?', id)!, person),
-				for: this.titled(d.targets)
-			};
-		if (d.kind === 'question')
-			return {
-				...d,
-				card: this.questionCard(this.one('SELECT * FROM question WHERE id = ?', id)!, person),
-				for: this.titled(d.targets)
-			};
-		return d;
+		return null;
 	}
 }

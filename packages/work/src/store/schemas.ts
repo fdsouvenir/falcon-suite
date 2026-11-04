@@ -26,7 +26,7 @@ export const Sources = Type.Array(Source, { minItems: 1, maxItems: 50 });
 export const Target = Type.Object(
 	{
 		kind: Type.Union([
-			Type.Literal('objective'),
+			Type.Literal('job'),
 			Type.Literal('project'),
 			Type.Literal('milestone'),
 			Type.Literal('task')

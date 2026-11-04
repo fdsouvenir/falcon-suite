@@ -2,67 +2,39 @@ import {
 	defineFeaturePlugin,
 	type FeatureInvocationContext
 } from 'openclaw/plugin-sdk/feature-plugin';
-import { contract, KINDS } from './contract.js';
+import * as transcripts from 'openclaw/plugin-sdk/session-transcript-runtime';
+import { contract as base } from './contract.js';
 import { PLUGIN_ID } from './identity.js';
-import type { Work } from './store/work.js';
+import type { Work, TurnOutcome } from './store/work.js';
 import { currentWork, dataDir, startWork } from './plugin/runtime.js';
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Actor, Envelope } from './store/types.js';
-import type { Kind } from './store/engine.js';
-import { outcome, raisesAsk, recordsWork } from './plugin/outcomes.js';
-import { keepRecord } from './plugin/keeper.js';
-import type { TurnOutcome } from './store/work.js';
-import { asksThePerson } from './plugin/asks.js';
-import {
-	ANSWERS_THRESHOLD,
-	LEFT_WAITING,
-	LEFT_WAITING_THRESHOLD,
-	answersDecision,
-	answersQuestion,
-	ASKED_FOR_THRESHOLD,
-	askingPart,
-	MESSAGE_SHADOW,
-	RUBRIC_VERSION,
-	summarise,
-	turnBattery,
-	decide,
-	fromPerson
-} from './plugin/gates.js';
-import { GUIDANCE, renderBrief } from './plugin/brief.js';
+import { outcome } from './plugin/outcomes.js';
 import { currentHuman } from './plugin/identity.js';
+import { Clerk, type Msg } from './clerk/clerk.js';
 
-/** Per-run bookkeeping for the record keeper and the end-of-turn gates (spec §10). */
+/** How long a session stays quiet before the writer looks at it (spec §3.1). */
+const IDLE_MS = 10 * 60 * 1000;
+
 type RunState = {
-	/** What the turn left outside the chat, in order. */
 	outcomes: TurnOutcome[];
-	/** The agent recorded or corrected Work itself this turn. */
-	recorded: boolean;
-	asked: boolean;
-	done: boolean;
-	/** The person's message that started the turn, when a person started it. */
 	request: string | null;
-	/** What the turn was asked, whoever asked it (a subagent's task, a scheduled prompt). */
 	prompt: string | null;
+	done: boolean;
 };
 
-/** Provider small-model defaults OpenClaw uses when no utility model is set (concepts/models). */
-const SMALL_DEFAULTS: Record<string, string> = {
-	openai: 'openai/gpt-5.6-luna',
-	'openai-codex': 'openai/gpt-5.6-luna',
-	anthropic: 'anthropic/claude-haiku-4-5'
-};
-
-/** The Office's utility model for an agent: its own, the default, or its provider's small model. */
-function utilityModel(cfg: any, agentId: string): string | null {
-	const entry =
-		cfg?.agents?.entries?.[agentId] ?? cfg?.agents?.list?.find?.((a: any) => a?.id === agentId);
-	const set = entry?.utilityModel ?? cfg?.agents?.defaults?.utilityModel;
-	if (set === '') return null;
-	if (typeof set === 'string') return set;
-	const primary = entry?.model ?? cfg?.agents?.defaults?.model;
-	const ref = typeof primary === 'string' ? primary : primary?.primary;
-	return typeof ref === 'string' ? (SMALL_DEFAULTS[ref.split('/')[0]] ?? null) : null;
+/** Did a person start this turn? Heartbeats, jobs and other sessions are not the person. */
+function fromPerson(
+	ctx: { trigger?: string; inputProvenance?: { kind?: string } },
+	message: string | undefined
+): boolean {
+	if (ctx.trigger && ctx.trigger !== 'user') return false;
+	if (ctx.inputProvenance?.kind && ctx.inputProvenance.kind !== 'external_user') return false;
+	if (!message?.trim()) return false;
+	return !/^\s*\[(OpenClaw heartbeat|Subagent Context|Inter-session message|cron:|OpenClaw cron)/i.test(
+		message
+	);
 }
 
 /** Who is calling: the agent behind a tool call, or the signed-in person behind the Control UI. */
@@ -74,10 +46,6 @@ function actorFor(context: FeatureInvocationContext): Actor {
 	}
 	const human = currentHuman();
 	if (human) return human;
-	// The Gateway only admits operator connections with the operation's scope to a plugin session
-	// action, so a caller that reached here is a signed-in operator even when the request scope does
-	// not expose the connection (as with paired browsers on OpenClaw 2026.9.6). Work is shared per
-	// Gateway, so that operator is the Gateway owner.
 	if (context.source === 'session-action') {
 		const scopes = context.action.client?.scopes ?? [];
 		if (scopes.some((s) => s.startsWith('operator.')))
@@ -117,8 +85,7 @@ function waitingOn(w: Work, ref: unknown) {
 	const r = typeof ref === 'string' ? ref : '';
 	if (r.startsWith('person:')) return { kind: 'person', ref: r };
 	if (r.startsWith('agent:')) return { kind: 'agent', ref: r };
-	if (r && (w.reads.get(r) as { kind?: string } | null)?.kind === 'task')
-		return { kind: 'work', ref: r };
+	if (r && w.kindOf(r) === 'task') return { kind: 'work', ref: r };
 	return { kind: 'external', ref: r || 'unspecified' };
 }
 
@@ -129,24 +96,33 @@ function targetsFor(
 ): { list: { kind: string; id: string }[] } | { error: string } {
 	const list: { kind: string; id: string }[] = [];
 	for (const id of (ids as string[] | undefined) ?? []) {
-		const kind = (w.reads.get(id) as { kind?: string } | null)?.kind;
-		if (!kind || !['objective', 'project', 'milestone', 'task'].includes(kind))
-			return { error: `about: ${id} is not a Task, Project, Milestone or Objective` };
+		const kind =
+			w.kindOf(id) ??
+			(w.db.prepare('SELECT 1 FROM milestone WHERE id = ?').get(id) ? 'milestone' : null);
+		if (!kind) return { error: `about: ${id} is not a Job, Project, Milestone or Task` };
 		list.push({ kind, id });
 	}
 	return { list };
 }
 
+const textOf = (content: unknown): string =>
+	typeof content === 'string'
+		? content
+		: Array.isArray(content)
+			? content
+					.filter((p) => p?.type === 'text' && typeof p.text === 'string')
+					.map((p) => p.text)
+					.join('\n')
+			: '';
+
 const feature = defineFeaturePlugin({
-	contract,
+	contract: base,
 	name: 'Falcon Work',
-	description: 'A record of what your agents do, why, and what needs you.',
+	description: 'A record of what your agents do for you, kept from your conversations.',
 	setup(api, events) {
 		const runs = new Map<string, RunState>();
-		const lastBrief = new Map<string, string>();
-
-		const ready = (): Work => currentWork();
-		/** Hooks never throw: if the store cannot open, the turn goes on without Work. */
+		const runtime = api.runtime as any;
+		const log = (line: string) => api.logger?.info?.(`Falcon Work ${line}`);
 		const maybe = (): Work | null => {
 			try {
 				return currentWork();
@@ -155,94 +131,26 @@ const feature = defineFeaturePlugin({
 				return null;
 			}
 		};
-		const runState = (id: string | undefined): RunState | null => {
-			if (!id) return null;
-			let state = runs.get(id);
-			if (!state) {
-				state = {
-					outcomes: [],
-					recorded: false,
-					asked: false,
-					done: false,
-					request: null,
-					prompt: null
-				};
-				runs.set(id, state);
-				if (runs.size > 500) runs.delete(runs.keys().next().value as string);
-			}
-			return state;
-		};
-
-		api.registerService({
-			id: PLUGIN_ID,
-			async start(ctx) {
-				// Feature plugins take no config in this SDK, so the location and owner are fixed.
-				startWork(ctx.stateDir);
-			}
-			// No stop: the store is shared with the registration that replaces this one.
-		});
-
-		// The guidance (static, so it caches) and the agent's brief, every turn (spec §10).
-		/** The agent's last reply per session: what the person's next message answers. */
-		const lastReply = new Map<string, string>();
-		/** One-off lines for the agent's next brief in a session (captured asks, reminders). */
-		const notes = new Map<string, string[]>();
-		const note = (session: string, line: string) =>
-			notes.set(session, [...(notes.get(session) ?? []), line].slice(-5));
-		const decisions = () =>
-			(api as unknown as { runtime?: { decisions?: Parameters<typeof decide>[0] } }).runtime
-				?.decisions;
-		const log = (line: string) => api.logger?.info?.(`Falcon Work ${line}`);
-		const changed = (w: Work) => {
+		const changed = () => {
 			try {
-				events.emit('changed', { at: w.now() });
+				events.emit('changed', { at: new Date().toISOString() });
 			} catch {
 				/* best effort */
 			}
 		};
+		const runState = (id: string | undefined): RunState | null => {
+			if (!id) return null;
+			let s = runs.get(id);
+			if (!s) {
+				s = { outcomes: [], request: null, prompt: null, done: false };
+				runs.set(id, s);
+				if (runs.size > 500) runs.delete(runs.keys().next().value as string);
+			}
+			return s;
+		};
 
-		// The guidance (static, so it caches) and the agent's brief, every turn (spec §10).
-		api.on('before_prompt_build', (event, ctx) => {
-			const work = ctx.agentId ? maybe() : null;
-			if (!work || !ctx.agentId) return { prependSystemContext: GUIDANCE };
-			const agent = `agent:${ctx.agentId}`;
-			const key = ctx.sessionKey ?? agent;
-			const now = work.now();
-			const message =
-				(event as { currentUserMessage?: string }).currentUserMessage ?? event.prompt ?? '';
-			const person = fromPerson(ctx as never, message);
-			if (!person)
-				log(
-					`gates skipped: not a person turn (trigger ${ctx.trigger ?? '-'}, provenance ${(ctx as { inputProvenance?: { kind?: string } }).inputProvenance?.kind ?? '-'})`
-				);
-			const state = runState(ctx.runId);
-			if (state && person) state.request = message;
-			if (state && !state.prompt && message.trim()) state.prompt = message;
-			if (person) void matchAnswers(work, key, message, ctx.runId ?? now);
-			const extra = notes.get(key) ?? [];
-			notes.delete(key);
-			const current = work.sessionTask(ctx.sessionKey);
-			const brief = renderBrief(
-				work.reads,
-				agent,
-				lastBrief.get(key) ?? null,
-				now,
-				current ? { id: current, title: work.reads.taskTitle(current) } : null
-			);
-			lastBrief.set(key, now);
-			return {
-				prependSystemContext: GUIDANCE,
-				prependContext: extra.length ? `${brief}\n${extra.join('\n')}` : brief
-			};
-		});
-
-		/** Gate answers_open_item: record the person's chat reply against what is open for them. */
-		/**
-		 * Every decision-model answer is logged with what it acted on, so shadow questions can be
-		 * reviewed and labelled before they are allowed to act. One JSON line per event, in Work's
-		 * own data folder; rotated at 5 MB.
-		 */
-		function logDecisions(entry: Record<string, unknown>) {
+		/** Every judgment and writer pass, logged for review and labelling; rotated at 5 MB. */
+		function logDecision(entry: Record<string, unknown>) {
 			try {
 				const dir = dataDir();
 				mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -255,248 +163,167 @@ const feature = defineFeaturePlugin({
 			}
 		}
 
-		/** The person's message: answers to what is open for them, and (shadow) what kind it is. */
-		async function matchAnswers(w: Work, session: string, message: string, runId: string) {
-			const open = w.views.overview(w.owner, w.now()).needs_you;
-			const items = [
-				...open.questions.map((q) => ({
-					id: q.id,
-					kind: 'question' as const,
-					prompt: q.prompt,
-					version: q.version
-				})),
-				...open.decisions.map((d) => ({
-					id: d.id,
-					kind: 'decision' as const,
-					prompt: d.prompt,
-					version: d.version,
-					options: Object.fromEntries(
-						(d.options as { id: string; label: string }[]).map((o) => [o.id, o.label])
-					),
-					recommendation: (d.recommendation as { option?: string } | null)?.option ?? null
-				}))
-			].slice(0, 20);
-			const open_items: Record<string, unknown> = {};
-			const questions: Record<string, unknown> = { ...MESSAGE_SHADOW };
-			items.forEach((it, n) => {
-				if (it.kind === 'question') {
-					open_items[it.id] = { n: n + 1, prompt: it.prompt };
-					questions[it.id] = answersQuestion(it.id);
-				} else {
-					open_items[it.id] = {
-						n: n + 1,
-						prompt: it.prompt,
-						options: it.options,
-						recommendation: it.recommendation
-					};
-					questions[it.id] = answersDecision(it.id, it.options);
-				}
-			});
-			const answers = await decide(
-				decisions(),
-				{
-					state: {
-						previous_reply: (lastReply.get(session) ?? '').slice(-2000),
-						message,
-						open_items
-					},
-					questions
-				},
-				'message',
-				undefined,
-				log
-			);
-			if (!answers) return;
-			const human = { kind: 'human' as const, id: w.owner };
-			const acted: string[] = [];
-			for (const it of items) {
-				const a = answers[it.id];
-				if (
-					it.kind === 'question' &&
-					a?.type === 'boolean' &&
-					a.probabilityTrue >= ANSWERS_THRESHOLD
-				) {
-					const r = w.do(
-						{
-							command: 'answer',
-							id: it.id,
-							idempotency_key: `gate-answer:${runId}:${it.id}`,
-							input: {
-								answer: message.slice(0, 12000),
-								confidence: 'confirmed',
-								sources: [{ kind: 'session', ref: session, label: 'Answered in chat' }]
-							}
-						},
-						human
-					);
-					if (r.outcome !== 'rejected') acted.push(`answered ${it.id}`);
-				}
-				if (
-					it.kind === 'decision' &&
-					a?.type === 'choice' &&
-					a.choice !== 'not_decided' &&
-					(a.probabilities?.[a.choice] ?? 0) >= ANSWERS_THRESHOLD
-				) {
-					const r = w.do(
-						{
-							command: 'decide',
-							id: it.id,
-							idempotency_key: `gate-decide:${runId}:${it.id}`,
-							input: { option: a.choice, rationale: `Decided in chat: ${message.slice(0, 1900)}` }
-						},
-						human
-					);
-					if (r.outcome !== 'rejected') acted.push(`decided ${it.id} ${a.choice}`);
-				}
-			}
-			logDecisions({
-				at: w.now(),
-				event: 'message',
-				rubric: RUBRIC_VERSION,
-				session,
-				run: runId,
-				message: message.slice(0, 600),
-				answers: summarise(answers, []),
-				acted
-			});
-			if (acted.length) changed(w);
-		}
+		const agents = (): string[] => {
+			const cfg = (api as { config?: any }).config;
+			const ids = new Set<string>();
+			for (const a of cfg?.agents?.list ?? []) if (a?.id) ids.add(a.id);
+			for (const id of Object.keys(cfg?.agents?.entries ?? {})) ids.add(id);
+			if (!ids.size) ids.add('main');
+			return [...ids];
+		};
 
-		/**
-		 * The end of a turn the person started: one batch for everything Work wants to know about it.
-		 * Measured questions act (left_waiting, and the pieces that are the ask); shadow ones are logged.
-		 */
-		async function captureTurn(
-			w: Work,
-			agentId: string,
-			session: string,
-			request: string,
-			reply: string,
-			runId: string,
-			askedInWork: boolean
-		) {
-			const agent = `agent:${agentId}`;
-			const inProgress = w.reads.brief(agent, null, w.now()).in_progress;
-			const task = inProgress[0] ?? null;
-			const doneWhen = task
-				? ((w.reads.get(task.id) as { definition?: { done_when?: string } } | null)?.definition
-						?.done_when ?? '')
-				: '';
-			const openQuestions = w.views
-				.overview(w.owner, w.now())
-				.needs_you.questions.map((q) => ({ id: q.id, prompt: q.prompt }));
-			const { pieces, pieceIds, openIds, batch } = turnBattery({
-				request,
-				reply,
-				task: task ? { title: task.title, done_when: doneWhen } : null,
-				tasks: inProgress.map((t) => ({ id: t.id, title: t.title })),
-				open: openQuestions
-			});
-			const answers = await decide(decisions(), batch, 'turn', agentId, log);
-			if (!answers) {
-				// No decision model: the plain text check, as a reminder only.
-				if (!askedInWork && asksThePerson(reply))
-					note(
-						session,
-						'Your last reply asked the person for something that is not in Falcon Work. If the work depends on it, record it with falcon_work_ask so it stays under Needs you.'
-					);
-				return;
-			}
-			const acted: string[] = [];
-			const a = answers.left_waiting;
-			const outcome = a?.type === 'choice' ? String(a.choice) : 'nothing';
-			const waiting =
-				!askedInWork &&
-				outcome.startsWith('needs_') &&
-				(a.probabilities?.[outcome] ?? 0) >= LEFT_WAITING_THRESHOLD;
-			let prompt = '';
-			if (waiting) {
-				const picked = pieces.filter((_, n) => {
-					const p = answers[pieceIds[n]];
-					return p?.type === 'boolean' && p.probabilityTrue >= ASKED_FOR_THRESHOLD;
-				});
-				prompt = picked.length ? picked.map((p) => p.text).join('\n') : askingPart(reply);
-				if (prompt.length > 1900) prompt = prompt.slice(0, 1899) + '…';
-				const kind =
-					outcome === 'needs_decision'
-						? 'a decision'
-						: outcome === 'needs_action'
-							? 'an action'
-							: 'an answer';
-				const r = w.do(
-					{
-						command: 'raise_question',
-						idempotency_key: `gate-capture:${runId}`,
-						input: {
-							prompt,
-							impact: `Asked in chat; captured by Falcon Work because the reply needs ${kind} from you.`,
-							answerable_by: [w.owner],
-							...(task ? { targets: [{ kind: 'task', id: task.id }] } : {})
-						}
-					},
-					{ kind: 'agent', id: agent }
-				);
-				if (r.outcome !== 'rejected') {
-					acted.push(`captured ${(r as { id?: string }).id}`);
-					if (outcome === 'needs_action' && task) {
-						w.do(
-							{
-								command: 'wait',
-								id: task.id,
-								idempotency_key: `gate-wait:${runId}`,
-								input: {
-									waiting_for: prompt.slice(0, 2000),
-									waiting_on: { kind: 'person', ref: w.owner },
-									resume_when: 'The person has done it and said so'
-								}
-							},
-							{ kind: 'agent', id: agent }
-						);
-						acted.push(`waiting ${task.id}`);
+		let clerk: Clerk | null = null;
+		const getClerk = (): Clerk | null => {
+			const work = maybe();
+			if (!work) return null;
+			if (clerk && (clerk as any).d.work === work) return clerk;
+			clerk = new Clerk({
+				work,
+				decisions: () => runtime?.decisions,
+				complete: runtime?.subagent?.complete
+					? async (agentId, system, message) =>
+							(
+								await runtime.subagent.complete({
+									agentId,
+									message,
+									extraSystemPrompt: system,
+									timeoutMs: 120_000
+								})
+							).text
+					: undefined,
+				sessions: (agentId) => {
+					const out: { sessionKey: string; sessionId?: string; updatedAt: number }[] = [];
+					try {
+						for (const { sessionKey, entry } of runtime.agent.session.listSessionEntries({
+							agentId
+						}))
+							out.push({
+								sessionKey,
+								sessionId: entry?.sessionId,
+								updatedAt: entry?.updatedAt ?? 0
+							});
+					} catch (error) {
+						log(`could not list sessions for ${agentId}: ${(error as Error).message}`);
 					}
-					note(
-						session,
-						`Falcon Work captured what your last reply asked of the person as a Question (${(r as { id?: string }).id}). Refine it, split it into separate Questions with falcon_work_ask, or withdraw it if the work does not depend on it.`
-					);
-				}
-			}
-			log(
-				`decisions at end of turn: left_waiting ${outcome} ${(a?.probabilities?.[outcome] ?? 0).toFixed(2)}${acted.length ? ` → ${acted.join(', ')}` : ''}`
-			);
-			logDecisions({
-				at: w.now(),
-				event: 'turn',
-				rubric: RUBRIC_VERSION,
-				session,
-				run: runId,
-				request: request.slice(0, 300),
-				reply_end: reply.slice(-1000),
-				asked_in_work: askedInWork,
-				answers: summarise(answers, pieceIds),
-				already_open_id:
-					answers.already_open?.choice && answers.already_open.choice !== 'none'
-						? (openIds.find(([k]) => k === answers.already_open.choice)?.[1] ?? null)
-						: null,
-				pieces_picked: pieceIds.filter(
-					(id) => (answers[id]?.probabilityTrue ?? 0) >= ASKED_FOR_THRESHOLD
-				),
-				acted
+					return out.sort((a, b) => b.updatedAt - a.updatedAt);
+				},
+				read: async (agentId, sessionKey, sessionId) => {
+					let id = sessionId;
+					if (!id)
+						try {
+							id = (await runtime.agent.session.getSessionEntryAsync({ agentId, sessionKey }))
+								?.sessionId;
+						} catch {
+							/* fall through */
+						}
+					const out: any = await transcripts.readVisibleSessionTranscriptMessageEntries({
+						agentId,
+						sessionKey,
+						sessionId: id
+					});
+					const list: any[] = Array.isArray(out) ? out : (out?.entries ?? []);
+					return list
+						.map((e): Msg | null => {
+							const role = e?.message?.role ?? e?.role;
+							if (role !== 'user' && role !== 'assistant') return null;
+							return {
+								seq: Number(e.seq ?? 0),
+								role,
+								text: textOf(e?.message?.content ?? e?.content),
+								at: String(e.createdAt ?? e.message?.timestamp ?? '')
+							};
+						})
+						.filter((m): m is Msg => !!m);
+				},
+				agents,
+				log,
+				logDecision,
+				changed
 			});
-			if (acted.length) changed(w);
-		}
+			return clerk;
+		};
 
-		// What the turn left outside the chat (spec §10, The record keeper). Tool calls themselves
-		// are not kept: the session transcript has them.
+		// The service owns the clerk's background work (spec §3.1, §8).
+		let schedule: ((id: string, delayMs: number, run: () => Promise<unknown>) => void) | null =
+			null;
+		const timers = new Map<string, ReturnType<typeof setTimeout>>();
+		const later = (id: string, delayMs: number, run: () => Promise<unknown>) => {
+			if (schedule) return schedule(id, delayMs, run);
+			clearTimeout(timers.get(id));
+			const timer = setTimeout(() => {
+				timers.delete(id);
+				run().catch((e) => log(`${id} failed: ${(e as Error).message}`));
+			}, delayMs);
+			// Background bookkeeping never keeps the Gateway process alive on its own.
+			timer.unref?.();
+			timers.set(id, timer);
+		};
+
+		api.registerService({
+			id: PLUGIN_ID,
+			apiVersion: 2,
+			start(ctx: any) {
+				const work = startWork(ctx.stateDir);
+				if (ctx.scheduler?.schedule)
+					schedule = (id, delayMs, run) =>
+						void ctx.scheduler.schedule({
+							id,
+							delayMs,
+							run: () => run().catch((e: Error) => log(`${id} failed: ${e.message}`))
+						});
+				// First start of 2.0: catch up on the last 14 days, whether or not anyone opens the page.
+				const catchup = work.meta('catchup');
+				if (!catchup || !JSON.parse(catchup).done)
+					later('catch-up', 20_000, async () => {
+						log('catch-up started');
+						await getClerk()?.catchUp(14, 30, ctx.scheduler?.signal);
+						log('catch-up finished');
+					});
+				// Hourly: the nightly sweep runs once a day, at night.
+				later('nightly-check', 60 * 60 * 1000, async function check() {
+					const w = maybe();
+					const hour = new Date().getHours();
+					const last = w?.meta('nightly_at');
+					if (
+						w &&
+						hour >= 2 &&
+						hour < 5 &&
+						(!last || Date.now() - Date.parse(last) > 20 * 3600 * 1000)
+					) {
+						w.setMeta('nightly_at', w.now());
+						await getClerk()?.nightly(ctx.scheduler?.signal);
+					}
+					later('nightly-check', 60 * 60 * 1000, check);
+				});
+			},
+			stop() {
+				for (const t of timers.values()) clearTimeout(t);
+				timers.clear();
+			}
+		} as any);
+
+		// Observe the person's message: the request a turn answers, and answers to Needs you.
+		api.on('before_prompt_build', (event, ctx) => {
+			const message =
+				(event as { currentUserMessage?: string }).currentUserMessage ?? event.prompt ?? '';
+			const state = runState(ctx.runId);
+			if (state && !state.prompt && message.trim()) state.prompt = message;
+			if (!fromPerson(ctx as never, message)) return;
+			if (state) state.request = message;
+			if (ctx.agentId && ctx.sessionKey) {
+				const agentId = ctx.agentId;
+				const session = ctx.sessionKey;
+				later(`answers:${ctx.runId ?? session}`, 0, async () =>
+					getClerk()?.checkAnswers(agentId, session, message, ctx.runId ?? session)
+				);
+			}
+		});
+
+		// What the turn left outside the chat (spec §3.2). Raw tool calls are not kept.
 		api.on('after_tool_call', (event, ctx) => {
 			if (!ctx.agentId) return;
 			const state = runState(event.runId ?? ctx.runId);
 			if (!state) return;
-			const params = (event.params ?? {}) as Record<string, unknown>;
-			if (!event.error && raisesAsk(event.toolName, params)) state.asked = true;
-			if (!event.error && recordsWork(event.toolName)) {
-				state.recorded = true;
-				return;
-			}
 			const e = event as typeof event & {
 				toolKind?: string;
 				toolInputKind?: string;
@@ -507,7 +334,7 @@ const feature = defineFeaturePlugin({
 				e.toolKind ??
 				c.toolKind ??
 				(e.toolInputKind || c.toolInputKind ? 'code_mode_exec' : undefined);
-			const o = outcome(event.toolName, params, {
+			const o = outcome(event.toolName, (event.params ?? {}) as Record<string, unknown>, {
 				error: event.error,
 				toolKind: kind,
 				result: e.result
@@ -515,170 +342,89 @@ const feature = defineFeaturePlugin({
 			if (o) state.outcomes.push(o);
 		});
 
-		// A subagent works under the Task of the session that spawned it.
-		api.on('subagent_spawned', (_event, ctx) => {
-			const c = ctx as { childSessionKey?: string; requesterSessionKey?: string };
-			if (!c.childSessionKey || !c.requesterSessionKey) return;
-			maybe()?.setParent(c.childSessionKey, c.requesterSessionKey);
+		// End of a turn: hand it to the clerk on the service's scheduler (no model calls in the hook),
+		// and arm the session's idle timer for the writer.
+		api.on('agent_end', (event, ctx) => {
+			const runId = event.runId ?? ctx?.runId;
+			const state = runState(runId);
+			if (!state || state.done || !ctx?.agentId || !ctx.sessionKey) return;
+			state.done = true;
+			const messages = (event.messages ?? []) as { role?: string; content?: unknown }[];
+			const reply =
+				[...messages]
+					.reverse()
+					.map((m) => (m.role === 'assistant' ? textOf(m.content) : ''))
+					.find((t) => t.trim()) ?? '';
+			const agentId = ctx.agentId;
+			const session = ctx.sessionKey;
+			const turn = {
+				agentId,
+				session,
+				run: runId ?? `${session}:${Date.now()}`,
+				request: state.request ?? state.prompt,
+				reply,
+				outcomes: state.outcomes
+			};
+			if (!event.success || !reply) return;
+			later(`turn:${turn.run}`, 0, async () => getClerk()?.judgeTurn(turn));
+			later(`idle:${session}`, IDLE_MS, async () => getClerk()?.writerPass(agentId, session));
 		});
 
-		type Llm = { complete?: (p: unknown) => Promise<{ text: string }> };
-		/** The utility model writes the record's words; never the agent's main model. */
-		const writer = (agentId: string) => {
-			const model = utilityModel((api as { config?: unknown }).config, agentId);
-			const llm = (api as unknown as { runtime?: { llm?: Llm } }).runtime?.llm;
-			if (!model || !llm?.complete) return undefined;
-			return async (prompt: string) =>
-				(
-					await llm.complete!({
-						messages: [{ role: 'user', content: prompt }],
-						model,
-						maxTokens: 600,
-						temperature: 0.2,
-						purpose: 'falcon-work.record'
-					})
-				).text;
-		};
-
-		// After the turn, inside the hook's own awaited scope (model calls need one): the record
-		// keeper files what the turn changed (spec §10, The record keeper).
-		api.on('agent_end', async (event, ctx) => {
-			const state = runState(event.runId ?? ctx?.runId);
-			const work = ctx?.agentId ? maybe() : null;
-			if (!work || !ctx?.agentId || !state || state.done) return;
-			state.done = true;
-			const agentId = ctx.agentId;
-			// Only observe completed transcript text. Work has no finalize hook and cannot request
-			// a revision, continue the agent or replace its delivered answer.
-			const messages = event.messages as { role?: string; content?: unknown }[];
-			const reply =
-				[...messages].reverse().flatMap((message) => {
-					if (message.role !== 'assistant') return [];
-					const content = message.content;
-					const text =
-						typeof content === 'string'
-							? content
-							: Array.isArray(content)
-								? content
-										.filter((part) => part?.type === 'text' && typeof part.text === 'string')
-										.map((part) => part.text)
-										.join('\n')
-								: '';
-					return text ? [text] : [];
-				})[0] ?? '';
-			if (ctx.sessionKey && reply) lastReply.set(ctx.sessionKey, reply);
-			try {
-				if (event.success && state.request && reply)
-					await captureTurn(
-						work,
-						agentId,
-						ctx.sessionKey ?? '',
-						state.request,
-						reply,
-						event.runId ?? ctx.runId ?? work.now(),
-						state.asked
-					);
-
-				const r = await keepRecord(
-					work,
-					{
-						agentId,
-						session: ctx.sessionKey ?? null,
-						run: event.runId ?? ctx.runId ?? work.now(),
-						request: state.request ?? state.prompt,
-						reply,
-						outcomes: state.outcomes,
-						person: !!state.request,
-						agentRecorded: state.recorded
-					},
-					{ decisions: decisions(), write: writer(agentId), log, logDecisions }
-				);
-				if (r.acted.length) changed(work);
-			} catch (error) {
-				log(`record keeper failed: ${(error as Error).message}`);
+		// A subagent's session is its own; nothing to link (the clerk reads every session).
+		api.on('before_compaction', (_event, ctx) => {
+			const c = ctx as { agentId?: string; sessionKey?: string };
+			if (c.agentId && c.sessionKey) {
+				const agentId = c.agentId;
+				const session = c.sessionKey;
+				later(`compact:${session}`, 0, async () => getClerk()?.writerPass(agentId, session));
+			}
+		});
+		api.on('session_end', (_event, ctx) => {
+			const c = ctx as { agentId?: string; sessionKey?: string };
+			if (c.agentId && c.sessionKey) {
+				const agentId = c.agentId;
+				const session = c.sessionKey;
+				later(`end:${session}`, 0, async () => getClerk()?.writerPass(agentId, session));
 			}
 		});
 
-		/** Run one command; tell open pages a change happened (best effort: it is already committed). */
 		const commit = (w: Work, envelope: Envelope, actor: Actor) => {
 			const outcome = w.do(envelope, actor);
-			if (outcome.outcome !== 'rejected' && outcome.outcome !== 'noop')
-				try {
-					events.emit('changed', { at: w.now() });
-				} catch (error) {
-					api.logger?.warn?.(`Falcon Work change notice failed: ${(error as Error).message}`);
-				}
+			if (outcome.outcome !== 'rejected' && outcome.outcome !== 'noop') changed();
 			return outcome;
 		};
+		const ready = (): Work => currentWork();
 
 		return {
 			read(input, context) {
+				actorFor(context); // a signed-in person or a calling agent
 				const w = ready();
-				const f = input.filters ?? {};
-				switch (input.view) {
-					case 'overview':
-						return w.views.overview(actorFor(context).id, w.now());
-					case 'areas':
-						return w.views.areas(actorFor(context).id, f.area, w.now());
+				const i = input as any;
+				switch (i.view) {
+					case 'home':
+						return w.views.home(w.owner, i.since ?? null);
 					case 'project':
-						return input.id
-							? (w.views.project(input.id, actorFor(context).id) ?? { error: 'not_found' })
+					case 'task':
+					case 'job':
+						return i.id
+							? ((w.views as any)[i.view](i.id) ?? { error: 'not_found' })
 							: { error: 'id_required' };
-					case 'objective':
-						return input.id
-							? (w.views.objective(input.id, actorFor(context).id) ?? { error: 'not_found' })
-							: { error: 'id_required' };
-					case 'panel':
-						return input.id
-							? (w.views.panel(input.id, actorFor(context).id) ?? { error: 'not_found' })
-							: { error: 'id_required' };
-					case 'feed':
-						return w.views.feed({
-							filter: f.feed,
-							agent: f.agent,
-							limit: f.limit,
-							before: f.before
-						});
-					case 'brief': {
-						const actor = actorFor(context);
-						return actor.kind === 'agent'
-							? w.reads.brief(actor.id, null, w.now())
-							: w.reads.needsYou(actor.id, w.now());
-					}
-					case 'needs_you':
-						return w.reads.needsYou(actorFor(context).id, w.now());
-					case 'objectives':
-						// The tab's shape: what serves each Objective comes with its Task counts.
-						return w.views.objectivesTab(!!f.include_inactive);
+					case 'search':
+						return { results: i.text ? w.views.search(i.text) : [] };
 					case 'get':
-						return input.id
-							? (w.reads.get(input.id) ?? { error: 'not_found' })
-							: { error: 'id_required' };
-					case 'list':
-						return input.kind && (KINDS as readonly string[]).includes(input.kind)
-							? w.reads.list(input.kind as Kind, f)
-							: { error: 'kind_required' };
-					case 'timeline':
-						return w.reads.timeline({
-							task: f.task,
-							session: f.session,
-							unfiled: f.unfiled,
-							agent: f.agent,
-							limit: f.limit,
-							before: f.before
-						});
-					case 'warnings':
-						return w.reads.warnings(w.now());
+						return i.id ? (w.views.get(i.id) ?? { error: 'not_found' }) : { error: 'id_required' };
+					case 'needs_you':
+						return w.views.needsYou();
 					case 'help':
-						return input.command
-							? (w.help(input.command) ?? { error: 'unknown_command' })
+						return i.command
+							? (w.help(i.command) ?? { error: 'unknown_command' })
 							: { commands: w.catalog() };
 				}
 				return { error: 'unknown_view' };
 			},
 			do(input, context) {
 				const w = ready();
-				return commit(w, envelopeFor(input, context), actorFor(context));
+				return commit(w, envelopeFor(input as any, context), actorFor(context));
 			},
 			plan(input, context) {
 				const w = ready();
@@ -686,7 +432,8 @@ const feature = defineFeaturePlugin({
 				if (!!i.project === !!i.new_project)
 					return invalid('Give project (an existing Project id) or new_project, not both');
 				const plan = { milestones: i.milestones, tasks: i.tasks };
-				return commit(
+				const actor = actorFor(context);
+				const r = commit(
 					w,
 					envelopeFor(
 						i.project
@@ -694,13 +441,23 @@ const feature = defineFeaturePlugin({
 							: { command: 'create_project', input: { ...i.new_project, ...plan } },
 						context
 					),
-					actorFor(context)
+					actor
 				);
+				if (
+					r.outcome !== 'rejected' &&
+					'id' in r &&
+					r.id &&
+					context.source === 'tool' &&
+					context.tool.sessionKey
+				)
+					w.linkSession(r.id, 'project', context.tool.sessionKey);
+				return r;
 			},
 			task(input, context) {
 				const w = ready();
 				const actor = actorFor(context);
 				const i = input as any;
+				const session = context.source === 'tool' ? context.tool.sessionKey : undefined;
 				const on = (command: string, body: Record<string, unknown>) =>
 					commit(w, envelopeFor({ command, id: i.id, input: body }, context), actor);
 				switch (i.action) {
@@ -710,11 +467,9 @@ const feature = defineFeaturePlugin({
 							'title',
 							'description',
 							'done_when',
-							'area',
 							'project',
 							'milestone',
-							'serves',
-							'decision',
+							'job',
 							'depends_on',
 							'plan'
 						])
@@ -724,9 +479,9 @@ const feature = defineFeaturePlugin({
 							envelopeFor({ command: 'create_task', input: fields }, context),
 							actor
 						);
-						if (!i.start || !('id' in created) || !created.id) return created;
-						if (context.source === 'tool' && context.tool.sessionKey)
-							w.setSessionTask(context.tool.sessionKey, created.id);
+						if (!('id' in created) || !created.id) return created;
+						if (session) w.linkSession(created.id, 'task', session);
+						if (!i.start) return created;
 						const started = commit(
 							w,
 							envelopeFor(
@@ -740,8 +495,7 @@ const feature = defineFeaturePlugin({
 					}
 					case 'start': {
 						const r = on('start', { claim: true });
-						if (r.outcome !== 'rejected' && context.source === 'tool' && context.tool.sessionKey)
-							w.setSessionTask(context.tool.sessionKey, i.id);
+						if (r.outcome !== 'rejected' && session && i.id) w.linkSession(i.id, 'task', session);
 						return r;
 					}
 					case 'wait':
@@ -764,6 +518,52 @@ const feature = defineFeaturePlugin({
 				}
 				return invalid('Unknown action');
 			},
+			job(input, context) {
+				const w = ready();
+				const actor = actorFor(context);
+				const i = input as any;
+				const session = context.source === 'tool' ? context.tool.sessionKey : undefined;
+				const on = (command: string, body: Record<string, unknown>) =>
+					commit(w, envelopeFor({ command, id: i.id, input: body }, context), actor);
+				switch (i.action) {
+					case 'create': {
+						const r = commit(
+							w,
+							envelopeFor(
+								{
+									command: 'create_job',
+									input: {
+										title: i.title,
+										instructions: i.instructions,
+										...(i.automations ? { automations: i.automations } : {})
+									}
+								},
+								context
+							),
+							actor
+						);
+						if ('id' in r && r.id && session) w.linkSession(r.id, 'job', session);
+						return r;
+					}
+					case 'edit':
+						return on('edit_job', {
+							...(i.title ? { title: i.title } : {}),
+							...(i.instructions ? { instructions: i.instructions } : {}),
+							...(i.reason ? { reason: i.reason } : {})
+						});
+					case 'pause':
+					case 'resume':
+					case 'retire':
+						return on(`${i.action}_job`, i.reason ? { reason: i.reason } : {});
+					case 'link_automation':
+						if (!i.automation) return invalid('link_automation: give automation {id, name?}');
+						return on('link_automation', i.automation);
+					case 'unlink_automation':
+						if (!i.automation) return invalid('unlink_automation: give automation {id}');
+						return on('unlink_automation', { id: i.automation.id });
+				}
+				return invalid('Unknown action');
+			},
 			ask(input, context) {
 				const w = ready();
 				const actor = actorFor(context);
@@ -772,10 +572,10 @@ const feature = defineFeaturePlugin({
 				const targets = targetsFor(w, [...new Set([...(i.about ?? []), ...holds])]);
 				if ('error' in targets) return invalid(targets.error);
 				for (const id of holds)
-					if ((w.reads.get(id) as { kind?: string } | null)?.kind !== 'task')
-						return invalid(`holds: ${id} is not a Task`);
+					if (w.kindOf(id) !== 'task') return invalid(`holds: ${id} is not a Task`);
 				const to: string[] = i.to?.length ? i.to : [w.owner];
 				const about = targets.list.length ? { targets: targets.list } : {};
+				const session = context.source === 'tool' ? context.tool.sessionKey : undefined;
 				const asks =
 					i.kind === 'question'
 						? (
@@ -787,6 +587,7 @@ const feature = defineFeaturePlugin({
 									impact: q.impact,
 									answerable_by: to,
 									...(q.hypothesis ? { hypothesis: q.hypothesis } : {}),
+									...(session ? { session } : {}),
 									...about
 								}
 							}))
@@ -799,6 +600,7 @@ const feature = defineFeaturePlugin({
 										recommendation: i.recommendation,
 										deciders: to,
 										consequence_of_no_decision: i.consequence_of_no_decision,
+										...(session ? { session } : {}),
 										...about
 									}
 								}
@@ -811,7 +613,7 @@ const feature = defineFeaturePlugin({
 					raised.push({ id: (r as { id: string }).id, prompt: a.input.prompt });
 				}
 				const who = to[0];
-				const held = holds.map((id) =>
+				for (const id of holds)
 					commit(
 						w,
 						envelopeFor(
@@ -824,24 +626,19 @@ const feature = defineFeaturePlugin({
 											? `${i.kind === 'question' ? 'Answer' : 'Decision'}: ${raised[0].prompt}`
 											: `Answers: ${raised.map((x) => x.prompt).join(' · ')}`,
 									waiting_on: { kind: who.startsWith('agent:') ? 'agent' : 'person', ref: who },
-									resume_when:
-										i.kind === 'question' ? 'Answered in Falcon Work' : 'Decided in Falcon Work'
+									resume_when: i.kind === 'question' ? 'Answered' : 'Decided'
 								}
 							},
 							context,
 							`:hold:${id}`
 						),
 						actor
-					)
-				);
+					);
 				return {
 					outcome: 'committed',
 					...(raised.length === 1 ? { id: raised[0].id } : {}),
 					[i.kind === 'question' ? 'questions' : 'decision']:
-						i.kind === 'question' ? raised.map((x) => x.id) : raised[0].id,
-					...(holds.length
-						? { held: holds.map((id, n) => ({ id, outcome: held[n].outcome })) }
-						: {})
+						i.kind === 'question' ? raised.map((x) => x.id) : raised[0].id
 				};
 			},
 			finding(input, context) {
