@@ -161,7 +161,9 @@ export class Views {
 			id,
 			id
 		);
-		return r?.at && r.at > fallback ? r.at : fallback;
+		// When the work happened, as the history shows it: a record written later (catch-up) does
+		// not make old work look new. Only an item with no history falls back to its own time.
+		return r?.at ?? fallback;
 	}
 
 	private waitingText(t: {
@@ -312,7 +314,9 @@ export class Views {
 				`SELECT t.id, d.title, t.updated_at AS at FROM task t JOIN task_definition d ON d.task_id = t.id AND d.rev = t.definition_rev
 				 WHERE t.status = 'completed' AND t.project_id IS NULL AND t.job_id IS NULL AND t.updated_at >= ?`,
 				weekAgo
-			).map((r) => ({ ...r, kind: 'task' as const })),
+			)
+				.map((r) => ({ ...r, at: this.lastActivity(r.id, r.at), kind: 'task' as const }))
+				.filter((r) => r.at >= weekAgo),
 			...this.all<{ id: string; title: string; at: string }>(
 				`SELECT p.id, p.title, max(coalesce(m.achieved_at, p.updated_at)) AS at FROM project p LEFT JOIN milestone m ON m.project_id = p.id
 				 WHERE p.abandoned_at IS NULL AND NOT EXISTS (SELECT 1 FROM task t WHERE t.project_id = p.id AND t.status IN ${OPEN})

@@ -571,7 +571,14 @@ export class Clerk {
 			return this.failed(session);
 		}
 		const edits = parseEdits(text);
-		const applied = await this.applyEdits(agentId, session, edits, delta[delta.length - 1].seq);
+		const lastAt = delta[delta.length - 1].at;
+		const applied = await this.applyEdits(
+			agentId,
+			session,
+			edits,
+			delta[delta.length - 1].seq,
+			Number.isNaN(Date.parse(lastAt)) ? undefined : new Date(lastAt).toISOString()
+		);
 		this.outcomes.delete(session);
 		this.done(session, agentId, delta[delta.length - 1].seq);
 		this.d.logDecision?.({
@@ -616,7 +623,9 @@ export class Clerk {
 		agentId: string,
 		session: string,
 		edits: Edit[],
-		seq: number
+		seq: number,
+		/** When the conversation stretch happened: history lines carry that time, not now. */
+		at?: string
 	): Promise<number> {
 		const keys = new Map<string, { id: string; kind: ItemKind }>();
 		const resolve = (ref?: string) => (ref ? (keys.get(ref)?.id ?? ref) : undefined);
@@ -630,7 +639,13 @@ export class Clerk {
 			(e): e is Extract<Edit, { op: 'create_task' | 'create_project' | 'create_job' }> =>
 				e.op.startsWith('create_')
 		);
-		const open = [...this.w.views.board().moving, ...this.w.views.board().waiting].slice(0, 20);
+		// Open items and work finished this week: a repeat of finished work is not new work either.
+		const board = this.w.views.board();
+		const open = [
+			...board.moving,
+			...board.waiting,
+			...board.done.map((d) => ({ id: d.id, kind: d.kind, title: d.title, status_line: 'done' }))
+		].slice(0, 30);
 		const dupOf = new Map<Edit, string>();
 		if (creates.length && open.length) {
 			const questions: Batch['questions'] = {};
@@ -895,7 +910,8 @@ export class Clerk {
 							run: ik(`entry:${id}`),
 							outcomes: [],
 							summary: clip(e.summary, 2000),
-							by: 'work'
+							by: 'work',
+							at
 						})
 					)
 						applied++;
@@ -943,6 +959,7 @@ export class Clerk {
 		const progress = { read: 0, total: queue.length, done: false, started_at: this.w.now() };
 		this.w.setMeta('catchup', JSON.stringify(progress));
 		this.d.changed();
+		let failed = 0;
 		for (const s of queue) {
 			if (signal?.aborted) return;
 			const cp = this.checkpoint(s.sessionKey);
@@ -964,13 +981,21 @@ export class Clerk {
 						seq: t.seq
 					});
 				}
-				if (fresh.length) await this.writerPass(s.agentId, s.sessionKey, true);
+				if (fresh.length && (await this.writerPass(s.agentId, s.sessionKey, true)) === null)
+					failed++;
 			} catch (error) {
+				failed++;
 				this.d.log(`clerk: catch-up skipped ${s.sessionKey}: ${(error as Error).message}`);
 			}
 			progress.read++;
 			this.w.setMeta('catchup', JSON.stringify(progress));
 			this.d.changed();
+		}
+		// Sessions that failed are tried again at the next start; finished ones are not re-read.
+		if (failed) {
+			this.d.log(`clerk: catch-up left ${failed} session(s) for the next start`);
+			this.w.setMeta('catchup', JSON.stringify({ ...progress, done: false, failed }));
+			return;
 		}
 		progress.done = true;
 		this.w.setMeta('catchup', JSON.stringify(progress));

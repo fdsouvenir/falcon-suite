@@ -337,3 +337,50 @@ test('catch-up reads past sessions newest first and records progress', async () 
 	assert.equal(w.views.search('importer').length, 1);
 	assert.equal(w.views.home().catching_up.done, true);
 });
+
+test('catch-up leaves sessions it could not read for the next start', async () => {
+	const w = new Work(':memory:', OWNER);
+	const clerk = new Clerk({
+		work: w,
+		decisions: () => jev({}),
+		complete: async () => '{"edits":[]}',
+		sessions: () => [{ sessionKey: 'agent:william:dashboard:s1', updatedAt: Date.now() }],
+		read: async () => {
+			throw new Error('no session id');
+		},
+		agents: () => ['william'],
+		log: () => {},
+		changed: () => {}
+	});
+	await clerk.catchUp(14);
+	const progress = JSON.parse(w.meta('catchup'));
+	assert.equal(progress.done, false);
+	assert.equal(progress.failed, 1);
+});
+
+test('work recorded later keeps the time it happened: old finished work is not "done this week"', async () => {
+	const old = new Date(Date.now() - 20 * 864e5).toISOString();
+	const transcript = [
+		{ seq: 1, role: 'user', text: 'remove the m365 settings', at: old },
+		{ seq: 2, role: 'assistant', text: 'Removed the leftover settings folder.', at: old }
+	];
+	const complete = async () =>
+		JSON.stringify({
+			edits: [
+				{
+					op: 'create_task',
+					key: 't1',
+					title: 'Remove m365 settings',
+					description: 'd',
+					done_when: 'Folder gone'
+				},
+				{ op: 'complete', task: 't1', result: 'Removed the folder.' },
+				{ op: 'entry', item: 't1', summary: 'Removed the leftover settings folder.' }
+			]
+		});
+	const { w, clerk } = setup({ decisions: jev({ done: 0.9 }), complete, transcript });
+	clerk.mark('william', 'agent:william:dashboard:s1', ['new work']);
+	await clerk.writerPass('william', 'agent:william:dashboard:s1');
+	assert.equal(w.views.happened(null)[0].at, old);
+	assert.deepEqual(w.views.board().done, []);
+});
