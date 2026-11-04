@@ -2,4 +2,4 @@
 // the preview channel (`falcon-work-preview`), so the two can never share an id or a data directory.
 export const PLUGIN_ID = 'falcon-work';
 // Release staging replaces this with the published package version.
-export const PLUGIN_VERSION = '5.0.0-dev.0';
+export const PLUGIN_VERSION = '2.0.0-dev.0';

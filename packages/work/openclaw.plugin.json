@@ -1,8 +1,8 @@
 {
   "id": "falcon-work",
   "name": "Falcon Work",
-  "description": "A record of what your agents do, why, and what needs you.",
-  "version": "5.0.0-dev.0",
+  "description": "A record of what your agents do for you, kept from your conversations.",
+  "version": "2.0.0-dev.0",
   "categories": [
     "agent-orchestration"
   ],
@@ -22,9 +22,10 @@
   },
   "contracts": {
     "tools": [
-      "falcon_work_ask",
       "falcon_work",
+      "falcon_work_ask",
       "falcon_work_finding",
+      "falcon_work_job",
       "falcon_work_plan",
       "falcon_work_read",
       "falcon_work_task"
