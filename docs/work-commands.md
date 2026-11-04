@@ -1,206 +1,139 @@
-# Falcon Work 5 — command list (draft)
+# Falcon Work 2.0 — command list
 
-Status: **draft for Fred's review**, 2026-10-03. Companion to [work-spec.md](work-spec.md); uses its
-vocabulary only. Every button in the Stitch screens (`.stitch/screens/`) maps to a command below
-(§8).
+Status: **matches the 2.0 code** on branch `work-2.0`, 2026-11-04. Companion to
+[work-spec.md](work-spec.md); uses its vocabulary only.
 
-## 1. Tools
+## 1. Who calls these
 
-Agents see Work as tools named for what they want to do. Each tool's description and fields say
-what it does, so the agent learns Work from its tools rather than from rules in the prompt:
+Work writes its record itself (spec §3): the clerk calls these commands as **Work**
+(`work:clerk`). Agents call them through their tools only when the person asks them to change the
+record; people's and agents' entries win over Work's (§3 below). The Control UI is read-only and
+calls no commands.
 
-- **`falcon_work_read`** — compact projections (§3). Never changes anything.
-- **`falcon_work_plan`** — plan a Project: a new one with its Milestones and Tasks, or more
-  Milestones and Tasks for an existing one (`create_project` / `plan_project`).
-- **`falcon_work_task`** — track a Task: `create` (optionally `start` it at once), `start`, `wait`
-  (always says who or what it waits on), `resume`, `complete` (result and evidence), `abandon`.
-- **`falcon_work_ask`** — ask the person: Questions (with the agent's best guess; `questions[]`
-  raises several at once, one per thing, each answerable on its own) or a Decision (options,
-  recommendation, what happens if nobody decides). Addressed to the Gateway owner unless `to` says
-  otherwise; `about` takes ids of the things it concerns; `holds` names Tasks that cannot go on
-  until it is answered, which then wait on the person asked. Its description says why to use it
-  over asking in chat: it stays under Needs you, survives the conversation, and the answer returns
-  in the agent's brief.
-- **`falcon_work_finding`** — record a Finding with evidence.
-- **`falcon_work`** — any other command (§4–§6): Objectives, KPIs, Areas, edits, moves, answering
-  and deciding. One command per call.
+Every command runs the same way, whoever calls it: validated against its input schema, committed
+atomically, logged as an immutable event (actor, time, object, version), and idempotent by key — a
+retried tool call reuses the tool call's id, and a clerk action uses a key built from the turn or
+session pass. `expected_version` is optional optimistic locking for any command on an object.
 
-Every tool runs the same store commands: validated, committed atomically, logged as an event, with
-the tool call's id as its idempotency key. They are the plugin's feature operations, so the Control
-UI uses the same operations through the same validation. There is no second path.
+Outcomes: `committed`, `committed_with_warnings`, `noop` (nothing to change, including a Work write
+blocked by §3), or `rejected` with a `code`, a `reason` and the commands to try `next`.
 
-**Keeping the agent's context small.** 4.x put every command's full schema in the system prompt on
-every turn. Work 5 exposes the common intents as typed tools and keeps the rest behind
-`falcon_work`, whose description lists command names; the full input of any command is available on
-demand (`falcon_work_read` with `view: help`). The standing guidance only says what Work is; each
-turn adds the short brief from the `before_prompt_build` hook (spec §10).
+## 2. Tools
 
-## 2. Every command
+Agents see Work as tools named for what they want to do. Each tool's description says that Work
+keeps its own record and that the tool is for changes the person asks for.
 
-**Input envelope**
+- **`falcon_work_read`** — `view`: `home` (Needs you, the board, what happened; optional
+  `since`) · `project`, `task`, `job` (`id`) · `search` (`text`) · `get` (any id) · `needs_you` ·
+  `help` (`command`: one command's full input). Never changes anything.
+- **`falcon_work_plan`** — create a Project with its Milestones and Tasks (`new_project`), or add
+  Milestones and Tasks to one (`project`).
+- **`falcon_work_task`** — `create` (standalone, or `project` / `milestone` / `job`; `start` to start
+  it at once), `start`, `wait`, `resume`, `complete` (result and evidence), `abandon`.
+- **`falcon_work_job`** — `create` (title, instructions, automations), `edit`, `pause`, `resume`,
+  `retire`, `link_automation`, `unlink_automation`.
+- **`falcon_work_ask`** — Questions (`questions[]` for several) or a Decision for the person; they
+  show under Needs you with a link to the conversation that asked. `holds` names Tasks that wait
+  until it is answered.
+- **`falcon_work_finding`** — a Finding with evidence.
+- **`falcon_work`** — any command below, one per call: `{command, id?, expected_version?, input}`.
 
-| Field              | Required                           | Notes                                                                                                                                                          |
-| ------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `command`          | yes                                | Name from this document.                                                                                                                                       |
-| `id`               | for commands on an existing object |                                                                                                                                                                |
-| `expected_version` | UI: yes · agent: optional          | When given, a stale version is rejected with the current state. When an agent omits it, the command applies to the current version and the event records that. |
-| `idempotency_key`  | no                                 | Defaults to the OpenClaw tool-call id, so an agent retry never double-applies. The UI sends its own.                                                           |
-| `input`            | yes (may be `{}`)                  | The command's fields.                                                                                                                                          |
+Tools record the calling session against what they create or start, so the item's page links to
+it.
 
-**Outcomes** — every command returns one of:
+## 3. Who wins
 
-| Outcome                   | Meaning                                                                                                                                                                     |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `committed`               | Done. Returns the object's new version.                                                                                                                                     |
-| `committed_with_warnings` | Done, with warnings the actor should know (e.g. started with an unfinished dependency).                                                                                     |
-| `noop`                    | Already in that state (e.g. completing a completed Task). Nothing written.                                                                                                  |
-| `input_required`          | Cannot proceed without someone's input. Returns what is needed; where it is another person or agent, an **Ask** is created. Nothing half-applied.                           |
-| `rejected`                | Not allowed or not valid. Returns the reason and the commands that would make it possible (e.g. "Milestone has 1 unfinished Task: complete it or `detach_from_milestone`"). |
+Descriptive fields — a Job's title and instructions, a Project's title and outcome, a Task's title,
+description and done-when, and every status line — remember who last wrote them. When Work writes
+a field that a person or agent wrote, the write is skipped (`noop`). People and agents always
+overwrite. Status changes (start, wait, complete…) are facts and are not blocked.
 
-**Who may do what.** Humans may run every command. Agents may run every command **except** the
-ones marked _human only_. An agent may only `decide` a Decision it is listed as a decider on, and
-only `answer` a Question it is listed as able to answer.
+## 4. Jobs
 
-## 3. Reads
+| Command             | On  | Input                                                   | Does                                                                     |
+| ------------------- | --- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `create_job`        | —   | title, instructions, agent?, automations?, status_line? | Create an ongoing duty; link the OpenClaw automations that run it.       |
+| `edit_job`          | job | title?, instructions?, reason?                          | Change its title or instructions.                                        |
+| `pause_job`         | job | reason?                                                 | Pause it (it shows as waiting: "Paused").                                |
+| `resume_job`        | job | reason?                                                 | Resume a paused Job.                                                     |
+| `retire_job`        | job | reason?                                                 | Retire it; it leaves the board.                                          |
+| `link_automation`   | job | id, name?                                               | Runs of that automation are filed under the Job. One Job per automation. |
+| `unlink_automation` | job | id                                                      | Remove an automation.                                                    |
 
-| Read             | Returns                                                                                                                                                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `brief`          | The calling agent's brief: active Objectives by rank with last progress, its in-progress and waiting Tasks, Questions/Decisions answered since its last turn, Warnings on its Work. The same text the hook injects. |
-| `needs_you`      | For a person (default: the caller): Questions, Decisions and Asks addressed to them, and Warnings, oldest first.                                                                                                    |
-| `objectives`     | Active Objectives by rank: KPIs, latest review, serving Projects/Tasks with counts, last progress. Paused/achieved/retired on request.                                                                              |
-| `get <id>`       | One object in full: current fields, revisions, links, Results, Questions/Decisions/Findings about it, recent history. Long collections page.                                                                        |
-| `list`           | Objects of one kind with filters: `area`, `project`, `objective`, `status`, `agent`, `text`; paged.                                                                                                                 |
-| `activity`       | The feed: changes, captured activity, untracked activity; filters as `list`; paged.                                                                                                                                 |
-| `warnings`       | Current Warnings, optionally for one object or agent.                                                                                                                                                               |
-| `help <command>` | The full input shape of one command.                                                                                                                                                                                |
+## 5. Projects and Milestones
 
-## 4. Objectives, KPIs, Areas
+| Command              | On        | Input                                                     | Does                                                                                       |
+| -------------------- | --------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `create_project`     | —         | title, outcome, agent?, status_line?, milestones?, tasks? | Create a Project, optionally with its whole plan.                                          |
+| `edit_project`       | project   | title?, outcome?, reason?                                 | Change its title or outcome.                                                               |
+| `abandon_project`    | project   | reason, dispositions?                                     | Abandon it, choosing for each unfinished Task: `abandon` or `detach` (becomes standalone). |
+| `resume_project`     | project   | reason                                                    | Resume an abandoned Project.                                                               |
+| `add_milestone`      | project   | title, success_condition, position?                       | Add a Milestone.                                                                           |
+| `plan_project`       | project   | milestones?, tasks?                                       | Add Milestones and Tasks in one step; Tasks name each other by `key` in `depends_on`.      |
+| `edit_milestone`     | milestone | title?, success_condition?                                | Change a Milestone.                                                                        |
+| `reorder_milestones` | project   | order                                                     | Set the order (every Milestone exactly once).                                              |
+| `achieve_milestone`  | milestone | basis, sources                                            | Mark it achieved. Refused while its Tasks are unfinished.                                  |
+| `reopen_milestone`   | milestone | reason                                                    | Reopen it.                                                                                 |
 
-| Command                                                                           | Who          | Input                                                             | Effect / guard                                                                                         |
-| --------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `create_objective`                                                                | _human only_ | `title`, `statement`, `rank?`, `autonomy?`, `limits?`, `session?` | Active Objective. Agents propose new Objectives as a Decision instead.                                 |
-| `edit_objective`                                                                  | _human only_ | `title?`, `statement?`                                            | New version.                                                                                           |
-| `rank_objectives`                                                                 | _human only_ | ordered list of active Objective ids                              | Ranks must be complete and unique.                                                                     |
-| `set_autonomy`                                                                    | _human only_ | `autonomy`, `limits` (required for `act`)                         |                                                                                                        |
-| `pause_objective` · `resume_objective` · `achieve_objective` · `retire_objective` | _human only_ | `reason?`                                                         | Leaving `active` frees its rank.                                                                       |
-| `add_kpi` · `edit_kpi` · `remove_kpi`                                             | _human only_ | `name`, `unit`, `direction`, `target`, `target_date?`             | Removing keeps readings in history.                                                                    |
-| `record_kpi_reading`                                                              | anyone       | `kpi`, `value`, `at`, `source`                                    | Append-only.                                                                                           |
-| `write_review`                                                                    | agent        | `moved`, `stalled`, `proposed?`, `sources[]≥1`                    | Agents only; immutable. Proposals are raised separately with `raise_decision` targeting the Objective. |
-| `create_area`                                                                     | anyone       | `title`, `description`, `accountable_human?`                      |                                                                                                        |
-| `edit_area`                                                                       | anyone       | `title?`, `description?`, `accountable_human?`                    |                                                                                                        |
-| `retire_area`                                                                     | _human only_ | `reason`                                                          | Rejected while it holds unfinished Work.                                                               |
+A Project is finished when every Milestone is achieved and no Task is open; it then shows under
+Done this week.
 
-## 5. Projects, Milestones, Tasks
+## 6. Tasks
 
-### Projects and Milestones
+| Command                    | On   | Input                                                                                               | Does                                                                               |
+| -------------------------- | ---- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `create_task`              | —    | title, description, done_when, project?, milestone?, job?, depends_on?, agent?, plan?, status_line? | Create a Task: standalone, in a Project (and Milestone), or in a Job — never both. |
+| `create_task_from_entries` | —    | as `create_task`, plus entries                                                                      | Create a Task and move history entries under it.                                   |
+| `file_entries`             | task | entries                                                                                             | Move history entries under this Task.                                              |
+| `revise_definition`        | task | title?, description?, done_when?, reason?                                                           | New revision of the definition (§3 applies per field).                             |
+| `revise_plan`              | task | content, reason?                                                                                    | New Plan revision.                                                                 |
+| `ready` / `unready`        | task | —                                                                                                   | Open ↔ ready.                                                                      |
+| `assign`                   | task | agent                                                                                               | Make an agent accountable. Only a person takes a Task from another agent.          |
+| `start`                    | task | claim?                                                                                              | In progress; needs an accountable agent (`claim` assigns the calling agent).       |
+| `wait`                     | task | waiting_for, waiting_on {kind: agent/person/work/external, ref}, resume_when, follow_up_at?         | Waiting; shows in the Waiting column with who or what it waits on.                 |
+| `resume`                   | task | —                                                                                                   | Back to the state before waiting.                                                  |
+| `record_result`            | task | content, sources                                                                                    | Record a Result without completing.                                                |
+| `complete`                 | task | result? or content + sources                                                                        | Complete with a Result.                                                            |
+| `reopen`                   | task | reason                                                                                              | Reopen a finished Task.                                                            |
+| `abandon`                  | task | reason                                                                                              | Abandon (reversible).                                                              |
+| `detach_from_milestone`    | task | reason                                                                                              | Keep it in the Project, outside any Milestone.                                     |
+| `depend` / `undepend`      | task | on                                                                                                  | Dependencies warn, never block; cycles are refused.                                |
 
-| Command                            | Who    | Input                                                                                                                                    | Effect / guard                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ---------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `create_project`                   | anyone | `title`, `outcome`, `area`, `serves[]?`, `decision?`, `milestones[]?` (`title`, `success_condition`, `tasks[]?`), `tasks[]?`, `session?` | The whole plan in one call. A plan Task is `key?`, `title`, `description`, `done_when`, `depends_on[]?` (keys in the same plan, or existing Task ids), `agent?`, `plan?`. Outcome `data`: the new Milestone ids and Tasks by key. An agent creating Work that serves a _propose_ Objective must pass `decision`: a decided Decision targeting that Objective. Otherwise `rejected` (`proposal_required`, next: `raise_decision`). |
-| `plan_project`                     | anyone | `milestones[]?` (as above, appended in order), `tasks[]?` (plan Tasks with `milestone?`: an existing Milestone of this Project)          | Adds a plan to an existing Project in one step. All or nothing: a duplicate `key` (`duplicate_key`) or a dependency cycle (`dependency_cycle`) refuses the whole plan.                                                                                                                                                                                                                                                            |
-| `edit_project`                     | anyone | `title?`, `outcome?`, `reason`                                                                                                           |                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `move_project`                     | anyone | `area`, `reason`                                                                                                                         | Placement change, audited.                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `abandon_project`                  | person | `reason`, `dispositions?` (Task id → `abandon`·`detach`)                                                                                 | Each unfinished Task needs a disposition. Missing ones → rejected `dispositions_required` listing them; nothing applied.                                                                                                                                                                                                                                                                                                          |
-| `resume_project`                   | anyone | `reason`                                                                                                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `add_milestone` · `edit_milestone` | anyone | `title`, `success_condition`, `position?`                                                                                                |                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `reorder_milestones`               | anyone | ordered ids                                                                                                                              |                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `achieve_milestone`                | anyone | `basis`, `sources[]≥1`                                                                                                                   | **Closure guard**: rejected while associated Work is unfinished, naming each item.                                                                                                                                                                                                                                                                                                                                                |
-| `reopen_milestone`                 | anyone | `reason`                                                                                                                                 | Reopens a completed Project.                                                                                                                                                                                                                                                                                                                                                                                                      |
+## 7. The record
 
-### Tasks
+| Command              | On   | Input                               | Does                                                                                             |
+| -------------------- | ---- | ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `set_status_line`    | —    | item, status_line                   | One sentence on where a Job, Project or Task stands now (§3 applies).                            |
+| `attach_task`        | task | project?, milestone?, job?, reason? | Move a Task under a Project or Job, or make it standalone by giving neither.                     |
+| `promote_to_project` | task | title?, outcome                     | A Task that grew a second deliverable becomes a Project; the Task and its sessions move into it. |
+| `record_entry`       | —    | item, summary, session?, outcomes?  | One line of history under a Job, Project or Task.                                                |
 
-| Command                     | Who    | Input                                                                                                                                              | Effect / guard                                                                                                                                                                                    |
-| --------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `create_task`               | anyone | `title`, `description`, `done_when`, `area` _or_ `project`, `milestone?`, `serves[]?`, `decision?`, `depends_on[]?`, `agent?`, `session?`, `plan?` | Starts `open`. Same _propose_-Objective rule as `create_project`.                                                                                                                                 |
-| `create_task_from_session`  | anyone | `session`                                                                                                                                          | "Add to Work": a plugin flow, not a store command. The plugin reads the session from OpenClaw, shows a draft (title, description, discussion session) for confirmation, then calls `create_task`. |
-| `create_task_from_activity` | anyone | `activity[]`, then as `create_task`                                                                                                                | Attaches the untracked activity to the new Task.                                                                                                                                                  |
-| `attach_activity`           | anyone | `task`, `activity[]`                                                                                                                               | Explains untracked activity with an existing Task.                                                                                                                                                |
-| `revise_definition`         | anyone | `title?`, `description?`, `done_when?`, `reason`                                                                                                   | Rejected on finished Tasks (reopen first). Older Plans/Results are shown as for the old Definition.                                                                                               |
-| `revise_plan`               | anyone | `content`, `reason?`                                                                                                                               | New Plan revision pinned to the current Definition.                                                                                                                                               |
-| `ready` · `unready`         | anyone | —                                                                                                                                                  | No reason needed.                                                                                                                                                                                 |
-| `assign`                    | anyone | `agent`                                                                                                                                            | An agent taking another agent's Task → rejected `not_yours`; a person can reassign.                                                                                                               |
-| `start`                     | anyone | `claim?`                                                                                                                                           | Needs an accountable agent; `claim: true` assigns the caller. Unfinished dependencies → `committed_with_warnings`.                                                                                |
-| `wait`                      | anyone | `waiting_for`, `waiting_on` {`kind`: agent·person·work·external, `ref`}, `resume_when`, `follow_up_at?`                                            | Prior state remembered.                                                                                                                                                                           |
-| `resume`                    | anyone | —                                                                                                                                                  | Restores the prior state.                                                                                                                                                                         |
-| `record_result`             | anyone | `content`, `sources[]≥1`                                                                                                                           | Immutable, pinned to the current Definition. Not yet accepted.                                                                                                                                    |
-| `complete`                  | anyone | `result` (id) _or_ `content` + `sources[]≥1`                                                                                                       | Accepts the Result. Repeat → `noop`.                                                                                                                                                              |
-| `reopen`                    | anyone | `reason`                                                                                                                                           |                                                                                                                                                                                                   |
-| `abandon`                   | anyone | `reason`                                                                                                                                           | Reversible with `reopen`.                                                                                                                                                                         |
-| `move_task`                 | anyone | `area` _or_ `project`, `milestone?`, `reason`                                                                                                      |                                                                                                                                                                                                   |
-| `detach_from_milestone`     | anyone | `reason`                                                                                                                                           | Used to satisfy the closure guard.                                                                                                                                                                |
-| `depend` · `undepend`       | anyone | `on` (Task id)                                                                                                                                     | Cycles rejected.                                                                                                                                                                                  |
+## 8. Questions, Decisions and Findings
 
-### Shared by Objectives, Projects and Tasks
+Open Questions answerable by the person and pending Decisions they decide are **Needs you**. Each
+can carry the `session` it came from; the page links to it.
 
-| Command             | Who    | Input                                                 | Effect / guard                                                                                                  |
-| ------------------- | ------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `serve` · `unserve` | anyone | `kind` (project·task), `id`, `objective`, `decision?` | Same _propose_-Objective rule.                                                                                  |
-| `set_session`       | anyone | `kind`, `id`, `session` or `null`                     | Objectives, Projects, Tasks, Asks. A person's choice can only be changed by a person. Recorded with who set it. |
+| Command              | On       | Input                                                                                     | Does                                              |
+| -------------------- | -------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `raise_question`     | —        | prompt, impact, answerable_by, targets?, hypothesis?, session?                            | Something the person needs to tell the agent.     |
+| `add_hypothesis`     | question | text                                                                                      | The agent's best guess, shown as a guess.         |
+| `answer`             | question | answer, confidence?, sources?                                                             | Answer (the clerk records answers given in chat). |
+| `accept_hypothesis`  | question | —                                                                                         | People only: accept the guess as the answer.      |
+| `withdraw_question`  | question | reason                                                                                    | No longer matters.                                |
+| `raise_decision`     | —        | prompt, options, recommendation, deciders, consequence_of_no_decision, targets?, session? | A choice for the person.                          |
+| `revise_decision`    | decision | the body, reason                                                                          | Revise while pending.                             |
+| `decide`             | decision | option, rationale?                                                                        | Decide (agents give a rationale).                 |
+| `defer_decision`     | decision | until, reason                                                                             | Out of Needs you until the date.                  |
+| `withdraw_decision`  | decision | reason                                                                                    | No longer needed.                                 |
+| `supersede_decision` | decision | successor, reason                                                                         | Replaced by another.                              |
+| `record_finding`     | —        | conclusion, confidence, sources, targets?                                                 | Something learned, with evidence.                 |
+| `retract_finding`    | finding  | reason                                                                                    | It turned out wrong.                              |
+| `supersede_finding`  | finding  | successor, reason                                                                         | Replaced by a newer Finding.                      |
 
-## 6. Questions, Decisions, Findings, Asks
+`targets` name what a Question, Decision or Finding is about: `{kind: job | project | milestone |
+task, id}`.
 
-| Command              | Who               | Input                                                                                                                                                                           | Effect / guard                                                                                  |
-| -------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `raise_question`     | anyone            | `prompt`, `impact`, `answerable_by[]`, `targets[]?`, `hypothesis?`                                                                                                              | Creates an Ask for each human in `answerable_by`.                                               |
-| `add_hypothesis`     | anyone            | `text`, `sources[]?`                                                                                                                                                            | Shown as a hypothesis, never as the answer.                                                     |
-| `answer`             | anyone answerable | `answer`, `confidence?`, `sources[]?`                                                                                                                                           | Humans default to `confirmed`. A later answer supersedes, history kept. Resolves the Ask.       |
-| `accept_hypothesis`  | human answerable  | —                                                                                                                                                                               | "Use <agent>'s hypothesis": records it as the human's confirmed answer.                         |
-| `withdraw_question`  | anyone            | `reason`                                                                                                                                                                        |                                                                                                 |
-| `raise_decision`     | anyone            | `prompt`, `options[]≥2` (`id`, `label`, `summary?`, `risks?`, `tradeoffs?`), `recommendation` {`option`, `rationale`}, `deciders[]`, `consequence_of_no_decision`, `targets[]?` | Creates an Ask for each human decider. Targeting a Task makes it derived-blocked until decided. |
-| `revise_decision`    | anyone            | as `raise_decision`, `reason`                                                                                                                                                   | Only while pending.                                                                             |
-| `decide`             | deciders          | `option`, `rationale` (agents: required · humans: optional)                                                                                                                     | Resolves the Asks.                                                                              |
-| `defer_decision`     | deciders          | `until`, `reason`                                                                                                                                                               |                                                                                                 |
-| `withdraw_decision`  | anyone            | `reason`                                                                                                                                                                        |                                                                                                 |
-| `supersede_decision` | anyone            | `successor`, `reason`                                                                                                                                                           |                                                                                                 |
-| `record_finding`     | anyone            | `conclusion`, `confidence`, `sources[]≥1`, `targets[]?`                                                                                                                         |                                                                                                 |
-| `retract_finding`    | anyone            | `reason`                                                                                                                                                                        |                                                                                                 |
-| `supersede_finding`  | anyone            | `successor`, `reason`                                                                                                                                                           |                                                                                                 |
-| `dismiss_ask`        | anyone            | `reason`                                                                                                                                                                        | The underlying Question/Decision stays open.                                                    |
+## 9. Removed in 2.0
 
-Asks are created by the commands above, never directly. Answering or deciding resolves them.
-
-## 7. Written by the plugin, not by commands
-
-These have no command; the plugin writes them so nobody has to report them (spec §10–§11):
-
-- **Activity** from `after_tool_call` — attached to the agent's in-progress Task, or recorded as
-  untracked.
-- **Session links** — every session that touched an object, as history.
-- **Warnings** — computed from Work's data and session state; they clear themselves.
-- **The brief** — computed for `before_prompt_build`.
-- **The end-of-turn nudge** — `before_agent_finalize`, not a write at all.
-
-## 8. Screens → commands
-
-| Screen                          | Control                                 | Command                                                               |
-| ------------------------------- | --------------------------------------- | --------------------------------------------------------------------- |
-| Overview · Needs you            | Answer (text)                           | `answer`                                                              |
-|                                 | Use Verl's hypothesis                   | `accept_hypothesis`                                                   |
-|                                 | Option + Decide                         | `decide`                                                              |
-|                                 | Discuss in session                      | opens the session (no command)                                        |
-| Overview · Untracked / Activity | Create Task from this                   | `create_task_from_activity`                                           |
-| Header                          | New → Task / Project / Objective / Area | `create_task` · `create_project` · `create_objective` · `create_area` |
-| Objectives tab                  | drag to reorder                         | `rank_objectives`                                                     |
-| Objective page                  | Edit · Pause · Retire                   | `edit_objective` · `pause_objective` · `retire_objective`             |
-|                                 | Add reading · + KPI                     | `record_kpi_reading` · `add_kpi`                                      |
-|                                 | Allow Verl to act…                      | `set_autonomy`                                                        |
-|                                 | Link a Project or Task                  | `serve`                                                               |
-| Areas & Projects                | + Area · New Project                    | `create_area` · `create_project`                                      |
-| Project page                    | Edit · Change session · Abandon         | `edit_project` · `set_session` · `abandon_project`                    |
-|                                 | Mark achieved                           | `achieve_milestone` (disabled while the guard holds)                  |
-| Task panel                      | Edit · Wait… · Abandon                  | `revise_definition` · `wait` · `abandon`                              |
-| Session header                  | Add to Work                             | `create_task_from_session`                                            |
-
-## 9. Removed from 4.x
-
-`revise_change`, `authorize`, `revoke_authorization`, `review_target`, `reaffirm_plan`,
-`reaffirm_dependency`, `checkpoint`, `edit_question`, `place`, `associate`/`dissociate`,
-`archive`/`restore` — replaced by the commands above or dropped with the concepts they served
-(change control, review targets, archive state).
-
-## 10. Settled with Fred (2026-10-03)
-
-1. Agents cannot create, rank or change Objectives; they propose them as Decisions, and need a
-   decided Decision before creating Work toward a _propose_ Objective.
-2. `expected_version` is optional for agents and always sent by the UI.
-3. Retiring an Area is human only, and only when it holds no unfinished Work.
+Objectives, KPIs and reviews; Areas (`create_area`, `move_project`, `move_task` — use
+`attach_task`); `serve` / `unserve`; discussion sessions (`set_session`); Asks (`dismiss_ask`).

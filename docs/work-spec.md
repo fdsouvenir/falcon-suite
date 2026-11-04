@@ -67,7 +67,7 @@ Project's shape, and cases Jev leaves unsettled. This follows the TypeSafe integ
 | Event                                                                                                               | What runs                                                                                                                                                        |
 | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Turn ended** (`agent_end`)                                                                                        | The hook only records the turn and enqueues it. A few seconds later, on the plugin service's scheduler, Jev judges the turn (§3.2) and code acts on the answers. |
-| **The person sent a message** (`message_received`)                                                                  | Jev checks whether it answers an open Question or Decision (§3.2), and code records the answer at once.                                                          |
+| **The person sent a message** (seen in `before_prompt_build`)                                                       | Jev checks whether it answers an open Question or Decision (§3.2), and code records the answer at once.                                                          |
 | **Session idle** (10 minutes with no new turn, no run in progress), **before compaction**, **session end or reset** | The writer runs for the session, but only if a turn left work for it (§3.3).                                                                                     |
 | **Nightly**                                                                                                         | A sweep for anything missed, then a tidy-up of open items (§3.2).                                                                                                |
 | **Catch-up** on first start (§8)                                                                                    | Each turn in each session is judged, then the writer runs where it is needed.                                                                                    |
@@ -289,9 +289,9 @@ The Objectives, Areas & Projects and Activity tabs are removed.
 - `after_tool_call` notes the turn's outcomes in memory, as in Work 5.
 - `agent_end` stores the turn and its outcomes against the session, enqueues the turn for judging
   and arms the idle timer. It makes no model calls itself.
-- `message_received` enqueues the person's message for the answer check.
 - `before_compaction` and `session_end` trigger a writer pass when the session is marked.
-- There is no `before_prompt_build` hook: Work adds nothing to the agent's prompt.
+- `before_prompt_build` only observes: it takes the person's message for the turn and the answer
+  check, and returns nothing. Work adds nothing to the agent's prompt.
 
 ## 8. Install and catch-up
 
@@ -343,4 +343,4 @@ enforcement.
    per deliverable, update-before-create, and a Needs you that only shows what is really waiting.
 2. **Release numbering.** Published Work is `1.0.0`. This is a breaking change, so it ships as the
    next major version.
-3. **`docs/work-commands.md`** is out of date and needs rewriting to match §4–§5.
+3. **`docs/work-commands.md`** — rewritten for 2.0 (2026-11-04).
