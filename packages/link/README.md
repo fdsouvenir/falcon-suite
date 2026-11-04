@@ -52,6 +52,10 @@ Selected Microsoft permissions that Microsoft did not grant are named on the car
 When the operator configured the hosted callback (see below), Google and Microsoft sign-in
 complete automatically after consent. Otherwise Google uses gog's remote flow (paste the
 address shown in the browser after signing in) and Microsoft uses m365cli's device code.
+The callback service keeps one session per OAuth state, and gog hands back the same state for
+a repeated identical request for ten minutes, so Link clears the pending states in a
+Link-isolated gog store before each new sign-in and releases a replaced sign-in's session
+before registering the next. A callback problem is reported as one, naming the service.
 Microsoft sign-in lets m365cli detect personal or work accounts (`--audience auto`); work-only
 workloads and a provisioned tenant use the work audience.
 
@@ -67,11 +71,14 @@ attention with the reason. Reconnecting, changing access, pasting a code or addr
 cancelling all happen inside the card too, and a form's problems are shown in the form. There
 is no separate sign-in panel.
 
-Starting a sign-in never opens the provider by itself. The card shows the provider address as
-**Open sign-in** (a new tab in the current browser profile) and **Copy link**, so the person can
-paste the address into a different browser profile or device when the account they want to
-connect is signed in there. The login belongs to its address, not to the tab that opened it;
-the page keeps polling until the sign-in finishes or expires.
+The form only collects choices: owner, purpose, access and (for Google) the account address.
+Its button is **Continue**. Starting a sign-in never opens the provider by itself: the next
+screen, inside the same card, offers the provider's own sign-in action (**Sign in with Google**,
+**Sign in with Microsoft**, and so on, using the provider's official artwork where it has one),
+which opens a new tab in the current browser profile, and **Copy link**, so the person can paste
+the address into a different browser profile or device when the account they want to connect is
+signed in there. The login belongs to its address, not to the tab that opened it; the page keeps
+polling until the sign-in finishes or expires.
 
 Cancelling sign-in leaves everything as it was. Changing access doesn't remove access
 already given; the page links to Google's or Microsoft's app-access page for that.
@@ -82,8 +89,9 @@ HubSpot uses HubSpot's Agent CLI (`hubspot`, 0.16.0 or later). Nothing needs pro
 sign-in goes through HubSpot's own CLI app and code page, so there is no Link client or
 callback.
 
-- **Connect to HubSpot** runs `hubspot auth login url` in the account's own store, opens
-  HubSpot's approval page, and the person pastes the code HubSpot shows. Link runs
+- **Continue** runs `hubspot auth login url` in the account's own store; the card then offers
+  **Connect to HubSpot**, which opens HubSpot's approval page, and the person pastes the code
+  HubSpot shows. Link runs
   `hubspot auth login exchange --code …`, then `hubspot whoami --format json` confirms the
   HubSpot account (portal), the user and the permissions granted. People choose permissions
   on HubSpot's page; the card lists what was granted in plain words.
@@ -181,8 +189,8 @@ admin settings decide what it can do. Nothing needs provisioning.
   person's browser ends on a page that can't be reached. Before the person goes to sign in, the
   page shows a large warning with numbered steps: the error page is expected; copy the whole
   address from the address bar and paste it back here within 5 minutes. The sign-in address is
-  offered as Open sign-in / Copy link, and the warning stays next to the paste box while Link
-  waits.
+  offered as Sign in with ZoomInfo / Copy link, and the warning stays next to the paste box
+  while Link waits.
 - **How the address gets back.** Link starts `gtm auth login` with its own `xdg-open` and
   `open` commands (which do nothing) first on its PATH, so gtm can't open a browser on the
   Office's desktop and prints the sign-in address instead; Link shows that address. When the

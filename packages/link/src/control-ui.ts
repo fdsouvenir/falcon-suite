@@ -85,26 +85,34 @@ function mark(provider: Provider, large = false) {
 	node.setAttribute('aria-hidden', 'true');
 	return node;
 }
-// The provider's sign-in artwork, where it has one, is the action that starts sign-in.
-function signInButton(provider: Provider) {
+// The provider's own sign-in action (its official artwork where it has one), opening the
+// sign-in address in a new tab. Shown once Link has that address, never on the form before it.
+function signInAction(provider: Provider, url: string) {
 	const text = uiOf(provider).connect;
+	const a = el('a');
+	a.href = url;
+	a.target = '_blank';
+	a.rel = 'noopener noreferrer';
 	if (SIGN_IN_LOGO.has(provider)) {
-		const b = el('button', undefined, 'fl-btn fl-btn-provider');
+		a.className = 'fl-btn fl-btn-provider';
 		const logo = el('img');
 		logo.src = svg(LOGOS[provider]);
 		logo.alt = '';
-		b.append(logo, el('span', text));
-		return b;
+		a.append(logo, el('span', text));
+		return a;
 	}
-	if (!SIGN_IN_ART[provider]) return el('button', text, 'fl-btn fl-btn-primary');
-	const b = el('button', undefined, 'fl-signin');
-	b.type = 'submit';
-	b.setAttribute('aria-label', text);
+	if (!SIGN_IN_ART[provider]) {
+		a.className = 'fl-btn fl-btn-primary';
+		a.textContent = text;
+		return a;
+	}
+	a.className = 'fl-signin';
+	a.setAttribute('aria-label', text);
 	const art = el('img');
 	art.src = svg(SIGN_IN_ART[provider]);
 	art.alt = '';
-	b.append(art);
-	return b;
+	a.append(art);
+	return a;
 }
 // For sign-ins that end on an address the person copies back: what will happen, in steps,
 // before they go and while Link waits.
@@ -211,13 +219,13 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	}
 	// The provider address is offered, not opened: a login belongs to its address, not to the tab
 	// that opened it, so the person can paste it into another browser profile or device.
-	function signInLink(url: string) {
+	function signInLink(provider: Provider, url: string) {
 		const box = el('div', undefined, 'fl-sign-in');
-		const open = link('Open sign-in', url);
-		open.className = 'fl-btn fl-btn-primary';
+		const text = uiOf(provider).connect;
+		const open = signInAction(provider, url);
 		const note = el(
 			'p',
-			'Open sign-in uses this browser profile. To sign in from a different browser profile or device, copy the link and open it there. This page keeps waiting.',
+			`${text} opens a new tab in this browser profile. To sign in from a different browser profile or device, copy the link and open it there. This page keeps waiting.`,
 			'fl-muted'
 		);
 		const copy = button('Copy link', async () => {
@@ -228,8 +236,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					copy.textContent = 'Copy link';
 				}, 2000);
 			} catch {
-				note.textContent =
-					'The link could not be copied. Right-click Open sign-in and choose “Copy link address”.';
+				note.textContent = `The link could not be copied. Right-click ${text} and choose “Copy link address”.`;
 				note.className = 'fl-error';
 			}
 		});
@@ -589,9 +596,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		if (!metadataOnly && account && ui.revoke) form.append(revokeSentence(ui.revoke(account)));
 		const warning = metadataOnly ? null : pasteWarning(provider);
 		if (warning) form.append(warning);
-		const submit = metadataOnly
-			? el('button', 'Save', 'fl-btn fl-btn-primary')
-			: signInButton(provider);
+		// The form only collects choices. The provider's sign-in action comes on the next screen,
+		// once Link has a sign-in address for it.
+		const submit = el('button', metadataOnly ? 'Save' : 'Continue', 'fl-btn fl-btn-primary');
 		submit.type = 'submit';
 		submit.disabled = !canWrite();
 		const actions = el('div', undefined, 'fl-actions fl-signin-row');
@@ -721,7 +728,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		);
 		const warning = login.state === 'verifying' ? null : pasteWarning(login.provider);
 		if (warning) panel.append(warning);
-		if (login.url) panel.append(signInLink(login.url));
+		if (login.url) panel.append(signInLink(login.provider, login.url));
 		if (login.code) panel.append(el('p', login.code, 'fl-device-code'));
 		const problem = formError();
 		if (login.url && login.paste && login.state === 'awaiting_consent') {

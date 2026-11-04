@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { rmSync } from 'node:fs';
+import { rmSync, statSync } from 'node:fs';
 import { Registry } from './store.js';
 import {
 	type Account,
@@ -27,6 +27,16 @@ import {
 } from './providers/types.js';
 
 const ACTIVE = ['starting', 'awaiting_consent', 'verifying'];
+// The executable plus its size and modification time: the same path with a new build is a
+// different tool.
+function toolIdentity(tool: string) {
+	try {
+		const s = statSync(tool);
+		return `${tool}:${s.size}:${s.mtimeMs}`;
+	} catch {
+		return `${tool}:missing`;
+	}
+}
 export class LinkService implements Host {
 	readonly registry: Registry;
 	private logins = new Map<string, Login>();
@@ -47,17 +57,22 @@ export class LinkService implements Host {
 	accounts() {
 		return this.registry.list();
 	}
-	// Permission rows come from each CLI's own catalog, cached until the CLI changes.
-	private catalogs = new Map<string, Promise<Catalog>>();
+	// Permission rows come from each CLI's own catalog, cached until the CLI changes: the cache
+	// is keyed by the executable Link would run, so a replaced or updated CLI is read again
+	// rather than compared against rows an earlier build reported.
+	private catalogs = new Map<string, { tool: string; catalog: Promise<Catalog> }>();
 	catalog(id: string): Promise<Catalog> {
-		let catalog = this.catalogs.get(id);
-		if (!catalog) {
-			const p = provider(id);
-			if (!p.catalog) return Promise.reject(new Error('This integration has no permission list.'));
-			catalog = p.catalog(executable(this.dir, id));
-			this.catalogs.set(id, catalog);
-			catalog.catch(() => this.catalogs.delete(id));
-		}
+		const p = provider(id);
+		if (!p.catalog) return Promise.reject(new Error('This integration has no permission list.'));
+		const path = executable(this.dir, id);
+		const tool = toolIdentity(path);
+		const cached = this.catalogs.get(id);
+		if (cached && cached.tool === tool) return cached.catalog;
+		const catalog = p.catalog(path);
+		this.catalogs.set(id, { tool, catalog });
+		catalog.catch(() => {
+			if (this.catalogs.get(id)?.catalog === catalog) this.catalogs.delete(id);
+		});
 		return catalog;
 	}
 	discoveryUnavailable: string[] = [];
@@ -188,7 +203,7 @@ export class LinkService implements Host {
 		return this.publicLogin(l);
 	}
 	// Checks shared by every way of connecting; returns the account being reconnected, if any.
-	private claim(providerId: string, accountId: string | undefined) {
+	private async claim(providerId: string, accountId: string | undefined) {
 		// Consent is serialized per provider. Google remote state reuse must not bind a second
 		// pending account to the first account's callback.
 		for (const l of this.logins.values()) {
@@ -197,14 +212,16 @@ export class LinkService implements Host {
 			if (l.state === 'verifying')
 				throw new Error('Finish or cancel the current sign-in for this integration first.');
 			// Starting again replaces a sign-in still waiting on the provider (for example one the
-			// provider refused on its own page, which never returns here).
+			// provider refused on its own page, which never returns here). The replaced sign-in's
+			// session at the return service is released before the new one registers, since the
+			// service holds one session per OAuth state.
 			if (l.account_id === accountId) {
 				l.state = 'cancelled';
 				l.child?.kill();
-				void l.callback?.cancel().catch(() => {});
 				l.url = null;
 				l.code = null;
 				l.paste = undefined;
+				await l.callback?.cancel().catch(() => {});
 			} else this.cancel(l.id, l.actor);
 		}
 		if (this.logins.size >= 100) {
@@ -234,7 +251,7 @@ export class LinkService implements Host {
 			selectionScopes(p.ui, catalog, input.permissions);
 		} else if (input.permissions.length) throw new Error('Select supported permissions.');
 		const prepared = p.prepare?.(this.dir, input, catalog);
-		const prior = this.claim(input.provider, input.account_id);
+		const prior = await this.claim(input.provider, input.account_id);
 		if (prior) p.validate?.(input, prior);
 		const a: Account = {
 			id: prior?.id ?? `acct_${randomUUID()}`,
@@ -350,7 +367,7 @@ export class LinkService implements Host {
 		if (!p.connectKey) throw new Error('This integration does not connect with a key.');
 		const setup = p.readiness(this.dir);
 		if (setup.state !== 'ready') throw new Error(setup.message);
-		const prior = this.claim(input.provider, input.account_id);
+		const prior = await this.claim(input.provider, input.account_id);
 		if (prior && prior.auth !== 'service_key')
 			throw new Error('This account signs in with the provider; reconnect it instead.');
 		const problem = await this.cliProblem(input.provider);

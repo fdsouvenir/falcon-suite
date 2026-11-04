@@ -2,6 +2,7 @@ import { randomBytes, createHash, webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { provision, type Provision } from './cli.js';
 import type { Provider } from './model.js';
+import { PublicError } from './providers/types.js';
 
 export type CallbackConfig = {
 	url: string;
@@ -34,6 +35,20 @@ export function microsoftAuthority(p: Provision) {
 	return `https://login.microsoftonline.com/${p.microsoft_tenant || 'common'}/oauth2/v2.0`;
 }
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+// Every failure here names the sign-in return service, so a provider's earlier stage label
+// (for example its permission check) is never reported for a callback problem.
+const unreachable = () =>
+	new PublicError(
+		'callback_unreachable',
+		'The sign-in return service could not be reached from this Office. Try again, or contact your administrator.'
+	);
+async function reach(url: URL, init: RequestInit) {
+	try {
+		return await fetch(url, init);
+	} catch {
+		throw unreachable();
+	}
+}
 async function request(
 	config: CallbackConfig,
 	route: string,
@@ -41,7 +56,7 @@ async function request(
 	method: string,
 	body?: unknown
 ) {
-	const response = await fetch(new URL(route, config.url), {
+	const response = await reach(new URL(route, config.url), {
 		method,
 		redirect: 'error',
 		signal: AbortSignal.timeout(15000),
@@ -52,12 +67,21 @@ async function request(
 		},
 		...(body ? { body: JSON.stringify(body) } : {})
 	});
+	// The service keeps one session per OAuth state; a second registration of the same state
+	// is refused until the first is cancelled, finished or expired.
+	if (response.status === 409)
+		throw new PublicError(
+			'callback_session_exists',
+			'The sign-in return service still holds an earlier sign-in for this request. Wait a minute, then try again.'
+		);
 	if (!response.ok)
-		throw new Error(
-			'The callback service is unavailable. Start a new sign-in or contact your administrator.'
+		throw new PublicError(
+			'callback_unavailable',
+			'The sign-in return service refused this request. Try again, or contact your administrator.'
 		);
 	const text = await response.text();
-	if (text.length > 32768) throw new Error('Invalid callback response.');
+	if (text.length > 32768)
+		throw new PublicError('callback_invalid', 'The sign-in return service gave an invalid answer.');
 	return { status: response.status, data: JSON.parse(text) };
 }
 export class CallbackHandoff {
@@ -70,16 +94,28 @@ export class CallbackHandoff {
 		private readonly privateKey: webcrypto.CryptoKey
 	) {}
 	static async create(config: CallbackConfig, provider: Provider, state: string) {
-		const health = await fetch(new URL('/health', config.url), {
+		const health = await reach(new URL('/health', config.url), {
 			redirect: 'error',
 			signal: AbortSignal.timeout(15000)
 		});
-		const info = (await health.json()) as { version?: string; protocol?: number };
+		const info = (await health.json().catch(() => ({}))) as {
+			version?: string;
+			protocol?: number;
+		};
 		if (!health.ok || info.version !== config.version || info.protocol !== 1)
-			throw new Error('The callback service version does not match the configured release.');
-		const token = readFileSync(config.token_file, 'utf8').trim();
+			throw new PublicError(
+				'callback_version_mismatch',
+				'The sign-in return service does not match the release this Office is set up for. Contact your administrator.'
+			);
+		let token = '';
+		try {
+			token = readFileSync(config.token_file, 'utf8').trim();
+		} catch {}
 		if (!/^[A-Za-z0-9_-]{43,128}$/.test(token))
-			throw new Error('Callback service credentials are invalid.');
+			throw new PublicError(
+				'callback_credentials_invalid',
+				"This Office's sign-in return service credentials are missing or invalid. Contact your administrator."
+			);
 		const keys = await webcrypto.subtle.generateKey(
 			{
 				name: 'RSA-OAEP',
@@ -98,7 +134,10 @@ export class CallbackHandoff {
 			public_key: await webcrypto.subtle.exportKey('jwk', keys.publicKey)
 		});
 		if (data.id !== hash(state) || data.protocol !== 1 || data.expires_in !== 600)
-			throw new Error('Invalid callback session.');
+			throw new PublicError(
+				'callback_session_invalid',
+				'The sign-in return service registered this sign-in incorrectly. Try again, or contact your administrator.'
+			);
 		return new CallbackHandoff(config, data.id, state, provider, pollToken, keys.privateKey);
 	}
 	async consume(): Promise<{ code?: string; error?: string } | null> {

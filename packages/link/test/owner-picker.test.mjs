@@ -356,6 +356,15 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		assert.match(document.body.textContent, /Needs attention/);
 		const form = document.querySelector('.fl-form');
 		assert.ok(form.closest('.fl-account'), 'reconnect opens inside the account card');
+		assert.ok(
+			[...form.querySelectorAll('button')].some((b) => b.textContent === 'Continue'),
+			'the form only continues; Google sign-in comes on the next screen'
+		);
+		assert.equal(
+			form.querySelector('.fl-signin'),
+			null,
+			'no Google button before a sign-in address exists'
+		);
 		form.reportValidity = () => true;
 		email.value = 'fred@example.com';
 		assert.equal(
@@ -389,7 +398,12 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 			'no separate sign-in panel'
 		);
 		const open = signing.querySelector('.fl-sign-in a');
-		assert.equal(open?.textContent, 'Open sign-in');
+		assert.equal(
+			open?.getAttribute('aria-label'),
+			'Sign in with Google',
+			"Google's own sign-in button is the link that opens the sign-in"
+		);
+		assert.ok(open.classList.contains('fl-signin'));
 		assert.equal(open.href, 'https://accounts.google.com/test-consent');
 		assert.equal(open.target, '_blank');
 		const copy = [...document.querySelectorAll('.fl-sign-in button')].find(
