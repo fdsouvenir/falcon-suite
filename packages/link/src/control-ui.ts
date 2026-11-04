@@ -168,7 +168,6 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	const nav = el('nav', undefined, 'fl-nav');
 	nav.setAttribute('aria-label', 'Integrations');
 	const detail = el('div', undefined, 'fl-detail');
-	const formHost = el('div', undefined, 'fl-form-host');
 	layout.append(nav, detail);
 	root.append(header, notification, layout);
 	container.append(root);
@@ -187,8 +186,9 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	let disposed = false;
 	let refreshing = false;
 	let poll: ReturnType<typeof setTimeout> | undefined;
+	// A sign-in in progress is shown inside its account's card; nothing about an account appears
+	// anywhere else on the page.
 	let activeLogin: Login | null = null;
-	let lastStart: StartInput | null = null;
 	let formDisposer: (() => void) | undefined;
 	// Check connection results and open Manage sections stay with their card across refreshes.
 	const checks = new Map<string, { busy: boolean; error?: string }>();
@@ -196,17 +196,30 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	const accessOpen = new Set<string>();
 	// An account's own form or confirmation opens inside its card, replacing the card's actions.
 	let cardForm: { account: string; node: HTMLElement } | null = null;
+	// A new account's form takes the place in the list where that account will appear.
+	let pending: { provider: Provider; node: HTMLElement } | null = null;
 	const message = (s: string, error = false) => {
 		notification.textContent = s;
 		notification.classList.toggle('fl-error', error);
 	};
 	const canWrite = () => host.connection.canWrite;
+	// A form's own problems are shown in the form, next to what needs fixing.
+	function formError() {
+		const p = el('p', undefined, 'fl-form-error fl-error');
+		p.setAttribute('role', 'alert');
+		return p;
+	}
 	// The provider address is offered, not opened: a login belongs to its address, not to the tab
 	// that opened it, so the person can paste it into another browser profile or device.
 	function signInLink(url: string) {
 		const box = el('div', undefined, 'fl-sign-in');
 		const open = link('Open sign-in', url);
 		open.className = 'fl-btn fl-btn-primary';
+		const note = el(
+			'p',
+			'Open sign-in uses this browser profile. To sign in from a different browser profile or device, copy the link and open it there. This page keeps waiting.',
+			'fl-muted'
+		);
 		const copy = button('Copy link', async () => {
 			try {
 				await navigator.clipboard.writeText(url);
@@ -215,33 +228,34 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					copy.textContent = 'Copy link';
 				}, 2000);
 			} catch {
-				message(
-					'The link could not be copied. Right-click Open sign-in and choose “Copy link address”.',
-					true
-				);
+				note.textContent =
+					'The link could not be copied. Right-click Open sign-in and choose “Copy link address”.';
+				note.className = 'fl-error';
 			}
 		});
 		const actions = el('div', undefined, 'fl-sign-in-actions');
 		actions.append(open, copy);
-		box.append(
-			actions,
-			el(
-				'p',
-				'Open sign-in uses this browser profile. To sign in from a different browser profile or device, copy the link and open it there. This page keeps waiting.',
-				'fl-muted'
-			)
-		);
+		box.append(actions, note);
 		return box;
 	}
-	async function act<T>(b: HTMLButtonElement, action: () => Promise<T>, success?: string) {
+	async function act<T>(
+		b: HTMLButtonElement,
+		action: () => Promise<T>,
+		success?: string,
+		error?: HTMLElement
+	) {
 		b.disabled = true;
+		if (error) error.textContent = '';
 		try {
 			const r = await action();
 			if (disposed) return;
 			if (success) message(success);
 			return r;
 		} catch (e) {
-			if (!disposed) message((e as Error).message || 'The operation failed. Try again.', true);
+			if (disposed) return;
+			const text = (e as Error).message || 'The operation failed. Try again.';
+			if (error) error.textContent = text;
+			else message(text, true);
 		} finally {
 			if (!disposed) b.disabled = !canWrite();
 		}
@@ -257,14 +271,20 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	function closeForm() {
 		formDisposer?.();
 		formDisposer = undefined;
-		formHost.replaceChildren();
-		if (cardForm) {
+		if (cardForm || pending) {
 			cardForm = null;
+			pending = null;
 			render();
 		}
 	}
 	function openInCard(account: Account, node: HTMLElement, title: HTMLElement) {
 		cardForm = { account: account.id, node };
+		render();
+		title.tabIndex = -1;
+		title.focus();
+	}
+	function openAsNew(provider: Provider, node: HTMLElement, title: HTMLElement) {
+		pending = { provider, node };
 		render();
 		title.tabIndex = -1;
 		title.focus();
@@ -504,7 +524,6 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	// Sign-in never opens the provider by itself: the card offers the link to open or copy, so the
 	// person can finish in another browser profile (or device) than the one showing the Office.
 	async function startSignIn(input: StartInput) {
-		lastStart = input;
 		if (input.account_id) checks.delete(input.account_id);
 		const l = await client.invoke('start', input);
 		if (disposed) return;
@@ -534,12 +553,13 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		closeForm();
 		const provider = selected;
 		const ui = uiOf(provider);
-		const form = el('form', undefined, account ? 'fl-form fl-card-form' : 'fl-form');
+		const form = el('form', undefined, account ? 'fl-form fl-card-form' : 'fl-form fl-card fl-new');
 		const title = el(
-			account ? 'h5' : 'h3',
+			account ? 'h5' : 'h4',
 			metadataOnly ? 'Owner and purpose' : account ? 'Change access' : `Add a ${ui.name} account`
 		);
 		form.append(title);
+		const problem = formError();
 		// Owner and purpose are details, saved without signing in; access changes ask for them
 		// only when the account has none yet.
 		const askMetadata = metadataOnly || !account?.owner || !account?.purpose;
@@ -578,36 +598,40 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		if (!metadataOnly && ui.email_required)
 			actions.append(field(`${ui.name} account address`, email));
 		actions.append(submit, button('Cancel', closeForm));
-		form.append(actions);
+		form.append(problem, actions);
 		form.addEventListener('submit', (event) => {
 			event.preventDefault();
 			if (!form.reportValidity()) return;
-			void act(submit, async () => {
-				const values = askMetadata
-					? meta.values()
-					: { owner: account!.owner!, purpose: account!.purpose! };
-				if (!values.owner) throw new Error('Choose an owner.');
-				if (metadataOnly && account) {
-					await client.invoke('metadata', { account_id: account.id, ...values });
-					closeForm();
-					await load();
-					return;
-				}
-				const permissions = rows ? rows.selected() : [];
-				if (rows && !permissions.length) throw new Error('Choose access for at least one service.');
-				await startSignIn({
-					provider,
-					...values,
-					permissions,
-					...(account ? { account_id: account.id } : {}),
-					...(ui.email_required ? { email: email.value.trim() } : {})
-				});
-			});
+			void act(
+				submit,
+				async () => {
+					const values = askMetadata
+						? meta.values()
+						: { owner: account!.owner!, purpose: account!.purpose! };
+					if (!values.owner) throw new Error('Choose an owner.');
+					if (metadataOnly && account) {
+						await client.invoke('metadata', { account_id: account.id, ...values });
+						closeForm();
+						await load();
+						return;
+					}
+					const permissions = rows ? rows.selected() : [];
+					if (rows && !permissions.length)
+						throw new Error('Choose access for at least one service.');
+					await startSignIn({
+						provider,
+						...values,
+						permissions,
+						...(account ? { account_id: account.id } : {}),
+						...(ui.email_required ? { email: email.value.trim() } : {})
+					});
+				},
+				undefined,
+				problem
+			);
 		});
-		if (account) return openInCard(account, form, title);
-		formHost.append(form);
-		title.tabIndex = -1;
-		title.focus();
+		if (account) openInCard(account, form, title);
+		else openAsNew(provider, form, title);
 	}
 	// Connects with a pasted service key instead of a sign-in; the key is sent once and never shown again.
 	function keyForm(account?: Account) {
@@ -616,9 +640,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const provider = selected;
 		const ui = uiOf(provider);
 		if (!ui.key) return;
-		const form = el('form', undefined, account ? 'fl-form fl-card-form' : 'fl-form');
-		const title = el(account ? 'h5' : 'h3', account ? 'Replace service key' : ui.key.action);
+		const form = el('form', undefined, account ? 'fl-form fl-card-form' : 'fl-form fl-card fl-new');
+		const title = el(account ? 'h5' : 'h4', account ? 'Replace service key' : ui.key.action);
 		form.append(title, el('p', ui.key.help, 'fl-muted'));
+		const problem = formError();
 		const meta = metadataFields(account?.owner ?? undefined, account?.purpose ?? undefined);
 		form.append(...meta.nodes);
 		const key = el('input');
@@ -633,7 +658,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		submit.disabled = !canWrite();
 		const actions = el('div', undefined, 'fl-actions');
 		actions.append(submit, button('Cancel', closeForm));
-		form.append(actions);
+		form.append(problem, actions);
 		form.addEventListener('submit', (event) => {
 			event.preventDefault();
 			if (!form.reportValidity()) return;
@@ -653,13 +678,12 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 					closeForm();
 					await load();
 				},
-				'Account connected.'
+				'Account connected.',
+				problem
 			);
 		});
-		if (account) return openInCard(account, form, title);
-		formHost.append(form);
-		title.tabIndex = -1;
-		title.focus();
+		if (account) openInCard(account, form, title);
+		else openAsNew(provider, form, title);
 	}
 	function scheduleLogin() {
 		clearTimeout(poll);
@@ -669,7 +693,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				const next = (await client.invoke('login', { id: activeLogin!.id })) as Login;
 				if (disposed) return;
 				const changed = JSON.stringify(next) !== JSON.stringify(activeLogin);
-				activeLogin = next;
+				settleLogin(next);
 				if (changed) await load();
 				scheduleLogin();
 			} catch {
@@ -678,77 +702,76 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			}
 		}, 2000);
 	}
-	function loginCard() {
-		if (!activeLogin) return null;
-		const login = activeLogin;
-		const card = el('section', undefined, 'fl-card fl-login');
-		card.setAttribute('aria-live', 'polite');
-		const dismiss = button('Dismiss', () => {
-			activeLogin = null;
-			render();
-		});
-		const retry = button('Try again', async () => {
-			await act(retry, async () => startSignIn(lastStart!));
-		});
-		retry.disabled = !canWrite() || !lastStart;
-		if (ACTIVE.includes(login.state)) {
-			card.append(el('h3', 'Signing in…'));
-			if (login.step)
-				card.append(el('p', `Step ${login.step.number} of ${login.step.total}`, 'fl-muted'));
-			card.append(el('p', login.message));
-			const warning = login.state === 'verifying' ? null : pasteWarning(login.provider);
-			if (warning) card.append(warning);
-			if (login.url) card.append(signInLink(login.url));
-			if (login.code) card.append(el('p', login.code, 'fl-device-code'));
-			if (login.url && login.paste && login.state === 'awaiting_consent') {
-				const form = el('form', undefined, 'fl-paste');
-				const input = el('input');
-				input.type = login.paste.kind;
-				input.required = true;
-				input.maxLength = 8192;
-				input.autocomplete = 'off';
-				const finish = el('button', 'Continue', 'fl-btn fl-btn-primary');
-				finish.type = 'submit';
-				finish.disabled = !canWrite();
-				form.append(field(login.paste.label, input), finish);
-				form.addEventListener('submit', (event) => {
-					event.preventDefault();
-					void act(finish, async () => {
+	// A finished sign-in leaves nothing of its own behind: the account's card already says
+	// Connected or Needs attention (with the reason), and a cancelled new account is gone.
+	function settleLogin(next: Login) {
+		activeLogin = ACTIVE.includes(next.state) ? next : null;
+		if (next.state === 'connected') message(next.message);
+	}
+	// The sign-in in progress, inside the account's card where its actions normally are.
+	function loginPanel(login: Login) {
+		const panel = el('div', undefined, 'fl-card-form fl-signing-in');
+		panel.setAttribute('aria-live', 'polite');
+		panel.append(
+			el(
+				'h5',
+				login.step ? `Signing in — step ${login.step.number} of ${login.step.total}` : 'Signing in'
+			),
+			el('p', login.message)
+		);
+		const warning = login.state === 'verifying' ? null : pasteWarning(login.provider);
+		if (warning) panel.append(warning);
+		if (login.url) panel.append(signInLink(login.url));
+		if (login.code) panel.append(el('p', login.code, 'fl-device-code'));
+		const problem = formError();
+		if (login.url && login.paste && login.state === 'awaiting_consent') {
+			const form = el('form', undefined, 'fl-paste');
+			const input = el('input');
+			input.type = login.paste.kind;
+			input.required = true;
+			input.maxLength = 8192;
+			input.autocomplete = 'off';
+			const finish = el('button', 'Continue', 'fl-btn fl-btn-primary');
+			finish.type = 'submit';
+			finish.disabled = !canWrite();
+			form.append(field(login.paste.label, input), finish);
+			form.addEventListener('submit', (event) => {
+				event.preventDefault();
+				void act(
+					finish,
+					async () => {
 						const value = input.value;
 						input.value = '';
-						activeLogin = (await client.invoke('finish', {
-							id: login.id,
-							redirect: value
-						})) as Login;
+						settleLogin(
+							(await client.invoke('finish', { id: login.id, redirect: value })) as Login
+						);
 						if (!disposed) await load();
-					});
-				});
-				card.append(form);
-			}
-			if (login.state !== 'verifying') {
-				const cancel = button('Cancel sign-in', async () => {
-					await act(cancel, async () => {
-						activeLogin = (await client.invoke('cancel', { id: login.id })) as Login;
+					},
+					undefined,
+					problem
+				);
+			});
+			panel.append(form);
+		}
+		panel.append(problem);
+		if (login.state !== 'verifying') {
+			const cancel = button('Cancel sign-in', async () => {
+				await act(
+					cancel,
+					async () => {
+						settleLogin((await client.invoke('cancel', { id: login.id })) as Login);
 						await load();
-					});
-				});
-				cancel.disabled = !canWrite();
-				card.append(cancel);
-			}
-			return card;
+					},
+					undefined,
+					problem
+				);
+			});
+			cancel.disabled = !canWrite();
+			const actions = el('div', undefined, 'fl-actions');
+			actions.append(cancel);
+			panel.append(actions);
 		}
-		const actions = el('div', undefined, 'fl-actions');
-		if (login.state === 'connected') card.append(el('p', login.message));
-		else if (login.state === 'cancelled') {
-			card.append(el('p', login.message));
-			actions.append(retry);
-		} else {
-			card.append(el('p', login.message, 'fl-error'));
-			actions.append(retry);
-		}
-		actions.append(dismiss);
-		card.append(actions);
-		return card;
+		return panel;
 	}
 	const signingIn = (a: Account) =>
 		activeLogin?.account_id === a.id && ACTIVE.includes(activeLogin.state);
@@ -1199,13 +1222,17 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		});
 		manage.append(el('summary', 'Manage account'), actions);
 		footer.append(manage);
-		card.append(cardForm?.account === a.id ? cardForm.node : footer);
+		// While signing in, the card's actions give way to the sign-in itself.
+		card.append(
+			signingIn(a) ? loginPanel(activeLogin!) : cardForm?.account === a.id ? cardForm.node : footer
+		);
 		return card;
 	}
 	function render() {
 		if (disposed) return;
 		const focused =
-			formHost.contains(document.activeElement) || cardForm?.node.contains(document.activeElement)
+			pending?.node.contains(document.activeElement) ||
+			cardForm?.node.contains(document.activeElement)
 				? (document.activeElement as HTMLElement)
 				: null;
 		layout.classList.toggle('fl-show-detail', selected !== null);
@@ -1284,11 +1311,12 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		};
 		// Integrations that keep one account per Office explain why there's no Add.
 		const single = uiOf(integration.id).single_account;
+		const adding = pending?.provider === selected ? pending.node : null;
 		if (single && list.some((a) => a.state !== 'disconnected'))
 			accountHeading.append(el('p', single, 'fl-muted fl-single-account'));
-		else if (list.length) accountHeading.append(add());
+		else if (list.length && !adding) accountHeading.append(add());
 		detail.append(accountHeading);
-		if (!list.length) {
+		if (!list.length && !adding) {
 			const empty = el('section', undefined, 'fl-empty');
 			const emptyMark = mark(integration.id, true);
 			emptyMark.classList.add('fl-empty-mark');
@@ -1296,12 +1324,10 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 			detail.append(empty);
 		}
 		for (const a of list) detail.append(accountCard(a, integration));
-		if (activeLogin?.provider === selected) {
-			const login = loginCard();
-			if (login) detail.append(login);
-		}
+		// The new account's form sits where its card will appear once it is signing in.
+		if (adding) detail.append(adding);
 		const skills = skillsRow(integration);
-		detail.append(formHost, ...(skills ? [skills] : []), technicalDetails(integration));
+		detail.append(...(skills ? [skills] : []), technicalDetails(integration));
 		if (focused) focused.focus({ preventScroll: true });
 	}
 	void loadOwners().then(() => {

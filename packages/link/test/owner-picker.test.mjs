@@ -114,6 +114,7 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 					result: {
 						id: 'login',
 						provider: 'google',
+						account_id: 'acct_failed',
 						state: 'starting',
 						url: null,
 						message: 'Starting sign-in…',
@@ -127,6 +128,7 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 					result: {
 						id: 'login',
 						provider: 'google',
+						account_id: 'acct_failed',
 						state: 'awaiting_consent',
 						url: 'https://accounts.google.com/test-consent',
 						message: 'Waiting for sign-in',
@@ -328,6 +330,16 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		connect.click();
 		const picker = document.querySelector('select[aria-label="Owner"]');
 		assert.ok(picker);
+		assert.ok(
+			document.querySelector('.fl-detail > .fl-new select[aria-label="Owner"]'),
+			'the new account form is a card in the accounts list, not a panel elsewhere'
+		);
+		assert.equal(
+			[...document.querySelectorAll('button')].filter((b) => b.textContent === 'Add account')
+				.length,
+			0,
+			'Add account is not offered twice while a form is open'
+		);
 		assert.deepEqual(
 			[...picker.querySelectorAll('option')].map((o) => [o.value, o.textContent]),
 			[
@@ -343,6 +355,7 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		assert.equal(email.readOnly, false, 'an unverified empty address must remain editable');
 		assert.match(document.body.textContent, /Needs attention/);
 		const form = document.querySelector('.fl-form');
+		assert.ok(form.closest('.fl-account'), 'reconnect opens inside the account card');
 		form.reportValidity = () => true;
 		email.value = 'fred@example.com';
 		assert.equal(
@@ -350,6 +363,15 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 			null,
 			'changing access does not ask for the owner again'
 		);
+		document.querySelector('.fl-notice').textContent = '';
+		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
+		await setImmediate();
+		assert.equal(
+			form.querySelector('.fl-form-error')?.textContent,
+			'Choose access for at least one service.',
+			'a form problem is shown in the form'
+		);
+		assert.equal(document.querySelector('.fl-notice').textContent, '');
 		Object.defineProperty(document.querySelector('select[aria-label="Email"]'), 'value', {
 			value: 'gmail:readonly',
 			configurable: true
@@ -358,7 +380,15 @@ test('owner picker excludes system agents by roster kind, not by name', async ()
 		await setImmediate();
 		assert.match(document.body.textContent, /Starting sign-in/);
 		await new Promise((resolve) => setTimeout(resolve, 2200));
-		const open = document.querySelector('.fl-sign-in a');
+		const signing = document.querySelector('.fl-account .fl-signing-in');
+		assert.ok(signing, 'the sign-in in progress lives inside the account card');
+		assert.equal(document.querySelectorAll('.fl-signing-in').length, 1);
+		assert.equal(
+			document.querySelector('.fl-detail > .fl-signing-in, .fl-login'),
+			null,
+			'no separate sign-in panel'
+		);
+		const open = signing.querySelector('.fl-sign-in a');
 		assert.equal(open?.textContent, 'Open sign-in');
 		assert.equal(open.href, 'https://accounts.google.com/test-consent');
 		assert.equal(open.target, '_blank');

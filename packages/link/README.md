@@ -60,11 +60,18 @@ Accounts found in a CLI's own store are managed in that store with its own selec
 The hosted callback is used for them only when their OAuth client is the provisioned Link
 client; otherwise the manual or device-code flow is used.
 
-Starting a sign-in never opens the provider by itself. The sign-in card shows the provider
-address as **Open sign-in** (a new tab in the current browser profile) and **Copy link**, so the
-person can paste the address into a different browser profile or device when the account they
-want to connect is signed in there. The login belongs to its address, not to the tab that
-opened it; the page keeps polling until the sign-in finishes or expires.
+Everything about an account happens in its own card. Add account opens the form as a new card
+at the end of the list; once the sign-in starts, that card becomes the account's card with the
+sign-in inside it, and when the sign-in finishes the card simply shows Connected or Needs
+attention with the reason. Reconnecting, changing access, pasting a code or address, and
+cancelling all happen inside the card too, and a form's problems are shown in the form. There
+is no separate sign-in panel.
+
+Starting a sign-in never opens the provider by itself. The card shows the provider address as
+**Open sign-in** (a new tab in the current browser profile) and **Copy link**, so the person can
+paste the address into a different browser profile or device when the account they want to
+connect is signed in there. The login belongs to its address, not to the tab that opened it;
+the page keeps polling until the sign-in finishes or expires.
 
 Cancelling sign-in leaves everything as it was. Changing access doesn't remove access
 already given; the page links to Google's or Microsoft's app-access page for that.
