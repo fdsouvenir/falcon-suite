@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { rmSync } from 'node:fs';
+import { rmSync, statSync } from 'node:fs';
 import { Registry } from './store.js';
 import {
 	type Account,
@@ -27,6 +27,16 @@ import {
 } from './providers/types.js';
 
 const ACTIVE = ['starting', 'awaiting_consent', 'verifying'];
+// The executable plus its size and modification time: the same path with a new build is a
+// different tool.
+function toolIdentity(tool: string) {
+	try {
+		const s = statSync(tool);
+		return `${tool}:${s.size}:${s.mtimeMs}`;
+	} catch {
+		return `${tool}:missing`;
+	}
+}
 export class LinkService implements Host {
 	readonly registry: Registry;
 	private logins = new Map<string, Login>();
@@ -47,17 +57,22 @@ export class LinkService implements Host {
 	accounts() {
 		return this.registry.list();
 	}
-	// Permission rows come from each CLI's own catalog, cached until the CLI changes.
-	private catalogs = new Map<string, Promise<Catalog>>();
+	// Permission rows come from each CLI's own catalog, cached until the CLI changes: the cache
+	// is keyed by the executable Link would run, so a replaced or updated CLI is read again
+	// rather than compared against rows an earlier build reported.
+	private catalogs = new Map<string, { tool: string; catalog: Promise<Catalog> }>();
 	catalog(id: string): Promise<Catalog> {
-		let catalog = this.catalogs.get(id);
-		if (!catalog) {
-			const p = provider(id);
-			if (!p.catalog) return Promise.reject(new Error('This integration has no permission list.'));
-			catalog = p.catalog(executable(this.dir, id));
-			this.catalogs.set(id, catalog);
-			catalog.catch(() => this.catalogs.delete(id));
-		}
+		const p = provider(id);
+		if (!p.catalog) return Promise.reject(new Error('This integration has no permission list.'));
+		const path = executable(this.dir, id);
+		const tool = toolIdentity(path);
+		const cached = this.catalogs.get(id);
+		if (cached && cached.tool === tool) return cached.catalog;
+		const catalog = p.catalog(path);
+		this.catalogs.set(id, { tool, catalog });
+		catalog.catch(() => {
+			if (this.catalogs.get(id)?.catalog === catalog) this.catalogs.delete(id);
+		});
 		return catalog;
 	}
 	discoveryUnavailable: string[] = [];

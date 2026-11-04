@@ -243,15 +243,24 @@ const google: ProviderModule = {
 			!url.searchParams.get('state')
 		)
 			throw new Error('Provider authorization URL could not be verified.');
-		const actual = new Set((url.searchParams.get('scope') ?? '').split(' '));
+		// gog must ask Google for exactly the chosen access. Scope names are already shown under
+		// Technical details, so naming the difference costs nothing and makes a failure explain
+		// itself instead of repeating on every try.
+		const actual = new Set((url.searchParams.get('scope') ?? '').split(' ').filter(Boolean));
 		const wanted = new Set(command.scopes);
-		Object.assign(stage, {
-			code: 'google_permission_mismatch',
-			message:
-				'The Google permission request did not match your selection. No sign-in link was offered.'
-		});
-		if (actual.size !== wanted.size || [...actual].some((s) => !wanted.has(s)))
+		const unchosen = [...actual].filter((s) => !wanted.has(s)).map(short);
+		const unrequested = [...wanted].filter((s) => !actual.has(s)).map(short);
+		if (unchosen.length || unrequested.length) {
+			Object.assign(stage, {
+				code: 'google_permission_mismatch',
+				message:
+					'gog would ask Google for different access than you chose, so no sign-in link was offered.' +
+					(unchosen.length ? ` Not chosen but requested: ${unchosen.join(', ')}.` : '') +
+					(unrequested.length ? ` Chosen but not requested: ${unrequested.join(', ')}.` : '') +
+					' Update gog on this Office, then try again, or contact your administrator.'
+			});
 			throw new Error('Provider permission request differs from the selection.');
+		}
 		if (callback) {
 			l.callback = await CallbackHandoff.create(callback, 'google', url.searchParams.get('state')!);
 			if (l.state !== 'starting') {

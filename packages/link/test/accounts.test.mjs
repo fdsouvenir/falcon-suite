@@ -71,6 +71,12 @@ test('two same-provider accounts retain distinct identities, purposes, encrypted
  await assert.rejects(()=>l.check(first.account_id),/not found/);
  l.registry.save({...l.registry.get(second.account_id),id:'acct_00000000-0000-4000-8000-000000000000',state:'disconnected'}); await l.remove('acct_00000000-0000-4000-8000-000000000000'); assert.deepEqual(l.accounts().map(x=>x.id),[second.account_id],'a record left disconnected by an earlier version can be removed');
 `));
+test('a gog request that differs from the chosen access names the difference and offers no sign-in link', async () =>
+	scenario(`
+ const login=await l.start({...input('fred@example.com'),permissions:['gmail:full']},'fred'); assert.equal(login.state,'failed'); assert.equal(login.url,null);
+ const saved=l.accounts().find(a=>a.id===login.account_id); assert.equal(saved.connection_error.code,'google_permission_mismatch');
+ assert.match(saved.connection_error.message,/Not chosen but requested: gmail\\.readonly\\./); assert.match(saved.connection_error.message,/Chosen but not requested: gmail\\.modify, gmail\\.settings\\.basic\\./);
+`));
 test('wrong callback state and another operator cannot finish a login; cancellation cannot be completed later', async () =>
 	scenario(`
  const login=await l.start(input('fred@example.com'),'fred'); assert.equal(login.state,'awaiting_consent');

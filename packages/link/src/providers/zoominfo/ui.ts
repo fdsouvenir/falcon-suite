@@ -22,7 +22,7 @@ const ui: ProviderUi = {
 		title:
 			"Read this first: after you sign in, ZoomInfo's tab will show an error page. That's expected.",
 		steps: [
-			'Select “Sign in with ZoomInfo”, then “Open sign-in”. ZoomInfo opens in a new tab. Keep this page open.',
+			'Select Continue, then “Sign in with ZoomInfo”. ZoomInfo opens in a new tab. Keep this page open.',
 			'Sign in to ZoomInfo and allow access.',
 			'The ZoomInfo tab then shows a page that “can’t be reached” (for example “This site can’t be reached” or “localhost refused to connect”). This is expected. Nothing is wrong.',
 			'Copy the whole address from that tab’s address bar. It starts with http://localhost:9876/callback',
