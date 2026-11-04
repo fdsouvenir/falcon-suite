@@ -3,7 +3,7 @@
 A set of separately installable OpenClaw plugins. Each package in `packages/` is its own plugin,
 installed and configured on its own.
 
-- `docs/work-spec.md` — the Work 5 specification.
+- `docs/work-spec.md` — the Falcon Work 2.0 specification (draft: the clerk, Jobs, the new pages).
 - `docs/work-commands.md` — the Work command list.
 - `docs/vault-spec.md` — the Vault 5 specification.
 - `docs/link-spec.md` — the approved Falcon Link requirements and issue sequence.
