@@ -209,13 +209,20 @@ const feature = defineFeaturePlugin({
 				},
 				read: async (agentId, sessionKey, sessionId) => {
 					let id = sessionId;
+					// The transcript reader needs the session's current id; look it up when not given.
 					if (!id)
 						try {
-							id = (await runtime.agent.session.getSessionEntryAsync({ agentId, sessionKey }))
-								?.sessionId;
+							for (const { sessionKey: key, entry } of runtime.agent.session.listSessionEntries({
+								agentId
+							}))
+								if (key === sessionKey) {
+									id = entry?.sessionId;
+									break;
+								}
 						} catch {
 							/* fall through */
 						}
+					if (!id) throw new Error(`no session id for ${sessionKey}`);
 					const out: any = await transcripts.readVisibleSessionTranscriptMessageEntries({
 						agentId,
 						sessionKey,
@@ -279,6 +286,12 @@ const feature = defineFeaturePlugin({
 						await getClerk()?.catchUp(14, 30, ctx.scheduler?.signal);
 						log('catch-up finished');
 					});
+				// Sessions left marked for the writer (a restart, a failed pass) are picked up soon after start.
+				later('sweep-marked', 90_000, async () => {
+					const c = getClerk();
+					if (!c) return;
+					for (const m of c.marked()) await c.writerPass(m.agentId, m.session);
+				});
 				// Hourly: the nightly sweep runs once a day, at night.
 				later('nightly-check', 60 * 60 * 1000, async function check() {
 					const w = maybe();
