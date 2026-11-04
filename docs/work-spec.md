@@ -314,8 +314,12 @@ scheduler, with no user request behind them:
 - `runtime.subagent.complete` and `runtime.llm.complete`, with no model named, answered in 1–3 s
   for about $0.0006 per call.
 
-Not yet tested: a `runtime.decisions` (Jev) call from the plugin service. Work 5 only called it
-from hooks.
+A second throwaway plugin called `runtime.decisions.evaluate` (Jev 1.13) from its service, at start
+and from the scheduler: status `ok` in 770 ms on the first call and 102 ms on the second. It judged
+the last turn of a real session (the person asked "what does that mean?" and the agent explained),
+answering `work_asked` 0.09, `needs_person` 0.03, and the unsettled `work_reported` 0.52 and
+`only_conversation` 0.46. Under §3.3 that turn goes to the writer. Answers like these are why the
+questions are measured before release (§11).
 
 Not usable by this plugin: `gateway.readSessionFacts` (bundled or trusted official plugins only)
 and `subagent.getSessionMessages` (only sessions the plugin created). Notes:
@@ -329,12 +333,10 @@ enforcement.
 
 ## 11. Open points
 
-1. **Jev from the service.** Confirm that `runtime.decisions.evaluate` works from the service
-   scheduler, as the writer calls did in the spike.
-2. **Measure before release.** The new questions in §3.2 need labelled real turns: start from the
+1. **Measure before release.** The new questions in §3.2 need labelled real turns: start from the
    Work 5 corpus in `eval/`, reuse `asks.p` and `answers.q` as measured, and tune the thresholds in
    §3.3 on cases kept apart from the test set. The writer's edits need the same treatment: one Task
    per deliverable, update-before-create, and a Needs you that only shows what is really waiting.
-3. **Release numbering.** Published Work is `1.0.0`. This is a breaking change, so it ships as the
+2. **Release numbering.** Published Work is `1.0.0`. This is a breaking change, so it ships as the
    next major version.
-4. **`docs/work-commands.md`** is out of date and needs rewriting to match §4–§5.
+3. **`docs/work-commands.md`** is out of date and needs rewriting to match §4–§5.
