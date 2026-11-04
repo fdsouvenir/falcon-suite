@@ -111,6 +111,33 @@ test('Needs you holds open Questions and Decisions for the person, with their se
 	assert.ok(![...w.views.board().moving, ...w.views.board().waiting].some((c) => c.id === t));
 });
 
+test('the person can dismiss a Question or Decision from Needs you, even when its session is gone', () => {
+	const { w, ok } = world();
+	const q = ok({
+		command: 'raise_question',
+		input: { prompt: 'Q?', impact: 'i', answerable_by: [FRED.id], session: 'agent:main:gone' }
+	});
+	const d = ok({
+		command: 'raise_decision',
+		input: {
+			prompt: 'D?',
+			options: [
+				{ id: 'a', label: 'A' },
+				{ id: 'b', label: 'B' }
+			],
+			recommendation: { option: 'a', rationale: 'r' },
+			deciders: [FRED.id],
+			consequence_of_no_decision: 'c',
+			session: 'agent:main:gone'
+		}
+	});
+	assert.equal(w.views.needsYou().length, 2);
+	const reason = { reason: 'Dismissed from Needs you' };
+	ok({ command: 'withdraw_question', id: q, input: reason }, FRED);
+	ok({ command: 'withdraw_decision', id: d, input: reason }, FRED);
+	assert.equal(w.views.needsYou().length, 0);
+});
+
 test("Work never overwrites a field a person or agent set; the agent's status line wins", () => {
 	const { w, ok } = world();
 	const t = ok(

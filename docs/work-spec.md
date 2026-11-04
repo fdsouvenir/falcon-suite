@@ -247,18 +247,24 @@ Everything an agent writes through a tool counts as an agent entry (§3.3).
 
 ## 6. Pages
 
-Work is a native Control UI page, read-only throughout. The only interactive elements are session
-chips (they open that session), links to Work items, the Back link, search and the "Done this week"
-expanders. To act on something you go back to its session or start a new one. Mockups: Stitch
+Work is a native Control UI page, read-only apart from dismissing an ask on Needs you. The other
+interactive elements are session chips and titles (they open that session), links to Work items,
+the Back link, search, filters and expanders. To act on something you go back to its session or
+start a new one. Mockups: Stitch
 project _Falcon Work 5_, with copies in `media/preview/work-home-2026-11-03/`.
 
 ### Home (screen `a0c126201da946a4b5c0224b02d9ed5b`)
 
 Title and "Since you were here …" line, with search. Then three stacked sections:
 
-1. **Needs you** — one card per open Question or Decision: the item it concerns, the question in
-   one sentence, and a clickable chip for the session it came from. A session that no longer exists
-   shows greyed out and cannot be clicked.
+1. **Needs you** (screen `02f1af63a3d8490f8c912433a7d916b8`) — the open Questions and Decisions
+   grouped by the session they came from, newest session first, in one dense accordion with
+   All / Questions / Decisions and agent filters. A collapsed session is one row: agent, session
+   title (opens the session), its newest ask, count and age. The newest session starts open; an open
+   session lists its asks one per line (Q or D, the item it concerns, the question, age) and shows 5
+   before "+N more". Eight sessions show before "Show N older sessions". There are no Answer or
+   Decide buttons; each ask has a **Dismiss** (×), which withdraws it. A session that no longer
+   exists is greyed and offers **Dismiss all**, since nothing else can clear its asks.
 2. **Everything in motion** — a three-column board: **Moving**, **Waiting**, **Done this week**.
    Each Job and each Project is one card with its Tasks inside, and only standalone Tasks get their
    own card. A card shows its type, title, status line, current Milestone for a Project, and a

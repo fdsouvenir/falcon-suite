@@ -39,3 +39,22 @@
 | Delete step + group menu | `ee6b93b4fcd9471bb7f18e2718a2908c` | generated, 1 correction round; group menu is clipped (artifact) |
 | Mobile list              | `87e7f9becb1c4384a23da63ae5841e0d` | generated, 1 correction round                                   |
 | Mobile entry, editing    | `cfcba313416b4d289f11470772ddf721` | generated, 1 correction round                                   |
+
+### Needs you, grouped by session (Nov 4 exploration)
+
+Files in `screens/needs-you/` (Stitch PNG + HTML). Generated, no correction rounds yet; invented extras
+(Deploy Update, worker/buffer footers, session IDs, Host Observer nav) are artifacts.
+
+| Variant              | Stitch id                          |
+| -------------------- | ---------------------------------- |
+| A — accordion list   | `00bd51ae478245df813de3e6f7d4f637` |
+| B — two-pane inbox   | `a368152be88a47429ca87f01eec0d79e` |
+| C — grouped table    | `a87425513195417eaee3b416f36fddf9` |
+
+Round 2 (read-only asks + Dismiss, board and What happened kept below; prompts in `screens/needs-you/*.txt`):
+
+| Variant                     | Stitch id                          |
+| --------------------------- | ---------------------------------- |
+| A2 — accordion              | `02f1af63a3d8490f8c912433a7d916b8` |
+| B2 — session tiles          | `3438c55b91d546eb97e4b5ab7c087ac3` |
+| C2 — capped scrolling inbox | `3274639bdea34514ae9c9a9bc2cc7c93` |

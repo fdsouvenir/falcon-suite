@@ -229,24 +229,10 @@ export const columns = (main: Child[], aside: Child[]) =>
 	);
 
 /**
- * Needs you. On Home each item is a card naming the item it concerns; on an item's own page it is a
- * row with the session on the right.
+ * Needs you on an item's own page: a row per ask with the session on the right. (Home groups the
+ * asks by session; see views/needs.ts.)
  */
-export function needsYou(c: Ctx, items: NeedsYouItem[], opts: { page?: string } = {}) {
-	if (opts.page === undefined)
-		return h(
-			'div',
-			{ class: 'fw-needs' },
-			items.map((n) =>
-				h(
-					'article',
-					{ class: 'fw-need' },
-					n.about ? h('h3', { class: 'fw-need-title' }, itemLink(c, n.about)) : null,
-					h('p', { class: 'fw-need-prompt' }, n.prompt),
-					n.session ? h('div', null, sessionChip(c, n.session, n.since)) : null
-				)
-			)
-		);
+export function needsYou(c: Ctx, items: NeedsYouItem[], opts: { page: string }) {
 	return h(
 		'div',
 		{ class: 'fw-needs' },

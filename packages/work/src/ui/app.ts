@@ -22,7 +22,10 @@ type ReadInput = {
 /** A session as the chips show it; `undefined` while the session list is still loading. */
 export type SessionInfo = { title: string; active: boolean } | null | undefined;
 
-/** What every view gets: data access, navigation and sessions. The pages are read-only. */
+/**
+ * What every view gets: data access, navigation and sessions. The pages are read-only, apart from
+ * dismissing an ask on Needs you.
+ */
 export type Ctx = {
 	host: ControlUiHost;
 	signal: AbortSignal;
@@ -32,13 +35,15 @@ export type Ctx = {
 	/** The person this Gateway's Work belongs to, when the read says so. */
 	owner: string | null;
 	read: <T>(input: ReadInput) => Promise<T>;
+	/** Dismiss an ask on Needs you (the only change the page makes). */
+	dismiss: (ask: { kind: 'question' | 'decision'; id: string }) => Promise<void>;
 	go: (params: Record<string, string | undefined>) => void;
 	href: (params: Record<string, string | undefined>) => string;
 	open: (ref: Pick<ItemRef, 'id' | 'kind'>) => void;
 	hrefFor: (ref: Pick<ItemRef, 'id' | 'kind'>) => string;
 	session: (key: string) => SessionInfo;
 	openSession: (key: string) => void;
-	/** Remembered open/closed state of the "Done this week" expanders across redraws. */
+	/** Remembered open/closed state of expanders and Needs you groups across redraws. */
 	expanded: Set<string>;
 };
 
@@ -107,6 +112,14 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 				if (typeof o === 'string') owner = o;
 				return r as T;
 			},
+			dismiss: async (ask) => {
+				const r: any = await feature.invoke('do', {
+					command: ask.kind === 'question' ? 'withdraw_question' : 'withdraw_decision',
+					id: ask.id,
+					input: { reason: 'Dismissed from Needs you' }
+				} as never);
+				if (r?.outcome === 'rejected') throw new Error(r.reason ?? 'Could not dismiss');
+			},
 			go: (params) => context.host.navigation.openPage({ id: PAGE_ID, params: clean(params) }),
 			href: (params) => context.host.navigation.pageHref({ id: PAGE_ID, params: clean(params) }),
 			open: (ref) => context.host.navigation.openPage({ id: PAGE_ID, params: target(ref) }),
@@ -125,6 +138,9 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 		const c = ctx();
 		for (const el of root.querySelectorAll<HTMLElement>('[data-session]'))
 			el.replaceWith(sessionChip(c, el.dataset.session!, el.dataset.at ?? null));
+		// Needs you groups by session, so it redraws itself once titles and missing sessions are known.
+		for (const el of root.querySelectorAll<HTMLElement>('[data-needs]'))
+			(el as HTMLElement & { repaint?: (c: Ctx) => void }).repaint?.(c);
 	}
 
 	async function page(c: Ctx): Promise<Node> {

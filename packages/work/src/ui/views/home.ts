@@ -5,13 +5,13 @@ import {
 	happened,
 	itemLink,
 	kindChip,
-	needsYou,
 	pageTitle,
 	searchField,
 	section,
 	KIND
 } from '../parts.js';
 import type { Card, DoneRow, HomePage } from '../types.js';
+import { needsBySession } from './needs.js';
 
 /** Home (spec §6): Needs you, Everything in motion, What happened since the last visit. */
 export async function homeView(c: Ctx) {
@@ -55,7 +55,7 @@ export async function homeView(c: Ctx) {
 			'Needs you',
 			d.needs_you.length,
 			{ dot: 'accent' },
-			d.needs_you.length ? needsYou(c, d.needs_you) : empty('Nothing needs you.')
+			d.needs_you.length ? needsBySession(c, d.needs_you) : empty('Nothing needs you.')
 		),
 		section(
 			'Everything in motion',
