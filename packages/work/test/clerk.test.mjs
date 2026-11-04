@@ -434,7 +434,7 @@ test('the writer is given real names and told never to write "the agent" or "the
 	assert.deepEqual(JSON.parse(sent.message).names, { agent: 'Verl', person: 'Fred' });
 	assert.match(sent.system, /never "the agent", "the person"/);
 	assert.equal(
-		clerk.names('william', 's').agent,
+		setup().clerk.names('william', 's').agent,
 		'William',
 		'without a resolver, the agent id is the name'
 	);
