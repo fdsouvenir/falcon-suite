@@ -70,9 +70,9 @@ export function addPlan(
 	for (const { task, milestone } of placed) {
 		const { key, depends_on, ...rest } = task;
 		const id = insertTask(ctx, rest, {
-			area_id: null,
 			project_id: project,
-			milestone_id: milestone
+			milestone_id: milestone,
+			job_id: null
 		});
 		if (key) byKey.set(key, id);
 		created.push({ id, task });

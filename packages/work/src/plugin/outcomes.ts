@@ -14,7 +14,7 @@ import type { TurnOutcome } from '../store/work.js';
 const clip = (s: string, n = 160) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
-const RECORDING_TOOLS = /^falcon_work(_plan|_task|_ask|_finding)?$/;
+const RECORDING_TOOLS = /^falcon_work(_plan|_task|_job|_ask|_finding)?$/;
 const FILE_TOOLS = new Set([
 	'write',
 	'edit',

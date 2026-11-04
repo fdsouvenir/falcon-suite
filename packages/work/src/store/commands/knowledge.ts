@@ -7,6 +7,7 @@ import {
 	Text,
 	Short,
 	Reason,
+	Session,
 	When,
 	Who,
 	Sources,
@@ -20,38 +21,11 @@ import {
 
 const parse = <T>(v: unknown): T => JSON.parse(v as string) as T;
 
-/** The discussion session an Ask about these targets should use (spec §9 fallback). */
-function sessionFor(ctx: Context, targets: { kind: string; id: string }[]): string | null {
-	for (const t of targets) {
-		if (t.kind === 'task') {
-			const r = ctx.one<{ session_key: string | null; project_id: string | null }>(
-				'SELECT session_key, project_id FROM task WHERE id = ?',
-				t.id
-			);
-			if (r?.session_key) return r.session_key;
-			if (r?.project_id) {
-				const p = ctx.one<{ session_key: string | null }>(
-					'SELECT session_key FROM project WHERE id = ?',
-					r.project_id
-				);
-				if (p?.session_key) return p.session_key;
-			}
-		} else if (t.kind === 'project' || t.kind === 'objective') {
-			const r = ctx.one<{ session_key: string | null }>(
-				`SELECT session_key FROM ${t.kind} WHERE id = ?`,
-				t.id
-			);
-			if (r?.session_key) return r.session_key;
-		}
-	}
-	return null;
-}
-
 function addTargets(
 	ctx: Context,
 	kind: string,
 	id: string,
-	targets: { kind: 'objective' | 'project' | 'milestone' | 'task'; id: string }[] = []
+	targets: { kind: 'job' | 'project' | 'milestone' | 'task'; id: string }[] = []
 ) {
 	for (const t of targets) {
 		ctx.get(t.kind, t.id);
@@ -88,13 +62,15 @@ function checkDecisionBody(i: any) {
 export const knowledgeCommands = [
 	defineCommand({
 		name: 'raise_question',
-		summary: 'Record missing knowledge and who can supply it. People listed get an Ask.',
+		summary:
+			'Record something the person needs to tell the agent. Open Questions for the person show under Needs you.',
 		input: obj({
 			prompt: Short,
 			impact: Short,
 			answerable_by: Type.Array(Who, { minItems: 1, maxItems: 20 }),
 			targets: opt(Type.Array(Target, { maxItems: 50 })),
-			hypothesis: opt(Text)
+			hypothesis: opt(Text),
+			session: opt(Session)
 		}),
 		run(ctx, i) {
 			const id = ctx.newId();
@@ -106,16 +82,13 @@ export const knowledgeCommands = [
 				status: 'open',
 				hypothesis: i.hypothesis ?? null,
 				hypothesis_by: i.hypothesis ? ctx.actor.id : null,
+				session_key: i.session ?? null,
 				created_by: ctx.actor.id,
 				created_at: ctx.now,
 				version: 1
 			});
 			addTargets(ctx, 'question', id, i.targets);
 			ctx.event('question', id, 1);
-			const session = sessionFor(ctx, i.targets ?? []);
-			for (const who of i.answerable_by)
-				if (who.startsWith('person:') && who !== ctx.actor.id)
-					ctx.ask('question', id, who, i.prompt, session);
 			ctx.done(id, 1);
 		}
 	}),
@@ -171,7 +144,6 @@ export const knowledgeCommands = [
 				withdrawn_reason: i.reason
 			});
 			ctx.event('question', q!.id as string, v, { reason: i.reason });
-			ctx.resolveAsks(q!.id as string, 'dismissed');
 			ctx.done(q!.id as string, v);
 		}
 	}),
@@ -179,8 +151,12 @@ export const knowledgeCommands = [
 	defineCommand({
 		name: 'raise_decision',
 		summary:
-			'Put a choice to its deciders, with options and a recommendation. People deciding get an Ask.',
-		input: obj({ ...DecisionBody, targets: opt(Type.Array(Target, { maxItems: 50 })) }),
+			'Put a choice to its deciders, with options and a recommendation. Pending Decisions for the person show under Needs you.',
+		input: obj({
+			...DecisionBody,
+			targets: opt(Type.Array(Target, { maxItems: 50 })),
+			session: opt(Session)
+		}),
 		run(ctx, i) {
 			checkDecisionBody(i);
 			const id = ctx.newId();
@@ -192,16 +168,13 @@ export const knowledgeCommands = [
 				deciders: i.deciders,
 				consequence_of_no_decision: i.consequence_of_no_decision,
 				status: 'pending',
+				session_key: i.session ?? null,
 				created_by: ctx.actor.id,
 				created_at: ctx.now,
 				version: 1
 			});
 			addTargets(ctx, 'decision', id, i.targets);
 			ctx.event('decision', id, 1);
-			const session = sessionFor(ctx, i.targets ?? []);
-			for (const who of i.deciders)
-				if (who.startsWith('person:') && who !== ctx.actor.id)
-					ctx.ask('decision', id, who, i.prompt, session);
 			ctx.done(id, 1);
 		}
 	}),
@@ -244,7 +217,6 @@ export const knowledgeCommands = [
 				deferred_until: null
 			});
 			ctx.event('decision', d!.id as string, v, { option: i.option });
-			ctx.resolveAsks(d!.id as string);
 			ctx.done(d!.id as string, v);
 		}
 	}),
@@ -282,7 +254,6 @@ export const knowledgeCommands = [
 				resolved_at: ctx.now
 			});
 			ctx.event('decision', d!.id as string, v, { reason: i.reason });
-			ctx.resolveAsks(d!.id as string, 'dismissed');
 			ctx.done(d!.id as string, v);
 		}
 	}),
@@ -301,7 +272,6 @@ export const knowledgeCommands = [
 				resolved_at: ctx.now
 			});
 			ctx.event('decision', d!.id as string, v, i);
-			ctx.resolveAsks(d!.id as string, 'dismissed');
 			ctx.done(d!.id as string, v);
 		}
 	}),
@@ -363,22 +333,6 @@ export const knowledgeCommands = [
 			ctx.event('finding', f!.id as string, v, i);
 			ctx.done(f!.id as string, v);
 		}
-	}),
-	defineCommand({
-		name: 'dismiss_ask',
-		on: 'ask',
-		summary: 'Dismiss an Ask. The Question or Decision behind it stays open.',
-		input: obj({ reason: Reason }),
-		run(ctx, i, a) {
-			if (a!.status !== 'pending') return ctx.nothing(a!.id as string, a!.version as number);
-			const v = ctx.update('ask', a!.id as string, {
-				status: 'dismissed',
-				dismissed_reason: i.reason,
-				resolved_at: ctx.now
-			});
-			ctx.event('ask', a!.id as string, v, { reason: i.reason });
-			ctx.done(a!.id as string, v);
-		}
 	})
 ];
 
@@ -409,8 +363,7 @@ function answer(
 		answer: id,
 		...(accepted ? { accepted_hypothesis: true } : {})
 	});
-	ctx.resolveAsks(q.id as string);
 	ctx.done(q.id as string, v, { answer: id });
 }
 
-export { sessionFor, targetsOf };
+export { targetsOf };

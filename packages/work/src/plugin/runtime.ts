@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { PLUGIN_ID } from '../identity.js';
 import { Work } from '../store/work.js';
+import { setAsideWork5 } from '../store/db.js';
 
 /**
  * The Work store, opened lazily by whichever registration of this plugin needs it first.
@@ -23,7 +24,11 @@ let work: Work | null = null;
 /** Called by the service with the Gateway's real state directory. */
 export function startWork(stateDir: string): Work {
 	shared[KEY] = stateDir;
-	return (work ??= new Work(path.join(stateDir, PLUGIN_ID, 'work.db'), 'person:gateway-owner'));
+	if (work) return work;
+	const file = path.join(stateDir, PLUGIN_ID, 'work.db');
+	// A Work 5 database is set aside untouched; 2.0 starts clean and catches up (spec §8).
+	setAsideWork5(file);
+	return (work = new Work(file, 'person:gateway-owner'));
 }
 
 /** The store, opening it if this registration's service has not started yet. */

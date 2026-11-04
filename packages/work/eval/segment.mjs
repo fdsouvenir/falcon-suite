@@ -11,7 +11,7 @@ export const normalize = (s) =>
 		.toLowerCase();
 
 // The plugin's own splitter, so the evaluation judges exactly the pieces Work would use.
-export { segments } from '../dist/plugin/gates.js';
+export { segments } from '../dist/clerk/pieces.js';
 
 /** Which gold class a segment carries: need, offer, chat or none. */
 export function goldFor(segment, labels) {

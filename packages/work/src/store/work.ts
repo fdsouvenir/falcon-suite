@@ -2,52 +2,52 @@ import type { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { openWorkDatabase } from './db.js';
 import { execute, type CommandDef } from './engine.js';
-import { Reads, DEFAULT_THRESHOLDS, type Thresholds } from './reads.js';
 import { Views } from './views.js';
-import { objectiveCommands } from './commands/objectives.js';
-import { structureCommands } from './commands/structure.js';
+import { jobCommands } from './commands/jobs.js';
+import { projectCommands } from './commands/projects.js';
 import { taskCommands } from './commands/tasks.js';
 import { knowledgeCommands } from './commands/knowledge.js';
+import { recordCommands } from './commands/record.js';
 import type { Actor, Envelope, Outcome } from './types.js';
 
 export const COMMANDS: CommandDef[] = [
-	...objectiveCommands,
-	...structureCommands,
+	...jobCommands,
+	...projectCommands,
 	...taskCommands,
+	...recordCommands,
 	...knowledgeCommands
 ];
 
-/** What a turn left outside the chat (spec §10, The record keeper). */
+/** What a turn left outside the chat (spec §3.2). */
 export type TurnOutcome = {
 	kind: 'commit' | 'push' | 'pr' | 'release' | 'deploy' | 'message' | 'file' | 'config' | 'change';
 	label: string;
 	ref?: string;
 };
 
-/** The Work store: commands (`do`), reads, and the writes the hooks make (spec §10). */
+export type ItemKind = 'task' | 'project' | 'job';
+
+/** The Work store: commands (`do`), views, and the record the clerk keeps (spec §3, §4). */
 export class Work {
 	readonly db: DatabaseSync;
-	readonly reads: Reads;
 	readonly views: Views;
 	private readonly commands = new Map(COMMANDS.map((c) => [c.name, c]));
 
 	constructor(
 		file: string,
-		/** The Gateway owner, e.g. `person:<profile>`: the default accountable person. */
+		/** The Gateway owner, e.g. `person:<profile>`: who "Needs you" is for. */
 		readonly owner: string,
-		thresholds: Thresholds = DEFAULT_THRESHOLDS,
 		private readonly clock: () => string = () => new Date().toISOString()
 	) {
 		this.db = openWorkDatabase(file);
-		this.reads = new Reads(this.db, thresholds);
-		this.views = new Views(this.db, this.reads);
+		this.views = new Views(this.db, owner, () => this.clock());
 	}
 
 	do(envelope: Envelope, actor: Actor): Outcome {
 		if (
 			!actor ||
-			(actor.kind !== 'human' && actor.kind !== 'agent') ||
-			!/^(person|agent):\S+$/.test(actor.id)
+			!['human', 'agent', 'work'].includes(actor.kind) ||
+			!/^(person|agent|work):\S+$/.test(actor.id)
 		)
 			throw new TypeError('A valid actor is required');
 		return execute(this.db, this.commands, envelope, actor, this.owner, this.clock());
@@ -71,83 +71,104 @@ export class Work {
 			: null;
 	}
 
-	/** The session a subagent was spawned from, recorded by the subagent_spawned hook. */
-	setParent(session: string, parent: string): void {
-		if (session === parent) return;
-		this.db
-			.prepare(
-				'INSERT INTO session_parent (session_key, parent_key) VALUES (?, ?) ON CONFLICT (session_key) DO UPDATE SET parent_key = excluded.parent_key'
-			)
-			.run(session, parent);
-	}
-
-	/**
-	 * The Task a session is working on: its own, or else its parent's (a subagent works under the
-	 * Task it was spawned for). Only an unfinished Task counts.
-	 */
-	sessionTask(session: string | null | undefined): string | null {
-		const seen = new Set<string>();
-		for (let key = session ?? null; key && !seen.has(key);) {
-			seen.add(key);
-			const row = this.db
-				.prepare(
-					"SELECT s.task_id AS id FROM session_task s JOIN task t ON t.id = s.task_id WHERE s.session_key = ? AND t.status IN ('open','ready','in_progress','waiting')"
-				)
-				.get(key) as { id: string } | undefined;
-			if (row) return row.id;
-			key =
-				(
-					this.db
-						.prepare('SELECT parent_key FROM session_parent WHERE session_key = ?')
-						.get(key) as { parent_key: string } | undefined
-				)?.parent_key ?? null;
-		}
+	/** The kind of an item id, or null. */
+	kindOf(id: string): ItemKind | null {
+		for (const k of ['task', 'project', 'job'] as const)
+			if (this.db.prepare(`SELECT 1 FROM ${k} WHERE id = ?`).get(id)) return k;
 		return null;
 	}
 
-	/** Make a Task the session's current Task (the agent started it here, or Work filed work under it). */
-	setSessionTask(session: string, task: string): void {
+	/** Record that an item's work happened in a session (spec §4, item_session). */
+	linkSession(item: string, kind: ItemKind, session: string, at: string = this.clock()): void {
 		this.db
 			.prepare(
-				'INSERT INTO session_task (session_key, task_id, set_at) VALUES (?, ?, ?) ON CONFLICT (session_key) DO UPDATE SET task_id = excluded.task_id, set_at = excluded.set_at'
+				'INSERT INTO item_session (item_id, item_kind, session_key, first_seen_at, last_seen_at) VALUES (?,?,?,?,?) ON CONFLICT (item_id, session_key) DO UPDATE SET last_seen_at = max(last_seen_at, excluded.last_seen_at)'
 			)
-			.run(session, task, this.clock());
+			.run(item, kind, session, at, at);
+		// A Task's work also happened in its Project's or Job's session.
+		if (kind === 'task') {
+			const t = this.db.prepare('SELECT project_id, job_id FROM task WHERE id = ?').get(item) as
+				{ project_id: string | null; job_id: string | null } | undefined;
+			if (t?.project_id) this.linkSession(t.project_id, 'project', session, at);
+			if (t?.job_id) this.linkSession(t.job_id, 'job', session, at);
+		}
 	}
 
-	/** One turn on the timeline: its outcomes and summary, under a Task or unfiled. */
-	recordTurn(e: {
+	/** One line of history (spec §3.3): what happened, under the item it concerns, or unfiled. */
+	recordEntry(e: {
 		agent: string;
+		item?: { id: string; kind: ItemKind } | null;
 		session?: string | null;
 		run?: string | null;
-		task?: string | null;
 		outcomes: TurnOutcome[];
 		summary?: string | null;
-		by: 'work' | 'agent';
-	}): string {
+		by: 'work' | 'agent' | 'person';
+		at?: string;
+	}): string | null {
 		const id = randomUUID();
-		this.db
+		const r = this.db
 			.prepare(
-				'INSERT INTO timeline_entry (id, task_id, agent, session_key, run_id, at, outcomes, summary, recorded_by) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (run_id) DO NOTHING'
+				'INSERT INTO timeline_entry (id, subject_kind, subject_id, agent, session_key, run_id, at, outcomes, summary, recorded_by) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT (run_id, subject_id) DO NOTHING'
 			)
 			.run(
 				id,
-				e.task ?? null,
+				e.item?.kind ?? null,
+				e.item?.id ?? null,
 				e.agent,
 				e.session ?? null,
 				e.run ?? null,
-				this.clock(),
+				e.at ?? this.clock(),
 				JSON.stringify(e.outcomes.slice(0, 50)),
 				e.summary ? e.summary.slice(0, 2000) : null,
 				e.by
 			);
-		return id;
+		if (e.item && e.session) this.linkSession(e.item.id, e.item.kind, e.session, e.at);
+		return r.changes ? id : null;
 	}
 
-	/** Mark something the record keeper wrote, so the person can tell it apart. */
-	markRecordedByWork(id: string): void {
+	/** Open items linked to a session, most recently active first (the clerk's candidates). */
+	sessionItems(session: string, limit = 8) {
+		return this.db
+			.prepare(
+				`SELECT s.item_id AS id, s.item_kind AS kind FROM item_session s
+				 LEFT JOIN task t ON s.item_kind = 'task' AND t.id = s.item_id
+				 LEFT JOIN project p ON s.item_kind = 'project' AND p.id = s.item_id
+				 LEFT JOIN job j ON s.item_kind = 'job' AND j.id = s.item_id
+				 WHERE s.session_key = ?
+				   AND ((s.item_kind = 'task' AND t.status IN ('open','ready','in_progress','waiting'))
+				     OR (s.item_kind = 'project' AND p.abandoned_at IS NULL)
+				     OR (s.item_kind = 'job' AND j.status <> 'retired'))
+				 ORDER BY s.last_seen_at DESC LIMIT ?`
+			)
+			.all(session, limit) as { id: string; kind: ItemKind }[];
+	}
+
+	/** The Job an automation runs, if any. */
+	jobForAutomation(automation: string): string | null {
+		return (
+			(
+				this.db
+					.prepare('SELECT job_id FROM job_automation WHERE automation_id = ?')
+					.get(automation) as { job_id: string } | undefined
+			)?.job_id ?? null
+		);
+	}
+
+	meta(key: string): string | null {
+		return (
+			(
+				this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as
+					{ value: string } | undefined
+			)?.value ?? null
+		);
+	}
+
+	setMeta(key: string, value: string): void {
 		this.db
-			.prepare('INSERT OR IGNORE INTO work_recorded (object_id, at) VALUES (?, ?)')
-			.run(id, this.clock());
+			.prepare(
+				'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value'
+			)
+			.run(key, value);
 	}
 
 	now(): string {

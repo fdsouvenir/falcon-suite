@@ -25,20 +25,11 @@ test('the source identity is the production one', async () => {
 	assert.equal(PLUGIN_ID, manifest.id);
 });
 
-test('the gates the plugin runs are the gates the evaluation measured', async () => {
-	const { readFileSync } = await import('node:fs');
-	const g = await import('../dist/plugin/gates.js');
-	const measured = JSON.parse(readFileSync(new URL('../eval/gates.json', import.meta.url), 'utf8'));
-	assert.deepEqual(JSON.parse(JSON.stringify(g.LEFT_WAITING)), measured.left_waiting.question);
-	const q = g.answersQuestion('{id}');
-	const t = measured.answers_open_item.question_template;
-	assert.deepEqual(q.instructions, t.instructions);
-	assert.deepEqual(q.criteria, t.criteria);
-	const asked = g.askedFor('{id}');
-	assert.deepEqual(asked.instructions, measured.asked_for.piece_template.instructions);
-	assert.deepEqual(asked.criteria, measured.asked_for.piece_template.criteria);
-	assert.deepEqual(
-		g.answersDecision('{id}', {}).instructions,
-		measured.answers_open_item.decision_template.instructions
-	);
+test('the clerk questions are the ones the evaluation measures', async () => {
+	const q = await import('../dist/clerk/questions.js');
+	const src = readFileSync(new URL('../eval/clerk_jev.mjs', import.meta.url), 'utf8');
+	assert.match(src, /from '\.\.\/dist\/clerk\/questions\.js'/);
+	assert.match(src, /turnBatch\(/);
+	assert.equal(q.YES, 0.7);
+	assert.equal(q.NO, 0.3);
 });

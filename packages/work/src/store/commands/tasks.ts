@@ -1,45 +1,40 @@
 import { Type } from 'typebox';
 import { defineCommand, type Context } from '../engine.js';
 import { reject } from '../types.js';
-import {
-	Id,
-	Title,
-	Text,
-	Reason,
-	When,
-	Who,
-	Session,
-	Sources,
-	obj,
-	opt,
-	Empty
-} from '../schemas.js';
-import { checkServes } from './structure.js';
+import { Id, Title, Text, Short, Reason, When, Who, Sources, obj, opt, Empty } from '../schemas.js';
 
 type TaskRow = {
 	id: string;
 	status: string;
 	prior_status: string | null;
 	agent: string | null;
-	area_id: string | null;
 	project_id: string | null;
+	job_id: string | null;
 	milestone_id: string | null;
 	definition_rev: number;
-	session_key: string | null;
 	version: number;
 };
 const FINISHED = ['completed', 'abandoned'];
 
-/** Resolve placement: exactly one of area / project; a milestone must belong to the project. */
-function placement(ctx: Context, i: { area?: string; project?: string; milestone?: string }) {
-	if (!!i.area === !!i.project)
-		reject('placement', 'Place the Task in exactly one Area or Project');
-	if (i.area) {
-		const a = ctx.get<{ status: string }>('area', i.area);
-		if (a.status !== 'active') reject('area_retired', 'That Area is retired');
-		if (i.milestone) reject('placement', 'A Milestone needs a Project');
-		return { area_id: i.area, project_id: null, milestone_id: null };
+export type Where = {
+	project_id: string | null;
+	milestone_id: string | null;
+	job_id: string | null;
+};
+
+/** Resolve placement: a Project (and Milestone), a Job, or neither (standalone). */
+export function placement(
+	ctx: Context,
+	i: { project?: string; milestone?: string; job?: string }
+): Where {
+	if (i.project && i.job) reject('placement', 'A Task belongs to a Project or a Job, not both');
+	if (i.milestone && !i.project) reject('placement', 'A Milestone needs its Project');
+	if (i.job) {
+		const j = ctx.get<{ status: string }>('job', i.job);
+		if (j.status === 'retired') reject('job_retired', 'That Job is retired');
+		return { project_id: null, milestone_id: null, job_id: i.job };
 	}
+	if (!i.project) return { project_id: null, milestone_id: null, job_id: null };
 	const p = ctx.get<{ abandoned_at: string | null }>('project', i.project);
 	if (p.abandoned_at) reject('project_abandoned', 'That Project is abandoned', ['resume_project']);
 	if (i.milestone) {
@@ -49,7 +44,7 @@ function placement(ctx: Context, i: { area?: string; project?: string; milestone
 		if (m.status === 'achieved')
 			reject('milestone_achieved', 'That Milestone is achieved', ['reopen_milestone']);
 	}
-	return { area_id: null, project_id: i.project!, milestone_id: i.milestone ?? null };
+	return { project_id: i.project, milestone_id: i.milestone ?? null, job_id: null };
 }
 
 function setStatus(
@@ -74,12 +69,7 @@ function warnDependencies(ctx: Context, t: TaskRow) {
 		ctx.warn('dependency_unfinished', `Depends on "${d.title}", which is not finished`, d.id);
 }
 
-export function insertTask(
-	ctx: Context,
-	i: any,
-	where: { area_id: string | null; project_id: string | null; milestone_id: string | null }
-) {
-	checkServes(ctx, i.serves, i.decision);
+export function insertTask(ctx: Context, i: any, where: Where) {
 	if (i.agent && !i.agent.startsWith('agent:'))
 		reject('not_an_agent', 'Tasks are assigned to agents');
 	const id = ctx.newId();
@@ -89,12 +79,14 @@ export function insertTask(
 		status: 'open',
 		agent: i.agent ?? null,
 		definition_rev: 1,
-		session_key: i.session ?? null,
-		session_set_by: i.session ? ctx.actor.id : null,
+		status_line: i.status_line ?? null,
+		status_line_at: i.status_line ? ctx.now : null,
 		created_at: ctx.now,
 		updated_at: ctx.now,
 		version: 1
 	});
+	for (const f of ['title', 'description', 'done_when', ...(i.status_line ? ['status_line'] : [])])
+		ctx.markWritten(id, f);
 	ctx.insert('task_definition', {
 		task_id: id,
 		rev: 1,
@@ -113,12 +105,11 @@ export function insertTask(
 			author: ctx.actor.id,
 			at: ctx.now
 		});
-	for (const o of i.serves ?? []) ctx.link('serves', 'task', id, 'objective', o);
 	for (const d of i.depends_on ?? []) {
 		ctx.get('task', d);
 		ctx.link('depends_on', 'task', id, 'task', d);
 	}
-	ctx.event('task', id, 1, i.decision ? { decision: i.decision } : undefined);
+	ctx.event('task', id, 1);
 	return id;
 }
 
@@ -126,15 +117,13 @@ const NewTask = {
 	title: Title,
 	description: Text,
 	done_when: Text,
-	area: opt(Id),
 	project: opt(Id),
 	milestone: opt(Id),
-	serves: opt(Type.Array(Id, { maxItems: 20 })),
-	decision: opt(Id),
+	job: opt(Id),
 	depends_on: opt(Type.Array(Id, { maxItems: 50 })),
 	agent: opt(Who),
-	session: opt(Session),
-	plan: opt(Text)
+	plan: opt(Text),
+	status_line: opt(Short)
 };
 
 /** Would adding task -> on create a cycle? */
@@ -158,7 +147,8 @@ export function reaches(ctx: Context, from: string, to: string): boolean {
 export const taskCommands = [
 	defineCommand({
 		name: 'create_task',
-		summary: 'Create a Task in an Area or Project, with a definition of done.',
+		summary:
+			'Create a Task: one deliverable with a definition of done. Standalone, or in a Project (and Milestone) or a Job.',
 		input: obj(NewTask),
 		run(ctx, i) {
 			const id = insertTask(ctx, i, placement(ctx, i));
@@ -167,7 +157,7 @@ export const taskCommands = [
 	}),
 	defineCommand({
 		name: 'create_task_from_entries',
-		summary: 'Create a Task for timeline entries (turns of work), moving them under it.',
+		summary: 'Create a Task for history entries, moving them under it.',
 		input: obj({ ...NewTask, entries: Type.Array(Id, { minItems: 1, maxItems: 100 }) }),
 		run(ctx, i) {
 			const { entries, ...rest } = i;
@@ -179,7 +169,7 @@ export const taskCommands = [
 	defineCommand({
 		name: 'file_entries',
 		on: 'task',
-		summary: 'File timeline entries (turns of work) under this Task, from another Task or unfiled.',
+		summary: 'Move history entries under this Task.',
 		input: obj({ entries: Type.Array(Id, { minItems: 1, maxItems: 100 }) }),
 		run(ctx, i, t) {
 			fileEntries(ctx, t!.id as string, i.entries);
@@ -192,7 +182,12 @@ export const taskCommands = [
 		name: 'revise_definition',
 		on: 'task',
 		summary: "Revise a Task's title, description or done-when. Reopen finished Tasks first.",
-		input: obj({ title: opt(Title), description: opt(Text), done_when: opt(Text), reason: Reason }),
+		input: obj({
+			title: opt(Title),
+			description: opt(Text),
+			done_when: opt(Text),
+			reason: opt(Reason)
+		}),
 		run(ctx, i, row) {
 			const t = row as unknown as TaskRow;
 			if (FINISHED.includes(t.status))
@@ -202,10 +197,20 @@ export const taskCommands = [
 				t.id,
 				t.definition_rev
 			)!;
+			const keep = (f: 'title' | 'description' | 'done_when') => {
+				if (i[f] === undefined) return true;
+				if (ctx.by !== 'work') return false;
+				const prior = ctx.one<{ by: string }>(
+					'SELECT by FROM written_by WHERE object_id = ? AND field = ?',
+					t.id,
+					f
+				);
+				return !!prior && prior.by !== 'work';
+			};
 			const next = {
-				title: i.title ?? cur.title,
-				description: i.description ?? cur.description,
-				done_when: i.done_when ?? cur.done_when
+				title: keep('title') ? cur.title : i.title,
+				description: keep('description') ? cur.description : i.description,
+				done_when: keep('done_when') ? cur.done_when : i.done_when
 			};
 			if (
 				next.title === cur.title &&
@@ -218,11 +223,13 @@ export const taskCommands = [
 				task_id: t.id,
 				rev,
 				...next,
-				reason: i.reason,
+				reason: i.reason ?? 'Revised',
 				author: ctx.actor.id,
 				at: ctx.now
 			});
 			const v = ctx.update('task', t.id, { definition_rev: rev, updated_at: ctx.now });
+			for (const f of ['title', 'description', 'done_when'] as const)
+				if (next[f] !== cur[f]) ctx.markWritten(t.id, f);
 			ctx.event('task', t.id, v, { definition_rev: rev, reason: i.reason });
 			ctx.done(t.id, v);
 		}
@@ -442,7 +449,6 @@ export const taskCommands = [
 				},
 				{ result }
 			);
-			ctx.resolveAsks(t.id, 'dismissed');
 		}
 	}),
 	defineCommand({
@@ -476,24 +482,6 @@ export const taskCommands = [
 			if (t.status === 'abandoned') return ctx.nothing(t.id, t.version);
 			if (t.status === 'completed') reject('task_finished', 'The Task is completed', ['reopen']);
 			setStatus(ctx, t, 'abandoned', { prior_status: null }, { reason: i.reason });
-			ctx.resolveAsks(t.id, 'dismissed');
-		}
-	}),
-	defineCommand({
-		name: 'move_task',
-		on: 'task',
-		summary: 'Move a Task to another Area or Project (and Milestone).',
-		input: obj({ area: opt(Id), project: opt(Id), milestone: opt(Id), reason: Reason }),
-		run(ctx, i, row) {
-			const t = row as unknown as TaskRow;
-			const where = placement(ctx, i);
-			const v = ctx.update('task', t.id, { ...where, updated_at: ctx.now });
-			ctx.event('task', t.id, v, {
-				from: { area: t.area_id, project: t.project_id, milestone: t.milestone_id },
-				to: where,
-				reason: i.reason
-			});
-			ctx.done(t.id, v);
 		}
 	}),
 	defineCommand({
@@ -544,11 +532,15 @@ export const taskCommands = [
 	})
 ];
 
-/** Moving an entry is how the person or agent corrects where the record keeper filed it. */
+/** Moving an entry is how the person or agent corrects where Work filed it. */
 function fileEntries(ctx: Context, task: string, ids: string[]) {
 	for (const a of ids) {
 		if (!ctx.one('SELECT 1 FROM timeline_entry WHERE id = ?', a))
 			reject('not_found', `No timeline entry ${a}`);
-		ctx.run('UPDATE timeline_entry SET task_id = ? WHERE id = ?', task, a);
+		ctx.run(
+			"UPDATE timeline_entry SET subject_kind = 'task', subject_id = ? WHERE id = ?",
+			task,
+			a
+		);
 	}
 }

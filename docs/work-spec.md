@@ -1,434 +1,346 @@
-# Falcon Work 5 — specification (draft)
+# Falcon Work — specification (rewrite, draft)
 
-Status: **draft for Fred's review**, 2026-10-01. Nothing here is implemented.
+Status: **draft for Fred's review**, 2026-11-03. Replaces the Work 5 specification of 2026-10-01.
+It records the decisions from the 2026-11-03 rethink; open points are in §11.
 
 ## 1. Purpose
 
-Work is where an agent is **made to record what it is doing**, in a structure that gives the human
-**one pane of glass** over everything their agents are doing for them, and why.
+Falcon Work is a **pane of glass**: open it and catch up in thirty seconds on everything your
+agents have been doing for you, what is in motion, and what is waiting on you.
 
-Two things follow from that, and every rule below serves one of them:
+**It fills itself in.** Nobody, neither the person nor the agent, has to keep it up to date. A
+background **clerk** reads conversations after they happen and writes the record. Agents can still
+correct the record through their tools, and the person corrects it by talking to an agent. Nobody
+is required to do either.
 
-1. **The record keeps itself.** An agent that has to remember to report will not, and nudging it
-   mid-work does not change that. Work writes the record from what actually happens (§10, The
-   record keeper): it files each turn's outcomes under the right Task, opens Tasks for new work and
-   completes them when their done-when is met. The agent can still record and correct through its
-   tools, and its entries win; it is never required to.
-2. **The structure matches how people delegate.** People hand their agent standing
-   responsibilities, bounded efforts with checkpoints, individual tasks, and long-running aims they
-   want progress on. The agent runs into unknowns, makes choices someone may need to approve, and
-   learns things worth keeping. Each of those has a home.
-
-Work is **gateway-scoped and shared**: every person and agent on a Gateway sees the same Work.
-Per-person permissioning may come later and is out of scope here.
+Why the rewrite: under Work 5 the agent was expected to keep the record itself, helped by per-turn
+hooks. In practice none of it filled in. From Oct 22 to Nov 3, 131 of 178 turns that left outcomes
+were never filed, and Work created no Tasks on its own. The per-turn record keeper saw one turn at
+a time, so it could never tell one piece of work from the next. Its writer also failed on every
+call, because naming a model counts as a model override that plugins are not granted. The data
+model and the store were sound; how records got into them was wrong.
 
 ## 2. Vocabulary
 
-These are the only domain words. The UI, the agent tool and this document use them exactly.
-
-| Word          | What it is                                                                                   | Ends?                          |
-| ------------- | -------------------------------------------------------------------------------------------- | ------------------------------ |
-| **Objective** | A north star the human constantly wants progress toward.                                     | Only when the human says so    |
-| **KPI**       | An optional measure of an Objective, with a target.                                          | With its Objective             |
-| **Area**      | A standing responsibility that has to keep running.                                          | No (can be retired)            |
-| **Project**   | A bounded outcome, reached through ordered Milestones.                                       | Yes                            |
-| **Milestone** | A checkpoint inside one Project, with an observable success condition.                       | Yes                            |
-| **Task**      | One piece of executable work with a definition of done.                                      | Yes                            |
-| **Question**  | Missing knowledge that someone has to supply.                                                | When answered                  |
-| **Decision**  | A choice between options that a named decider has to make.                                   | When decided                   |
-| **Finding**   | Something learned that is worth keeping.                                                     | Can be retracted or superseded |
-| **Ask**       | A pending request for one specific person's or agent's input, delivered into a conversation. | When answered                  |
-| **Warning**   | Something the plugin noticed from the data itself that needs attention (§11).                | When the condition clears      |
-
-Parts of a Task: **Definition** (title, description, done-when), **Plan** (how it will be done),
-**Result** (what was produced, with evidence). Relationships: **serves**, **depends on**,
-**placement** (which Area or Project something lives in), **milestone association**, **targets**
-(what a Question, Decision or Finding is about).
-
-## 3. Objective
-
-An Objective is the _why_. Projects and Tasks link to the Objectives they **serve**. Upkeep in an
-Area may serve no Objective; that is normal, and the human can see the split.
-
-Fields:
-
-- `title` — short and scannable: "The consultancy reaches 20 retained clients".
-- `statement` — what success looks like and why it matters, in the human's words.
-- `rank` — explicit order among active Objectives, so trade-offs are visible. Unique among active.
-- `status` — `active` · `paused` · `achieved` · `retired`. Only a human changes it.
-- `autonomy` — `propose` (default) or `act`.
-  - **propose**: the agent suggests next steps as a Decision addressed to the human. Accepting it
-    creates the Project or Tasks.
-  - **act**: the agent may create and do Work toward the Objective without asking, inside the
-    written `limits` (for example "no spending, no messages to customers"). Everything is still
-    recorded.
-- `limits` — required when autonomy is `act`.
-- `owner` — the accountable human.
-
-**KPIs** (optional, zero or more per Objective): `name`, `unit`, `direction` (up/down/hold),
-`target`, optional `target_date`, and an append-only list of **readings** (`value`, `at`,
-`source`). A KPI with no readings is visibly unmeasured, not zero.
-
-**Reviews**: the agent periodically writes a review of each active Objective: what moved, what did
-not and why, what it proposes next. A review cites the Work and sources it rests on and is
-immutable once written. Reviews are **daily by default**; the schedule is an OpenClaw automation,
-and Work never schedules anything itself. A review with proposals creates Decisions addressed to the owner.
-
-## 4. Area
-
-A standing responsibility: Home, Finances, Fredbot Platform. It never completes.
-
-- `title`, `description` (what is in and out of this responsibility), `status` `active`/`retired`.
-- `accountable_human` — the person escalations in this Area go to. Defaults to the Gateway owner.
-- Every Project and every Task not in a Project is **placed** in exactly one Area. Moving
-  placement is an audited command with a reason.
-
-Area versus Project: if it would make sense to say "this is done", it is a Project. If it is
-"keep this healthy", it is an Area. Area versus Objective: an Area is upkeep; an Objective is
-direction.
-
-## 5. Project and Milestone
-
-A Project is a bounded outcome placed in one Area, optionally serving Objectives.
-
-- `title`, `outcome` (what exists when it is done), `area`, `accountable_human`, `serves[]`.
-- Status is **derived**, never set: `open`, `completed` (all Milestones achieved), `abandoned`.
-- Abandoning is reversible (resume) and never silently changes unfinished Work: each unfinished
-  item must be explicitly abandoned too or detached into the Area as standalone Work. Only a person
-  abandons a Project, choosing for each unfinished Task in the same step; an agent that thinks a
-  Project should go raises a Decision.
-
-A Milestone belongs to one Project, in order.
-
-- `title`, `success_condition` (observable), `order`, `status` `open`/`achieved`.
-- **Achieving** records a `basis` (why the success condition is met) and at least one source.
-- **Closure guard**: a Milestone cannot be achieved while associated Work is unfinished. Finish
-  it, or detach it with a reason. Reopening an achieved Milestone reopens a completed Project.
-
-There is no Phase, no project-level plan object and no "next item" pointer. The ordered
-Milestones and their associated Work are the plan.
-
-## 6. Task
-
-The unit of executable work, including code, configuration, data, infrastructure and errands.
-
-### Definition
-
-`title` (scannable action), `description` (context, scope, constraints), `done_when` (observable
-finish line). Definitions are **immutable revisions**: revising creates a new revision with a
-reason; the Task points at the current one. Revising a finished Task requires reopening it first.
-
-### Lifecycle
-
-`open` → `ready` → `in_progress` → `completed`, plus `waiting` and `abandoned`.
-
-- `open`/`ready` is routine grooming and needs no reason.
-- **Starting requires an accountable agent.** At most one agent is accountable per Task. Work assumes one
-  agent per Office: an agent cannot take a Task assigned to another agent; a person can reassign
-  it. Handover between agents waits for real multi-agent use (§15.9).
-- **Waiting** requires `waiting_for` (a sentence) and `waiting_on` (typed: an agent, a person, a
-  Work object, or something external), plus `resume_when` and optional `follow_up_at`. Resuming
-  restores the prior state.
-- **Completing** requires a Result. Repeat completion is a no-op. Further work means reopening.
-- **Blocked** is not a status. It is derived from typed causes: unfinished dependencies, open
-  Questions targeting the Task, pending Decisions targeting it, pending Asks, waiting.
-
-### Plan and Result
-
-- A **Plan** is optional narrative: approach, steps, risks, validation. Immutable revisions,
-  pinned to the Definition revision it was written for.
-- A **Result** is what was produced. It carries prose and **at least one source** (commit,
-  release, file, URL, message, reading). It pins the current Definition. A Result may be recorded
-  before completion (for review or handoff); completion accepts one.
-- When a Definition is revised, earlier Plans and Results are shown as written for an older
-  definition; they are never silently re-pinned.
-- _(Follow-on)_ Each source on a Result says how far it can be trusted: **reported** by the agent,
-  **captured** by the hooks (§10), or **verified** by the plugin checking it exists (a commit in
-  the repository, a published release, a reachable URL). The human sees at a glance how much of a
-  "done" rests on the agent's word.
-
-### Dependencies
-
-`depends_on` records expected order. It **warns, it never blocks**: starting or completing with
-an unfinished dependency is recorded truthfully with a warning. Cycles are rejected.
-
-### Approval of consequential steps
-
-When a step needs the human's go-ahead (a DNS change, a payment, a message sent on their
-behalf), the agent creates a **Decision** targeting the Task, with the human as decider. The Task
-is derived blocked until it is decided. This replaces the 4.x change-control boundary and
-`revise_change`, which are removed.
-
-Work records approval; it does not enforce it at runtime. OpenClaw's exec approvals and tool
-policy are the only runtime gate, and Work never claims otherwise.
-
-## 7. Question, Decision, Finding
-
-All three may **target** Objectives, Projects, Milestones or Tasks, and may be placed in an Area
-or Project.
-
-**Question** — missing knowledge.
-
-- `prompt`, `impact` (what is held up), `answerable_by` (people/agents).
-- `open` → `answered` (answer, confidence `tentative`/`supported`/`confirmed`, sources) or
-  `withdrawn` (reason). An answer can be superseded by a later answer; history is kept.
-- An agent may record a **hypothesis** while waiting; it is shown as such, never as the answer.
-- **Answering in the Work tab:** a text field and **Answer** submit immediately, recorded as the
-  human's answer with `confirmed` confidence; a brief Undo follows, and a later answer can replace
-  it with history kept. When the agent recorded a hypothesis, **Use <agent>'s hypothesis** records
-  that hypothesis as the human's confirmed answer, attributed to the human as accepting it. With a
-  session, **Discuss in session** opens it.
-
-**Decision** — a choice with consequences.
-
-- `prompt`, `options` (two or more: label, summary, risks, trade-offs), `recommendation`
-  (option + rationale), `deciders`, `consequence_of_no_decision`.
-- `pending` → `decided` (option, decider, rationale) · `deferred` (until a date) · `withdrawn`
-  · `superseded` (by another Decision). Rationale is required when an agent decides and
-  optional when a human does.
-- **Deciding in the Work tab:** clicking an option selects it (it does not decide); a row then
-  offers an optional "Why?" and **Decide**. The recommended option is labelled, not preselected.
-- Uses: approval of consequential steps (§6), agent proposals toward an Objective (§3), and
-  genuine design choices.
-
-**Finding** — something learned.
-
-- `conclusion`, `confidence`, at least one source.
-- `current` → `retracted` (reason) or `superseded` (by another Finding).
-
-## 8. Ask
-
-An Ask is the delivery mechanism, not a kind of Work. It records that one specific person or agent
-has been asked for input about one subject.
-
-- Created for a Question or Decision addressed to a human.
-- **Always shown in the Work tab** under "Needs you". If it has a session (§9), it is also posted
-  there and discussed there.
-- It can be answered from the Work tab or in its session; either way the answer is recorded once.
-- Answering it resubmits the underlying command, which is revalidated; nothing is half-applied
-  while waiting.
-
-## 9. Sessions
-
-OpenClaw owns sessions. Work relates to them in two separate ways.
-
-**Where the work happened** — automatic history. Every session in which an agent worked on a Task,
-or raised a Question, Decision or Finding, is captured by the hooks in §10 as evidence on that
-object. There can be many; nobody sets them by hand, and they are never edited.
-
-**Where it is discussed** — one optional session per **Objective, Project, Task and Ask**.
-
-> **Deferred (Fred, 2026-10-07; §15.8).** Discussion sessions, Add to Work, live session state and
-> the Session mismatch Warning are not part of 5.0. Sessions drift between subjects and one
-> subject has several sessions, so a fixed link adds little: the agent records and updates Work
-> as the conversation goes, the `task_fit` gate (§10) places each turn's work, and the automatic
-> history above answers "where was this done?". The store's existing `session` fields stay;
-> nothing new is built on them. The rest of this section describes the deferred design.
-
-- The agent may set it when it creates the object. The human can set, change or remove it from the
-  Work tab. The human's choice always wins, and every change records who made it.
-- What it means: an Objective's daily review is posted there; a Project or Task is worked and
-  talked about there; an Ask is posted there.
-- **Fallback:** a Task with no session uses its Project's. An Ask with no session uses the session
-  of what it is about: the Task it hands over, or the Task or Project its Question or Decision
-  targets (which may in turn fall back to the Project's). So linking a Project to a thread puts
-  all of its Tasks and Asks there unless one says otherwise.
-- Questions, Decisions and Findings have no discussion session of their own: Questions and
-  Decisions are discussed through their Ask, and Findings are reference material.
-- A session that no longer exists stays visible as missing; it is never silently dropped or
-  replaced.
-
-**Add to Work.** From any session's header, the human (or the agent) can turn the conversation
-into a Task: titled from the session's label or opening prompt, its description seeded from the
-conversation, and its discussion session set to that session. The session header then shows the
-linked Task, so a conversation and its Work open from each other.
-
-**Live session state.** Wherever a discussion session is shown, its current state is shown with
-it — running, idle, done, failed, missing — kept current by OpenClaw's completion hooks and a
-periodic check. Work **never changes a Task's status to match its session**: the status is what was
-recorded. A mismatch becomes a Warning (§11) instead.
-
-## 10. Enforcement and evidence
-
-This is what makes Work a record rather than a diary.
-
-| OpenClaw hook         | What Work does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `before_prompt_build` | Injects a **short** live brief instead of a schema: active Objectives by rank, where work lives (active Areas and their open Projects, with the Objectives they serve and their current Milestone), the agent's in-progress Tasks, Questions/Decisions answered since its last turn, what is waiting on it. The static guidance only says what Work is (the person's view of the agent's work, and its vocabulary) and that the person's request goes ahead if Work fails; behaviour comes from the tools, which are named for intents (plan a Project, track a Task, ask the person, record a Finding) and describe themselves. Rules in the prompt were tried and got applied literally past their intent (commands §1). |
-| `after_tool_call`     | Notes the turn's **outcomes** in memory (see The record keeper). Raw tool calls are never stored: OpenClaw's session transcript already holds them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `agent_end`           | Observes the completed turn: records its outcomes and captures asks left waiting on the person. Work does not register `before_agent_finalize` or `before_tool_call`: recording cannot revise an answer, reopen the agent turn or block tools. Model calls stay within the completed hook scope required by OpenClaw.                                                                                                                                                                                                                                                                                                                                                                                                      |
-
-### The record keeper
-
-_Settled with Fred 2026-10-10 (§15.10)._ Work writes the record itself, after every turn in any
-session — the person's, a subagent's, or an automation's.
-
-- **Outcomes, not tool calls.** During a turn Work notes only what left a mark outside the chat:
-  commits, pushes, pull requests, releases and publishes, installs and deploys, messages sent,
-  files written (grouped by repository or folder), config changes and other external writes. Reads,
-  searches, listings and test runs are not outcomes. Nothing about the tool calls themselves is
-  kept: each entry links to its session and turn, and OpenClaw's transcript (with its own
-  retention) holds the detail.
-- **Which Task.** Each session has its own current Task: the one it started, or Work filed it
-  under. A subagent works under its parent's. At the end of a turn with outcomes, or one the person
-  started, one decision batch answers: continues the session's Task / belongs to another open Task /
-  new work / not work, and whether that Task's done-when is now met.
-- **Writing it.** The Office's utility model (OpenClaw's `utilityModel` role) writes what the
-  decision model cannot: the turn's one-sentence summary; for new work, a Task with title,
-  description, done-when and its place (Area or Project, Milestone); for a met done-when, the
-  Result. Work then commits it as **recorded by Work**, with the outcomes as evidence.
-- **One Task per piece of work.** A session doing several things produces several Tasks, not one
-  umbrella Task (Fred: the provisioning session should have been five).
-- **The agent and the person stay in charge.** The agent's own Work calls take precedence over the
-  record keeper for that turn; the person can edit, merge or move anything, and everything Work
-  wrote is marked as such.
-- **The answer is not bookkeeping.** Recording only reads completed transcript messages and writes
-  Work records. It never changes messages, requests another agent pass or sends a chat reply.
-  Repeated completion events are ignored for an already processed run; timeline entries also use
-  the run id to prevent duplication. A utility-model failure falls back to an outcome entry
-  without a generated summary; it is logged, not turned into a request to the agent. No separate
-  persistent retry queue is implemented.
-- **Without the models** outcomes are still filed under the session's current Task; with no
-  current Task they wait as **unfiled work** (a Warning) until something files them.
-
-**Timeline.** A Task's history is its timeline: one entry per outcome-bearing turn, showing the
-outcomes as chips (commit, PR, file, message) and opening to that turn's summary. Turns on the
-Task that changed nothing outside the chat fold into one line ("3 turns of discussion"). The
-Activity tab is every Task's timeline, newest first.
-
-### Decision gates
-
-Work asks the Office's decision model (OpenClaw's `decisionModel` role, e.g. TypeSafe Jev) typed questions in **one batch per event** — the end of a turn the person started, and each message they send — including speculative questions whose answers only matter on some branches (TypeSafe's "speculative fan-out"). A routing table turns answers into Work actions. Questions measured against labelled turns act; new ones run in **shadow**: their answers are written to `decisions.jsonl` in Work's data folder with what they would have done, so they can be reviewed and labelled before they are promoted. Measured: bundling changed 5 of 133 borderline turns (2 better, 2 worse) against separate calls. Gates run only on turns the person started (`trigger` user, input provenance `external_user`), never on heartbeats, scheduled jobs or messages from other sessions. Without a decision model they do nothing and the agent gets a reminder in its next brief instead. Rubrics live in `src/plugin/gates.ts`, are measured in `eval/` against labelled turns, and a test keeps the two identical.
-
-| Gate                  | When                                                           | Outcome → action                                                                                                                                                                  | Measured (Jev 1.13)                                                               |
-| --------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **left_waiting**      | End of a person-started turn where nothing was raised in Work  | needs answer / decision / action → a Question to the person (and the Task waiting, for an action); offer or nothing → nothing. Threshold 0.5.                                     | 40 held-out turns: right action 35/40, every real ask caught but one              |
-| **asked_for**         | Right after left_waiting finds something                       | per sentence or list item of the reply: part of the ask? The picked pieces become the captured Question's text; the sentence-based text extractor is the fallback. Threshold 0.8. | 58 asking turns, 1,069 pieces: F1 0.84, precision 0.88 (text extractor 0.73)      |
-| **answers_open_item** | When the person sends a message and something is open for them | per open Question: answered → record the message as the answer; per open Decision: an option → decide. Threshold 0.7.                                                             | 42 real replies + 8 Decision cases: precision 1.00, recall 0.82, no decoy matched |
-
-In shadow (logged, not acted on): end of turn — `work_request` (track / one-off / chat), `plan_in_chat`, `promise` (the agent committed to later work), `task_done` (the in-progress Task's done-when is met), `task_fit` (which in-progress Task the work belongs to), `already_open` (the ask repeats a Question already open for the person — the log names it, so duplicates can be measured before Work links instead of re-asking); person's message — `message_kind` (answers / new request / correction / chat).
-
-## 11. Warnings
-
-Warnings are computed by the plugin from Work's own data and session state. They need nobody to
-report anything, which is the point: they catch what the record should say but doesn't. Each
-names the object, what is wrong and since when, and clears itself when the condition no longer
-holds.
-
-| Warning                           | Condition (thresholds configurable)                                                            |
-| --------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Stalled Task                      | In progress with no timeline entry for 48 hours.                                               |
-| Session mismatch _(deferred, §9)_ | In progress, but its discussion session has been idle for 48 hours, has failed, or is missing. |
-| Follow-up overdue                 | Waiting past its `follow_up_at`.                                                               |
-| Unanswered                        | A Question or Decision open for more than 7 days.                                              |
-| Objective without progress        | An active Objective with no completed serving Task for 7 days.                                 |
-| Unfiled work                      | Outcomes the record keeper could not file under a Task.                                        |
-| Milestone ready                   | Every associated Task is finished but the Milestone is not achieved.                           |
-
-Warnings appear in **Needs you** and feed the agent's daily Objective review.
-
-## 12. The human's view
-
-The Work tab in the Control UI answers, at a glance. Its **Overview** is calm: one line per item,
-nothing listed twice, and acting happens in the side panel, not on the page.
-
-1. **Summary** — one sentence: what is waiting on you, and what the agents are working on.
-2. **Needs you** — only what you can act on, oldest first, grouped by what you do: **Decide**
-   (Decisions you decide, with the agent's recommendation), **Answer** (Questions you can answer,
-   with the agent's hypothesis), **Do** (Tasks waiting on you, and Asks to take over a Task). A
-   Task waiting on you that one of your Decisions or Questions already covers is not listed again.
-   Age replaces the matching Warnings: an old item's age turns to a warning colour, and an overdue
-   follow-up shows as "overdue".
-3. **Happening now** — Tasks in progress, waiting (on whom; "waiting on your decision" when it is
-   covered above) and ready.
-4. **Heads up** — the remaining Warnings (§11), quietly: Objectives without progress, stalled
-   Tasks, unfiled work, Milestones ready to mark achieved.
-5. **Objectives** — each active Objective by rank with its first KPI and last progress (the full
-   view, with reviews and serving Work, is the Objectives tab).
-6. **Recently completed** — the latest finished Tasks; the rest is in Activity.
-7. **Areas and Projects** — the browsable structure, with derived status and Milestone progress.
-
-A Decision opens in the side panel with its options (risks and tradeoffs), the recommendation
-preselected, the agent's reasoning, an optional "Why?", **Decide**, and what happens if nobody
-decides. A Question shows why it matters, the agent's hypothesis with **Use its guess**, or your
-own answer. Both show what they are for.
-
-**Navigation.** Areas are a row of filter chips under the tabs ("All" by default, grouping
-Projects under Area headings), never a second sidebar. The Areas & Projects tab is a list,
-not detail (Fred, 2026-10-10): one row per Project — outcome, current Milestone, Tasks done, a pill
-only when it is waiting on you or stalled, last activity — opening the Project page; open Tasks
-that sit directly in an Area fold into one row under it ("2 Tasks outside a Project"). Objectives, Projects and Areas open as full
-pages with a breadcrumb and Back. Tasks, Questions, Decisions and Findings open in a side panel
-over the current page, with "Open as page". Session chips open the session; evidence chips open
-the commit, PR or file. A Project page shows its header (status, serves, accountable, session with
-live state; Edit, Change session, Abandon), outcome, ordered Milestones with their Tasks and
-achievement basis — **Mark achieved** is disabled with the reason while the closure guard holds —
-the Questions, Decisions and Findings about it, and its history. An Objective page shows its
-header (rank, owner, session), statement, KPIs, latest review and what serves it: each Project
-with its Tasks under their Milestones, and Tasks serving it directly. Its side column shows its
-Decisions and Questions only when there are any, its Autonomy, and a folded History.
-
-**Saying what things are.** Every page names its kind above its title in small caps (Objective,
-Project, Area), and every Project card and Decision or Question card names its kind too. A rank is
-written "Rank 2", never "#2". Every list says what it holds (Tasks, Other Tasks, Decisions…), and
-rows in mixed lists (Needs you) carry their kind. A Task row shows one status pill — open, ready,
-blocked, waiting or in progress — with why (what it depends on, whom it waits on, the follow-up
-date) as a quiet line under its title.
-
-**Look.** Work is a native Control UI page that looks built in: it uses only the Control UI's
-theme variables, fonts and full-width page layout, with no palette, fonts or page frame of its
-own, and the host's own components (dialogs, pickers, agent avatars, session summaries) wherever
-they exist. It follows light/dark mode and any theme the human picks. The sidebar icon is
-`listChecks`, labelled **Falcon Work**. The page title is `Falcon Work v<version>`:
-preview builds show their prerelease label (for example, `vpreview.38`), while stable builds
-show the full version (for example, `v5.0.0`). Release staging supplies the version from the
-published package, never a hard-coded preview number in the UI. Screens are designed in
-Stitch first, starting from the Control UI's theme.
-
-_(Follow-on)_ The same views are available as native widgets the agent can pin to a session
-dashboard — **Needs you**, **Objective progress**, a single **Task** or **Project** — so the view
-reaches into the sessions where the work happens.
-
-## 13. Persistence and agent interface
-
-- One private SQLite database per Gateway. Immutable revisions for Definitions, Plans, Results,
-  KPI readings and reviews. Append-only event log of every command: actor, time, before/after.
-- Optimistic versions on every mutable object; idempotency keys on every command.
-- Agent tools named for intents, plus `falcon_work` for every other typed command and compact
-  read projections (commands §1).
-- _(Follow-on)_ Durable event subscriptions with a read position, so an agent or automation
-  resumes without missing or double-reading changes (for example "a Question you raised was
-  answered"). The brief in §10 is built from these.
-
-## 14. Not in Work
-
-Schedules and recurrence (OpenClaw automations own them) · Tags (Area and Project are the only
-classification) · Phases · standalone Change Requests, Reviews or Blockers · documents and files ·
-transcripts (OpenClaw owns sessions; Work links to them) · runtime permission enforcement.
-
-## 15. Settled with Fred (2026-10-02)
-
-1. Strict mode is off by default; the end-of-turn nudge is the baseline.
-2. Asks always appear in the Work tab. Objectives, Projects, Tasks and Asks can each have one
-   discussion session, set by the agent at creation or by the human in the UI (§9).
-3. Objective reviews run daily by default.
-4. No effort-share metric. Objectives show when they last made progress instead.
-5. Work stays separate from OpenClaw's Workboard. From it Work takes: Add to Work from a session,
-   live session state, and Warnings (5.0); evidence trust levels, dashboard widgets and durable
-   event subscriptions (follow-on).
-6. Work's sidebar icon is `listChecks`. The UI is designed in Stitch first, on OpenClaw's own
-   theme. The `falcon_work` command list waits until the UI design is settled.
-7. Answering a Question submits immediately (with Undo); "Use <agent>'s hypothesis" accepts the
-   hypothesis as the human's answer. Choosing a Decision option only selects it; Decide commits,
-   with an optional reason when a human decides.
-8. _(2026-10-07)_ Discussion sessions are deferred (§9): no Add to Work, live session state or
-   Session mismatch Warning in 5.0; this supersedes the session parts of items 2 and 5. "Where the
-   work happened" history stays and should cover Tasks, Questions, Decisions and Findings.
-9. _(2026-10-07)_ One agent per Office is assumed. Agents do not abandon Projects or take other
-   agents' Tasks; a person does both. Multi-agent handover is revisited once there are real
-   multi-agent scenarios.
-10. _(2026-10-10)_ Work writes the record itself (§10, The record keeper): the agent is not required
-    to, and its own entries win. One Task per piece of work. A Task's history is a timeline of
-    outcomes, each opening to its turn summary; turns without outcomes fold. Raw tool calls are not
-    stored by Work; entries link to the session transcript. Supersedes enforcement by nudging and
-    the untracked-activity feed.
+| Word          | What it is                                                                                        | Ends?                 |
+| ------------- | ------------------------------------------------------------------------------------------------- | --------------------- |
+| **Job**       | An ongoing duty an agent carries out ("watch the support inbox and draft a reply to everything"). | No (paused, retired)  |
+| **Project**   | A bounded outcome that takes several deliverables, reached through ordered Milestones.            | Yes                   |
+| **Milestone** | A checkpoint in one Project, with an observable success condition.                                | Yes                   |
+| **Task**      | One deliverable with a definition of done. Standalone, or part of exactly one Project or Job.     | Yes                   |
+| **Question**  | Something the agent needs to know from the person.                                                | When answered         |
+| **Decision**  | A choice the person has to make between options.                                                  | When decided          |
+| **Finding**   | Something learned that is worth keeping, with evidence.                                           | Retracted, superseded |
+
+Every Job, Project and Task carries a **status line**: one plain sentence, written by the clerk,
+saying where it stands ("Parsing done; 2 decisions open on the import step").
+
+**Choosing between them.** A Task is one thing you could tick off in a sentence. If saying what
+"done" means takes a list, or the work spans days with checkpoints, it is a Project. If it never
+finishes, it is a Job. Getting this wrong at first is cheap: the clerk turns a Task that grows a
+second deliverable into a Project, keeping its history, and folds a Project that turns out to be one
+deliverable back into a Task.
+
+**Removed:** Areas, Objectives, KPIs and Objective reviews, Asks, discussion sessions, and
+Warnings as a separate concept. "Needs you" is simply the open Questions and Decisions.
+
+## 3. The clerk
+
+The clerk is how the record gets written. It is part of the plugin, not an OpenClaw agent: no
+entry in the Agents list, no session of its own, no tools. It works as a **cascade**:
+
+1. **Judge.** The Office's decision model (Jev) answers small typed questions about what just
+   happened, in one bundled request per event.
+2. **Decide.** Code turns those answers into actions through explicit truth tables (§3.3).
+3. **Write.** Only when the answers call for new words, or leave a question unsettled, does a
+   language model (the **writer**) draft them.
+4. **Check.** Jev checks what the writer proposed before Work applies it.
+
+Jev makes judgments; code makes decisions. Routine filing (which item this belongs to, whether it
+is finished, where it now stands, whether the person is needed) is done by Jev and code, and can be
+measured. The writer is called for what only it can do: a title and done-when for new work, a
+Project's shape, and cases Jev leaves unsettled. This follows the TypeSafe integration guidance
+(`typesafe-ai/skills`, `skills/typesafe-ai/SKILL.md`).
+
+### 3.1 Events
+
+| Event                                                                                                               | What runs                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Turn ended** (`agent_end`)                                                                                        | The hook only records the turn and enqueues it. A few seconds later, on the plugin service's scheduler, Jev judges the turn (§3.2) and code acts on the answers. |
+| **The person sent a message** (seen in `before_prompt_build`)                                                       | Jev checks whether it answers an open Question or Decision (§3.2), and code records the answer at once.                                                          |
+| **Session idle** (10 minutes with no new turn, no run in progress), **before compaction**, **session end or reset** | The writer runs for the session, but only if a turn left work for it (§3.3).                                                                                     |
+| **Nightly**                                                                                                         | A sweep for anything missed, then a tidy-up of open items (§3.2).                                                                                                |
+| **Catch-up** on first start (§8)                                                                                    | Each turn in each session is judged, then the writer runs where it is needed.                                                                                    |
+
+Running the judging on the service scheduler, not inside the hook, keeps model calls out of the
+turn's own authority window. Calls made from inside hooks failed there under Work 5 ("caller
+authority is no longer active").
+
+### 3.2 Questions
+
+All question wording, criteria and thresholds live in one module with the evaluation harness in
+`eval/`, under a versioned rubric, as in Work 5. Each question asks for **one judgment** a person
+could make at a glance. Questions that share state go in one request. Questions that only matter in
+some cases are asked anyway in the same request, and code reads them only when it needs them.
+
+**The state** for a turn is: the person's message (if a person started it) with who sent it; the
+agent's reply; the outcomes the hooks noted (commits, pushes, PRs, releases, installs, messages
+sent, files written, config changes); the reply split into pieces (sentences and list items, code
+removed); and the session's **candidate items**. These are the open Jobs, Projects and Tasks
+already linked to this session, plus the automation's Job if one started it, at most eight, each
+with title, status line and done-when. Names, not ids.
+
+**At the end of a turn** (yes/no unless marked):
+
+- `work_asked` — Does `request` ask the agent to do a piece of work?
+- `work_reported` — Does `reply` report that a piece of work was finished or delivered?
+- `work_planned` — Does `reply` lay out several steps of work still to come?
+- `needs_person` — Does `reply` ask the person for something the work cannot continue without?
+- `waits_outside` — Does `reply` say the work is waiting on something other than the person (a
+  third party, a system, a date)?
+- `new_work` — Does `request` ask for a piece of work that is none of the items in `candidates`?
+- `any_item` — Is this exchange part of the work on any of the items in `candidates`? This is the
+  companion question for "nothing fits".
+- per candidate `c`: `about.c` — Is this exchange part of the work on `candidates.c`? and `done.c` —
+  Does this exchange show that `candidates.c.done_when` is met?
+- per piece `p`: `asks.p` — Is `pieces.p` part of what `reply` asks the person to give, decide or
+  do? (measured: F1 0.84) and `stands.p` — Does `pieces.p` say where the work now stands?
+- per open Question or Decision `q` for the person: `repeats.q` — Does `reply` ask for the same
+  thing as `open.q`?
+
+**When the person sends a message**, per open Question `q`: `answers.q` — Does `message` answer
+`open.q`? (measured: precision 1.00, recall 0.82). Per open Decision `d`: `decides.d` — Does
+`message` choose one of `open.d`'s options? and the Choice `option.d` — which one?
+
+**Checking the writer**, per proposed new item `n` and each open item `o`: `same.n.o` — Is
+`proposed.n` the same piece of work as `open.o`? Per proposed completion, `done.c` on the evidence.
+Per proposed Question, `needs_person` on the pieces it came from.
+
+**Nightly**, per open item with no activity for 3 days, over its last timeline entries:
+`finished` — Do these entries show the work was finished? and `dropped` — Do these entries show
+the work was dropped or no longer wanted?
+
+### 3.3 Decisions in code
+
+Thresholds start at Jev's guidance: **at least 0.7 is yes, at most 0.3 is no**, and anything
+between is **unsettled**. Confidence is never used as the gate. Every action below records the
+answers it acted on.
+
+**End of a turn:**
+
+| Answers                                                                                                | Action                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `work_asked` no, `work_reported` no and no outcomes                                                    | Nothing is filed. The turn counts on the session's linked items, if any.                                                               |
+| `any_item` yes, one or more `about.c` yes                                                              | File the turn's timeline entry and outcomes under each such item. If a `stands.p` is yes, the best one becomes the item's status line. |
+| …and `done.c` yes and `work_reported` yes                                                              | Complete it. The result is the reporting pieces, with the outcomes as evidence. With no such piece, the writer writes the result.      |
+| (`work_asked` or `work_reported` yes, or outcomes present) and (`new_work` yes, or every `about.c` no) | New work: mark the session for the writer.                                                                                             |
+| `work_planned` yes                                                                                     | Mark the session for the writer (it may be a Project with Milestones).                                                                 |
+| `needs_person` yes, the session's work is an item, and no `repeats.q` is yes                           | Raise a Question now: its text is the pieces with `asks.p` yes, and its session is this one. Mark the item waiting on the person.      |
+| `needs_person` yes and some `repeats.q` yes                                                            | Link this session to that Question; raise nothing new.                                                                                 |
+| `waits_outside` yes                                                                                    | Mark the item waiting; the reason is the `stands.p` piece.                                                                             |
+| `any_item` or any `about.c` unsettled                                                                  | Mark the session for the writer.                                                                                                       |
+
+**When the person sends a message:** `answers.q` yes records the message as the answer.
+`decides.d` yes records the chosen option if its probability is at least 0.7. Anything else waits
+for the writer.
+
+**Checking the writer:** `same.n.o` yes turns a proposed new item into an update of `o`. A proposed
+completion or Question whose check is not yes is dropped and logged.
+
+**Nightly:** `finished` yes or `dropped` yes marks the item for the writer to close, with the reason.
+
+Every combination has an outcome. When nothing above matches, the turn is filed under the
+session's single linked item if there is one, and otherwise marked for the writer.
+
+### 3.4 The writer
+
+The writer runs on the session agent's own model through `api.runtime.subagent.complete`: one
+tool-free call, with no Work model setting and no override. It receives only what it needs: the
+conversation since the session's checkpoint (`readSessionTranscriptVisibleMessageDelta`), the
+outcomes, the candidate items Jev scored above 0.3, and why it was called. It returns a list of
+**edits**:
+
+- create or reshape a Job, Project, Milestone or Task; attach a Task to a Project or Job;
+- a title, description and done-when for new work; a plan; a result;
+- a status line where Jev found no piece that says where things stand;
+- a Question or Decision Jev's pieces could not express; withdraw one the conversation made moot;
+- a Finding;
+- the session's timeline sentence where Jev's filing left none.
+
+Edits go through the Jev check (§3.3), then through the same store commands the tools use.
+
+### 3.5 Rules
+
+- **One deliverable, one Task.** A session that did three things produces three Tasks, not one
+  umbrella Task.
+- **Update before creating.** Jev's routing and the `same` check enforce it.
+- **Jobs file themselves.** A session started by an automation linked to a Job puts its work under
+  that Job without asking.
+- **Entries made by people and agents win.** Work never overwrites a field a person or agent set
+  after Work last wrote it; it can only add to it. Everything Work writes is marked as written by
+  Work.
+- **Never acts.** The clerk only reads conversations and writes records. It sends no messages,
+  wakes no agent and changes no conversation.
+- **Corrections are labels.** When a person or agent changes something Work wrote, the change and
+  the answers behind the original are logged as a labelled example for the evaluation set.
+
+### 3.6 Checkpoints, failure and fallback
+
+- A checkpoint per session (the last transcript entry read) is committed in the same transaction
+  as the edits. A writer pass that fails leaves the checkpoint unmoved and is retried at the next
+  trigger, up to three times, before the session is left for the nightly sweep.
+- A failed Jev call is an error, never a "no". The turn is marked for the writer.
+- Edits are validated individually; an invalid one is dropped and logged.
+- Judging and writing run on a service-scheduler queue, newest first, within the plugin's
+  background budget.
+- **Without a decision model**, every marked session goes to the writer at idle and the Jev check
+  is skipped. Work still fills itself in, more slowly and at higher cost.
+
+## 4. Data model
+
+One private SQLite database per Gateway, append-only event log of every command (actor, time,
+before/after), optimistic versions and idempotency keys as before.
+
+Kept from Work 5: `project`, `milestone`, `task` with `task_definition`, `task_plan` and
+`task_result` (immutable revisions), `question`, `answer`, `decision`, `finding`, `link`,
+`timeline_entry`, `event`, `receipt`.
+
+Changed:
+
+- `task`: drop `area_id`; add `job_id`. A Task has a `project_id`, a `job_id`, or neither, never
+  both. Add `status_line` and `status_line_at`. Drop `session_set_by`.
+- `project`: drop `area_id`; add `status_line` and `status_line_at`. Drop `session_key` and
+  `session_set_by`.
+- `question`, `decision`: add `session_key`, the session the item came from (the most recent one if
+  it came up in several).
+
+New:
+
+- `job` — `id`, `title`, `instructions`, `status` (`active` · `paused` · `retired`), `agent`,
+  `status_line`, `status_line_at`, `created_at`, `version`.
+- `job_automation` — `job_id`, `automation_id`: the OpenClaw automations that run the Job. Work
+  never schedules anything itself.
+- `task_session` — `task_id`, `session_key`, `first_seen_at`, `last_seen_at`: where a Task's work
+  happened. It feeds "3 sessions" and the session chips.
+- `clerk_checkpoint` — `session_key`, `agent_id`, `last_entry_id`, `last_entry_at`, `attempts`,
+  `updated_at`.
+- `written_by` — which fields of which objects the clerk last wrote, and when, so the precedence
+  rule in §3.3 can be enforced.
+
+Removed: `area`, `objective`, `kpi`, `kpi_reading`, `review`, `ask`, `session_task`,
+`session_parent`, `work_recorded`.
+
+## 5. Agent interface
+
+Agents get no rules in the prompt and no per-turn brief. Work's tools stay available for when the
+person tells the agent to change something ("move that under the catalog Project", "that's done"):
+
+- `falcon_work_read` — read anything (home, an item, search).
+- `falcon_work_plan` — create or extend a Project with Milestones and Tasks.
+- `falcon_work_task` — create, start, wait, resume, complete or abandon a Task.
+- `falcon_work_job` — create, edit, pause, resume or retire a Job, and link its automations.
+- `falcon_work_ask` — raise a Question or Decision for the person.
+- `falcon_work_finding` — record a Finding.
+- `falcon_work` — any other command.
+
+Everything an agent writes through a tool counts as an agent entry (§3.3).
+
+## 6. Pages
+
+Work is a native Control UI page, read-only throughout. The only interactive elements are session
+chips (they open that session), links to Work items, the Back link, search and the "Done this week"
+expanders. To act on something you go back to its session or start a new one. Mockups: Stitch
+project _Falcon Work 5_, with copies in `media/preview/work-home-2026-11-03/`.
+
+### Home (screen `a0c126201da946a4b5c0224b02d9ed5b`)
+
+Title and "Since you were here …" line, with search. Then three stacked sections:
+
+1. **Needs you** — one card per open Question or Decision: the item it concerns, the question in
+   one sentence, and a clickable chip for the session it came from. A session that no longer exists
+   shows greyed out and cannot be clicked.
+2. **Everything in motion** — a three-column board: **Moving**, **Waiting**, **Done this week**.
+   Each Job and each Project is one card with its Tasks inside, and only standalone Tasks get their
+   own card. A card shows its type, title, status line, current Milestone for a Project, and a
+   footer with sessions, last activity and agent. Items in Needs you are not repeated on the board.
+3. **What happened since your last visit** — a bulleted list with a thin guide line, newest first:
+   one sentence per entry with a muted attribution ("— William, 2h ago").
+
+### Project (screen `d1748493de7e44c09c1451548ef189e1`)
+
+Header (kind, title, status line, meta), then Needs you for this Project, Milestones as a stepper
+(achieved, current, upcoming) with their Tasks, and What happened. Side column: Outcome, Sessions,
+Findings.
+
+### Task (screen `835d96e8fdc24f1c96bafa5c0b5b1dde`)
+
+Header, then Done when, Plan, What happened with evidence chips (commit, file, PR), and Result.
+Side column: Sessions, what it belongs to, open Questions.
+
+### Job (screen `38fee52fcc2340b5aa5e5ce4ca929e69`)
+
+Header, then Needs you, Open tasks, Done this week (collapsed) and What happened. Side column:
+Instructions, and Automations with their triggers and last run.
+
+The Objectives, Areas & Projects and Activity tabs are removed.
+
+## 7. Hooks
+
+- `after_tool_call` notes the turn's outcomes in memory, as in Work 5.
+- `agent_end` stores the turn and its outcomes against the session, enqueues the turn for judging
+  and arms the idle timer. It makes no model calls itself.
+- `before_compaction` and `session_end` trigger a writer pass when the session is marked.
+- `before_prompt_build` only observes: it takes the person's message for the turn and the answer
+  check, and returns nothing. Work adds nothing to the agent's prompt.
+
+## 8. Install and catch-up
+
+- **Clean database.** The new version starts empty. An existing `work.db` is renamed
+  `work.db.before-2` and left in place; nothing is migrated.
+- **Automatic catch-up.** The plugin service starts the catch-up when the Gateway loads the plugin,
+  whether or not anyone opens the page. It queues every session with activity in the **last 14
+  days**, newest first, judges each turn and runs the writer where it is needed (§3.1). It resumes after a restart from the
+  checkpoints.
+- **Progress on the page.** While catch-up runs, the home page shows "Catching up on your work:
+  18 of 54 sessions read", and cards appear as they are found.
+
+## 9. Feasibility (spike, 2026-11-03)
+
+A throwaway plugin on Alpha (OpenClaw 2026.10.4) ran these from its service, at start and from the
+scheduler, with no user request behind them:
+
+- `runtime.agent.session.listSessionEntries` listed sessions (11 in 14 days).
+- `readVisibleSessionTranscriptMessageEntries` read a 91-entry transcript in under 75 ms.
+- `runtime.subagent.complete` and `runtime.llm.complete`, with no model named, answered in 1–3 s
+  for about $0.0006 per call.
+
+A second throwaway plugin called `runtime.decisions.evaluate` (Jev 1.13) from its service, at start
+and from the scheduler: status `ok` in 770 ms on the first call and 102 ms on the second. It judged
+the last turn of a real session (the person asked "what does that mean?" and the agent explained),
+answering `work_asked` 0.09, `needs_person` 0.03, and the unsettled `work_reported` 0.52 and
+`only_conversation` 0.46. Under §3.3 that turn goes to the writer. Answers like these are why the
+questions are measured before release (§11).
+
+Not usable by this plugin: `gateway.readSessionFacts` (bundled or trusted official plugins only)
+and `subagent.getSessionMessages` (only sessions the plugin created). Notes:
+`~/.tmp/openclaw-spikes/work-clerk-background/README.md`.
+
+## 10. Not in Work
+
+Scheduling (OpenClaw automations own it), sending or waking anything, transcripts (OpenClaw owns
+sessions; Work links to them), tags or categories, Objectives and metrics, runtime permission
+enforcement.
+
+## 11. Open points
+
+0. **Measured (2026-11-04).** 89 clear labelled real turns, Jev 1.13: filing under an open item 43
+   right and 6 wrong; new work 14 right and 1 wrong; Needs you 20 right and 2 wrong; done-when
+   checks all right; status line a correct piece 40 of 45; decoys never matched. 64% of turns still
+   go to the writer. Details: `packages/work/eval/README.md`.
+1. **Measure further.** The new questions in §3.2 need labelled real turns: start from the
+   Work 5 corpus in `eval/`, reuse `asks.p` and `answers.q` as measured, and tune the thresholds in
+   §3.3 on cases kept apart from the test set. The writer's edits need the same treatment: one Task
+   per deliverable, update-before-create, and a Needs you that only shows what is really waiting.
+2. **Release numbering.** Published Work is `1.0.0`. This is a breaking change, so it ships as the
+   next major version.
+3. **`docs/work-commands.md`** — rewritten for 2.0 (2026-11-04).
