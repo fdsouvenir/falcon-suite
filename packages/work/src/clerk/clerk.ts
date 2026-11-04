@@ -633,6 +633,8 @@ export class Clerk {
 			ref ? (keys.get(ref)?.kind ?? this.w.kindOf(resolve(ref)!)) : null;
 		const ik = (s: string) => `clerk-w:${session}:${seq}:${s}`;
 		let applied = 0;
+		// One edit per op and target: the writer sometimes repeats itself.
+		const seenEdits = new Set<string>();
 
 		// Duplicates: is a proposed new item the same as an open one?
 		const creates = edits.filter(
@@ -790,8 +792,10 @@ export class Clerk {
 					break;
 				case 'complete': {
 					const id = resolve(e.task)!;
+					if (seenEdits.has(`complete:${id}`)) break;
+					seenEdits.add(`complete:${id}`);
 					const t = this.w.views.task(id);
-					if (!t) break;
+					if (!t || t.status === 'completed') break;
 					// Check the claim against the done-when before completing.
 					const a = await this.evaluate(
 						{

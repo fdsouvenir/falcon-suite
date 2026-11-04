@@ -384,3 +384,29 @@ test('work recorded later keeps the time it happened: old finished work is not "
 	assert.equal(w.views.happened(null)[0].at, old);
 	assert.deepEqual(w.views.board().done, []);
 });
+
+test('a writer that repeats a completion completes the Task once, without errors', async () => {
+	const transcript = [
+		{ seq: 1, role: 'user', text: 'make the file', at: new Date().toISOString() },
+		{ seq: 2, role: 'assistant', text: 'Made the file.', at: new Date().toISOString() }
+	];
+	const complete = async () =>
+		JSON.stringify({
+			edits: [
+				{
+					op: 'create_task',
+					key: 't1',
+					title: 'Make the file',
+					description: 'd',
+					done_when: 'File exists'
+				},
+				{ op: 'complete', task: 't1', result: 'Made the file.' },
+				{ op: 'complete', task: 't1', result: 'The file was made.' }
+			]
+		});
+	const { w, clerk, events } = setup({ decisions: jev({ done: 0.9 }), complete, transcript });
+	clerk.mark('william', 'agent:william:dashboard:s1', ['new work']);
+	await clerk.writerPass('william', 'agent:william:dashboard:s1');
+	assert.equal(w.views.search('file')[0].state, 'completed');
+	assert.ok(!events.logs.some((l) => /rejected/.test(l)), events.logs.join('\n'));
+});
