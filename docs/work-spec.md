@@ -98,10 +98,10 @@ with title, status line and done-when. Names, not ids.
 - `needs_person` — Does `reply` ask the person for something the work cannot continue without?
 - `waits_outside` — Does `reply` say the work is waiting on something other than the person (a
   third party, a system, a date)?
-- `only_conversation` — Is this exchange only conversation, with no work done or asked for?
-- `any_item` — Is the work in this exchange about any item in `candidates`? This is the companion
-  question for "nothing fits".
-- per candidate `c`: `about.c` — Is the work in this exchange about `candidates.c`? and `done.c` —
+- `new_work` — Does `request` ask for a piece of work that is none of the items in `candidates`?
+- `any_item` — Is this exchange part of the work on any of the items in `candidates`? This is the
+  companion question for "nothing fits".
+- per candidate `c`: `about.c` — Is this exchange part of the work on `candidates.c`? and `done.c` —
   Does this exchange show that `candidates.c.done_when` is met?
 - per piece `p`: `asks.p` — Is `pieces.p` part of what `reply` asks the person to give, decide or
   do? (measured: F1 0.84) and `stands.p` — Does `pieces.p` say where the work now stands?
@@ -128,17 +128,17 @@ answers it acted on.
 
 **End of a turn:**
 
-| Answers                                                                         | Action                                                                                                                                 |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `only_conversation` yes and no outcomes                                         | Nothing is filed. The turn counts on the session's linked items, if any.                                                               |
-| `any_item` yes, one or more `about.c` yes                                       | File the turn's timeline entry and outcomes under each such item. If a `stands.p` is yes, the best one becomes the item's status line. |
-| …and `done.c` yes and `work_reported` yes                                       | Complete it. The result is the reporting pieces, with the outcomes as evidence. With no such piece, the writer writes the result.      |
-| `any_item` no, and (`work_asked` yes, `work_reported` yes, or outcomes present) | New work: mark the session for the writer.                                                                                             |
-| `work_planned` yes                                                              | Mark the session for the writer (it may be a Project with Milestones).                                                                 |
-| `needs_person` yes, the session's work is an item, and no `repeats.q` is yes    | Raise a Question now: its text is the pieces with `asks.p` yes, and its session is this one. Mark the item waiting on the person.      |
-| `needs_person` yes and some `repeats.q` yes                                     | Link this session to that Question; raise nothing new.                                                                                 |
-| `waits_outside` yes                                                             | Mark the item waiting; the reason is the `stands.p` piece.                                                                             |
-| `any_item` or any `about.c` unsettled                                           | Mark the session for the writer.                                                                                                       |
+| Answers                                                                                                | Action                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `work_asked` no, `work_reported` no and no outcomes                                                    | Nothing is filed. The turn counts on the session's linked items, if any.                                                               |
+| `any_item` yes, one or more `about.c` yes                                                              | File the turn's timeline entry and outcomes under each such item. If a `stands.p` is yes, the best one becomes the item's status line. |
+| …and `done.c` yes and `work_reported` yes                                                              | Complete it. The result is the reporting pieces, with the outcomes as evidence. With no such piece, the writer writes the result.      |
+| (`work_asked` or `work_reported` yes, or outcomes present) and (`new_work` yes, or every `about.c` no) | New work: mark the session for the writer.                                                                                             |
+| `work_planned` yes                                                                                     | Mark the session for the writer (it may be a Project with Milestones).                                                                 |
+| `needs_person` yes, the session's work is an item, and no `repeats.q` is yes                           | Raise a Question now: its text is the pieces with `asks.p` yes, and its session is this one. Mark the item waiting on the person.      |
+| `needs_person` yes and some `repeats.q` yes                                                            | Link this session to that Question; raise nothing new.                                                                                 |
+| `waits_outside` yes                                                                                    | Mark the item waiting; the reason is the `stands.p` piece.                                                                             |
+| `any_item` or any `about.c` unsettled                                                                  | Mark the session for the writer.                                                                                                       |
 
 **When the person sends a message:** `answers.q` yes records the message as the answer.
 `decides.d` yes records the chosen option if its probability is at least 0.7. Anything else waits
@@ -333,7 +333,11 @@ enforcement.
 
 ## 11. Open points
 
-1. **Measure before release.** The new questions in §3.2 need labelled real turns: start from the
+0. **Measured (2026-11-04).** 89 clear labelled real turns, Jev 1.13: filing under an open item 43
+   right and 6 wrong; new work 14 right and 1 wrong; Needs you 20 right and 2 wrong; done-when
+   checks all right; status line a correct piece 40 of 45; decoys never matched. 64% of turns still
+   go to the writer. Details: `packages/work/eval/README.md`.
+1. **Measure further.** The new questions in §3.2 need labelled real turns: start from the
    Work 5 corpus in `eval/`, reuse `asks.p` and `answers.q` as measured, and tune the thresholds in
    §3.3 on cases kept apart from the test set. The writer's edits need the same treatment: one Task
    per deliverable, update-before-create, and a Needs you that only shows what is really waiting.
