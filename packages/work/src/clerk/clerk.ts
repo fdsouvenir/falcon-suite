@@ -706,12 +706,10 @@ export class Clerk {
 								...(e.status_line ? { status_line: clip(e.status_line, 2000) } : {}),
 								...(e.milestones?.length
 									? {
-											milestones: e.milestones
-												.slice(0, 20)
-												.map((m) => ({
-													title: clip(m.title, 240),
-													success_condition: clip(m.success_condition, 12000)
-												}))
+											milestones: e.milestones.slice(0, 20).map((m) => ({
+												title: clip(m.title, 240),
+												success_condition: clip(m.success_condition, 12000)
+											}))
 										}
 									: {})
 							},

@@ -15,15 +15,15 @@
     "onStartup": true
   },
   "controlUi": {
-    "entry": "dist/control-ui/b0b13c8103dbac2f10eae4c62f65dcb6815473b2ba3636d795d4a00db9221e24/index.js",
+    "entry": "dist/control-ui/82f5d4e45c2400f3fdeafb1a39d3ba1ddf9ff53825ae432ff86bebce987ea727/index.js",
     "styles": [
-      "dist/control-ui/b0b13c8103dbac2f10eae4c62f65dcb6815473b2ba3636d795d4a00db9221e24/index.css"
+      "dist/control-ui/82f5d4e45c2400f3fdeafb1a39d3ba1ddf9ff53825ae432ff86bebce987ea727/index.css"
     ]
   },
   "contracts": {
     "tools": [
-      "falcon_work",
       "falcon_work_ask",
+      "falcon_work",
       "falcon_work_finding",
       "falcon_work_job",
       "falcon_work_plan",

@@ -1,505 +1,372 @@
 import type { Ctx } from './app.js';
-import { h, icon, statusIcon, day, since, time, who, avatar, kicker } from './dom.js';
+import { PLUGIN_VERSION } from '../identity.js';
+import { h, icon, ago, dotted, who, count, type Child } from './dom.js';
+import type { Entry, ItemKind, ItemRef, NeedsYouItem, SessionRef, TaskLine } from './types.js';
 
-type SessionRef = { key: string; from: 'own' | 'project' | 'task' } | null;
+export const KIND: Record<ItemKind, string> = { job: 'Job', project: 'Project', task: 'Task' };
 
-/** A discussion-session chip; clicking opens the session (spec §9). */
-export function sessionChip(c: Ctx, s: SessionRef, opts: { prefix?: string } = {}) {
-	if (!s) return null;
-	const title = c.sessionTitle(s.key);
-	return h(
-		'button',
-		{
-			class: `fw-chip fw-session${title ? '' : ' is-missing'}`,
-			type: 'button',
-			title: title ? `Open session: ${title}` : `Session not found: ${s.key}`,
-			on: { click: (e: Event) => (e.stopPropagation(), c.openSession(s.key)) }
-		},
-		h('span', { class: 'fw-dot' }),
-		opts.prefix ?? '',
-		title ?? 'missing session',
-		s.from !== 'own'
-			? h('span', { class: 'fw-muted' }, ` (from ${s.from === 'project' ? 'Project' : 'its Task'})`)
-			: null
-	);
-}
-
-export const evidence = (sources: { ref: string; label?: string }[] | null | undefined) =>
-	(sources ?? []).map((s) =>
-		h('span', { class: 'fw-chip fw-mono', title: s.ref }, s.label ?? s.ref)
-	);
-
-/** Open the side panel for an object, keeping the current page. */
-export const openPanel = (c: Ctx, id: string) => c.go({ ...c.params, panel: id });
-
-/**
- * One status per Task row: a single pill, with why (whom it waits on, what blocks it) as a quiet
- * second line under the title.
- */
-export function taskStatus(t: any): { label: string; tone: string; detail: string | null } {
-	const blockers: string[] = (t.blocked_by ?? []).filter((b: string) => !b.startsWith('waiting:'));
-	if (t.status === 'waiting')
-		return {
-			label: 'waiting',
-			tone: 'waiting',
-			detail: [
-				t.waiting_on ? `on ${who(t.waiting_on.ref)}` : null,
-				t.follow_up_at ? `follow up ${day(t.follow_up_at)}` : null
-			]
-				.filter(Boolean)
-				.join(' · ')
-		};
-	if ((t.status === 'open' || t.status === 'ready') && blockers.length)
-		return { label: 'blocked', tone: 'waiting', detail: blockers.join(' · ') };
-	return {
-		label: t.status.replace('_', ' '),
-		tone: t.status,
-		detail: blockers.length ? blockers.join(' · ') : null
-	};
-}
-
-export function taskRow(c: Ctx, t: any, opts: { place?: boolean } = {}) {
-	const done = t.status === 'completed';
-	const s = taskStatus(t);
-	const sub = [opts.place && t.place ? t.place.title : null, done ? null : s.detail]
-		.filter(Boolean)
-		.join(' · ');
-	return h(
-		'div',
-		{
-			class: `fw-row fw-task${done ? ' is-done' : ''}`,
-			'data-panel': t.id,
-			role: 'button',
-			tabindex: 0,
-			on: {
-				click: () => openPanel(c, t.id),
-				keydown: (e: Event) => (e as KeyboardEvent).key === 'Enter' && openPanel(c, t.id)
-			}
-		},
-		h('span', { class: `fw-status fw-status-${t.status}` }, statusIcon(t.status)),
-		h(
-			'div',
-			{ class: 'fw-row-main' },
-			h('span', { class: 'fw-row-title' }, t.title),
-			sub ? h('span', { class: 'fw-row-sub', title: sub }, sub) : null
-		),
-		h(
-			'div',
-			{ class: 'fw-row-meta' },
-			done ? null : h('span', { class: `fw-pill fw-pill-${s.tone}` }, s.label),
-			t.agent && !done ? avatar(t.agent) : null,
-			t.session && !done ? sessionChip(c, t.session) : null
-		)
-	);
-}
-
-export function warningRow(c: Ctx, w: any) {
-	const target = w.object?.id && w.object.kind !== 'timeline' ? w.object : null;
-	return h(
-		'div',
-		{
-			class: 'fw-card fw-warning',
-			role: target ? 'button' : undefined,
-			on: target
-				? {
-						click: () =>
-							target.kind === 'objective'
-								? c.go({ objective: target.id })
-								: target.kind === 'milestone'
-									? null
-									: openPanel(c, target.id)
-					}
-				: undefined
-		},
-		icon('warn'),
-		h(
-			'div',
-			null,
-			h(
-				'div',
-				null,
-				h('strong', { class: 'fw-warn-text' }, labelFor(w.kind)),
-				' · ',
-				h('span', { class: 'fw-strong' }, w.title)
-			),
-			h('div', { class: 'fw-muted' }, readableDates(w.detail))
-		)
-	);
-}
-
-/** Warning details name exact timestamps for agents; people read them as dates. */
-export const readableDates = (text: string) =>
-	(text ?? '').replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z/g, (iso) => day(iso));
-
-const labelFor = (kind: string) =>
-	({
-		stalled_task: 'Stalled Task',
-		follow_up_overdue: 'Follow-up overdue',
-		unanswered: 'Unanswered',
-		objective_without_progress: 'Objective without progress',
-		unfiled_work: 'Unfiled work',
-		milestone_ready: 'Milestone ready',
-		session_mismatch: 'Session mismatch'
-	})[kind] ?? kind;
-
-/** A Decision you can decide: clicking an option selects it; Decide commits (spec §7). */
-export function decisionCard(c: Ctx, d: any) {
-	let chosen: string | null = null;
-	const why = h('input', {
-		class: 'fw-input',
-		type: 'text',
-		placeholder: 'Why? (optional)',
-		'aria-label': 'Why'
-	});
-	const decide = h('button', { class: 'fw-btn fw-btn-primary', type: 'button' }, 'Decide');
-	const row = h('div', { class: 'fw-decide-row', hidden: true }, why, decide);
-	const status = h('p', { class: 'fw-error-text', role: 'status' });
-	const options = d.options.map((o: any) => {
-		const b = h(
-			'button',
-			{ class: 'fw-option', type: 'button', 'aria-pressed': 'false', title: o.summary ?? '' },
-			o.label,
-			o.id === d.recommendation?.option ? h('span', { class: 'fw-muted' }, ' (recommended)') : null
-		);
-		b.addEventListener('click', () => {
-			chosen = o.id;
-			for (const x of options) x.setAttribute('aria-pressed', String(x === b));
-			row.hidden = false;
-		});
-		return b;
-	});
-	decide.addEventListener('click', async () => {
-		if (!chosen) return;
-		decide.disabled = true;
-		try {
-			await c.act(
-				'decide',
-				d.id,
-				{ option: chosen, ...(why.value.trim() ? { rationale: why.value.trim() } : {}) },
-				d.version
-			);
-		} catch (e) {
-			status.textContent = (e as Error).message;
-			decide.disabled = false;
-		}
-	});
-	return h(
-		'div',
-		{ class: 'fw-card fw-decision' },
-		h(
-			'div',
-			{ class: 'fw-card-head' },
-			icon('decision'),
-			kicker('Decision'),
-			h('strong', { class: 'fw-strong' }, d.prompt)
-		),
-		d.recommendation?.rationale ? h('p', { class: 'fw-muted' }, d.recommendation.rationale) : null,
-		d.can_decide
-			? h('div', { class: 'fw-options' }, options)
-			: h('p', { class: 'fw-muted' }, 'Waiting on its deciders.'),
-		d.can_decide ? row : null,
-		status,
-		h(
-			'div',
-			{ class: 'fw-card-foot' },
-			`Raised ${day(d.created_at)} · open ${since(d.created_at)}`,
-			sessionChip(c, d.session),
-			h('span', { class: 'fw-muted' }, `If nobody decides: ${d.consequence_of_no_decision}`)
-		)
-	);
-}
-
-/** A Question you can answer in place, or answer by accepting the agent's hypothesis. */
-export function questionCard(c: Ctx, q: any) {
-	const field = h('input', {
-		class: 'fw-input',
-		type: 'text',
-		placeholder: q.hypothesis ? 'Or type a different answer…' : 'Type an answer…',
-		'aria-label': 'Answer'
-	});
-	const status = h('p', { class: 'fw-error-text', role: 'status' });
-	const run = async (command: string, input: Record<string, unknown>) => {
-		try {
-			await c.act(command, q.id, input, q.version);
-		} catch (e) {
-			status.textContent = (e as Error).message;
-		}
-	};
-	const answer = h(
-		'button',
-		{
-			class: 'fw-btn',
-			type: 'button',
-			on: { click: () => field.value.trim() && run('answer', { answer: field.value.trim() }) }
-		},
-		'Answer'
-	);
-	field.addEventListener('keydown', (e) => (e as KeyboardEvent).key === 'Enter' && answer.click());
-	return h(
-		'div',
-		{ class: 'fw-card fw-question' },
-		h(
-			'div',
-			{ class: 'fw-card-head' },
-			icon('question'),
-			kicker('Question'),
-			h('strong', { class: 'fw-strong' }, q.prompt),
-			h(
-				'span',
-				{ class: 'fw-muted fw-right' },
-				`Open since ${day(q.created_at)}${q.holds ? ` · holds ${q.holds} Task${q.holds > 1 ? 's' : ''}` : ''}`
-			)
-		),
-		q.hypothesis
-			? h(
-					'p',
-					{ class: 'fw-muted' },
-					`${who(q.hypothesis_by)}'s hypothesis: `,
-					h('span', { class: 'fw-mono' }, q.hypothesis),
-					' ',
-					sessionChip(c, q.session)
-				)
-			: null,
-		q.can_answer
-			? h(
-					'div',
-					{ class: 'fw-answer-row' },
-					q.hypothesis
-						? h(
-								'button',
-								{
-									class: 'fw-btn',
-									type: 'button',
-									on: { click: () => run('accept_hypothesis', {}) }
-								},
-								`Use ${who(q.hypothesis_by)}'s hypothesis`
-							)
-						: null,
-					field,
-					answer,
-					q.session
-						? h(
-								'button',
-								{
-									class: 'fw-link',
-									type: 'button',
-									on: { click: () => c.openSession(q.session.key) }
-								},
-								'Discuss in session'
-							)
-						: null
-				)
-			: null,
-		status
-	);
-}
-
-export function objectiveLink(c: Ctx, o: { id: string; title: string }) {
+/** A link to a Work item's page. */
+export function itemLink(
+	c: Ctx,
+	ref: Pick<ItemRef, 'id' | 'kind' | 'title'>,
+	cls = 'fw-item-link'
+) {
 	return h(
 		'a',
 		{
-			class: 'fw-link',
-			href: c.href({ objective: o.id }),
-			on: { click: (e: Event) => (e.preventDefault(), c.go({ objective: o.id })) }
+			class: cls,
+			href: c.hrefFor(ref),
+			on: { click: (e: Event) => (e.preventDefault(), c.open(ref)) }
 		},
-		o.title
+		ref.title
 	);
 }
 
-export function kpiBar(k: any) {
-	const latest = k.latest ?? k.readings?.at(-1) ?? null;
-	const pct = latest && k.target ? Math.max(0, Math.min(100, (latest.value / k.target) * 100)) : 0;
-	return h(
-		'div',
-		{ class: 'fw-kpi' },
-		h(
-			'div',
-			{ class: 'fw-kpi-head' },
-			h('span', null, k.name),
-			h(
-				'span',
-				{ class: 'fw-mono' },
-				latest ? `${latest.value} / ${k.target} ${k.unit}` : `unmeasured / ${k.target} ${k.unit}`
-			)
-		),
-		h(
-			'div',
-			{
-				class: 'fw-bar',
-				role: 'meter',
-				'aria-valuenow': latest?.value ?? 0,
-				'aria-valuemax': k.target
-			},
-			h('span', { class: 'fw-bar-fill', style: `width:${pct}%` })
-		)
-	);
-}
-
-const OUTCOME: Record<string, { label: string; glyph: string }> = {
-	commit: { label: 'Commit', glyph: '◇' },
-	push: { label: 'Push', glyph: '↑' },
-	pr: { label: 'Pull request', glyph: '⇄' },
-	release: { label: 'Release', glyph: '⬡' },
-	deploy: { label: 'Deploy', glyph: '▸' },
-	message: { label: 'Message', glyph: '✉' },
-	file: { label: 'File', glyph: '▤' },
-	config: { label: 'Config', glyph: '⚙' },
-	change: { label: 'Change', glyph: '•' }
-};
-
-/** Paths read from the workspace or the home folder; long labels are clipped. */
-function short(label: string) {
-	const s = label.replace(/^.*\/\.openclaw\/workspace\//, '').replace(/^\/home\/[^/]+\//, '~/');
-	return s.length > 60 ? s.slice(0, 59) + '…' : s;
-}
-
-/** One outcome as a chip: a kind glyph, then the commit (hash and message), file or target. */
-function outcomeChip(o: { kind: string; label: string; ref?: string }) {
-	const k = OUTCOME[o.kind] ?? { label: o.kind, glyph: '•' };
-	return h(
-		'span',
-		{ class: `fw-chip fw-outcome`, title: `${k.label}: ${o.ref ?? o.label}` },
-		h('span', { class: 'fw-outcome-glyph', 'aria-hidden': 'true' }, k.glyph),
-		o.kind === 'commit' && o.ref
-			? h('span', { class: 'fw-mono fw-strong' }, o.ref.slice(0, 7))
-			: null,
-		o.kind === 'config' ? h('span', { class: 'fw-muted' }, 'Config') : null,
-		h(
-			'span',
-			{ class: o.kind === 'file' ? 'fw-mono' : '' },
-			o.kind === 'commit' && o.ref ? `‘${short(o.label)}’` : short(o.label)
-		)
-	);
-}
-
-const dayLabel = (iso: string) => {
-	const d = new Date(iso);
-	const today = new Date();
-	const y = new Date(today.getTime() - 864e5);
-	return d.toDateString() === today.toDateString()
-		? 'Today'
-		: d.toDateString() === y.toDateString()
-			? 'Yesterday'
-			: day(iso);
-};
+/** A small sentence-case chip naming what kind of item this is. */
+export const kindChip = (kind: ItemKind) => h('span', { class: 'fw-kind' }, KIND[kind]);
 
 /**
- * A timeline (spec §10, Timeline): one row per turn that changed something — its outcomes as
- * chips and its summary folded under "What happened" — newest first; turns without outcomes fold
- * into one line. With `showTask` (the Activity tab) each row names its Task and Project, rows are
- * grouped by day, and unfiled rows offer `file`.
+ * A session chip: its title and when it was last active; clicking opens that chat. A session that
+ * no longer exists is greyed out and does nothing. The chip keeps its key so the page can redraw it
+ * when the session list changes.
  */
-export function timeline(
-	c: Ctx,
-	entries: any[],
-	opts: { showTask?: boolean; file?: (entry: any) => void } = {}
-) {
-	const when = (iso: string) =>
-		h(
+export function sessionChip(c: Ctx, key: string, at: string | null = null) {
+	const s = c.session(key);
+	const data = { 'data-session': key, ...(at ? { 'data-at': at } : {}) };
+	if (s === null)
+		return h(
 			'span',
-			{ class: 'fw-mono fw-muted fw-tl-time', title: iso },
-			opts.showTask ? time(iso) : `${day(iso)} ${time(iso)}`
+			{ class: 'fw-session is-missing', title: key, ...data },
+			h('span', { class: 'fw-session-dot' }),
+			h('span', { class: 'fw-session-title' }, 'session no longer available')
 		);
-	const session = (key: string | null) => (key ? sessionChip(c, { key, from: 'own' }) : null);
-	const rows: HTMLElement[] = [];
-	let talk: any[] = [];
-	const flush = () => {
-		if (!talk.length) return;
-		rows.push(
-			h(
-				'li',
-				{ class: 'fw-tl fw-tl-talk' },
-				when(talk[0].at),
-				h(
-					'div',
-					{ class: 'fw-tl-main fw-tl-line' },
-					h(
-						'span',
-						{ class: 'fw-muted' },
-						`${talk.length} turn${talk.length > 1 ? 's' : ''} of discussion`
-					),
-					session(talk[0].session)
-				)
-			)
-		);
-		talk = [];
-	};
-	for (const e of entries) {
-		if (!e.outcomes.length) {
-			talk.push(e);
-			continue;
-		}
-		flush();
-		rows.push(
-			h(
-				'li',
-				{ class: `fw-tl${e.task ? '' : ' fw-tl-unfiled'}` },
-				when(e.at),
-				h(
-					'div',
-					{ class: 'fw-tl-main' },
-					opts.showTask || e.completed || e.recorded_by === 'agent' || !e.task
-						? h(
-								'div',
-								{ class: 'fw-tl-line' },
-								opts.showTask && e.task
-									? [
-											h(
-												'button',
-												{
-													class: 'fw-chip fw-tl-task',
-													type: 'button',
-													on: { click: () => openPanel(c, e.task.id) }
-												},
-												e.task.title
-											),
-											e.task.place ? h('span', { class: 'fw-muted' }, `· ${e.task.place}`) : null
-										]
-									: null,
-								!e.task ? h('span', { class: 'fw-pill fw-pill-warn' }, 'Unfiled') : null,
-								e.completed ? h('span', { class: 'fw-pill fw-pill-done' }, '✓ Completed') : null,
-								h('span', { class: 'fw-right' }),
-								e.recorded_by === 'agent'
-									? h('span', { class: 'fw-muted fw-tl-by' }, 'recorded by the agent')
-									: null,
-								!e.task && opts.file
-									? h(
-											'button',
-											{ class: 'fw-link', type: 'button', on: { click: () => opts.file!(e) } },
-											'File under a Task →'
-										)
-									: null
-							)
-						: null,
-					h('div', { class: 'fw-tl-line' }, e.outcomes.map(outcomeChip)),
-					e.summary || e.session
-						? h(
-								'details',
-								{ class: 'fw-fold fw-tl-detail' },
-								h('summary', null, ' What happened'),
-								h(
-									'div',
-									{ class: 'fw-tl-line' },
-									e.summary ? h('p', { class: 'fw-tl-summary' }, e.summary) : null,
-									h('span', { class: 'fw-right' }),
-									session(e.session)
-								)
-							)
-						: null
-				)
-			)
-		);
-	}
-	flush();
-	return h('ol', { class: 'fw-timeline' }, rows);
+	return h(
+		'button',
+		{
+			class: `fw-session${s?.active ? ' is-active' : ''}`,
+			type: 'button',
+			title: s ? `Open session: ${s.title}` : 'Open session',
+			on: { click: (e: Event) => (e.stopPropagation(), c.openSession(key)) },
+			...data
+		},
+		h('span', { class: 'fw-session-dot' }),
+		h('span', { class: 'fw-session-title' }, s?.title ?? 'Session'),
+		at ? h('span', { class: 'fw-session-at' }, ` · ${ago(at)}`) : null
+	);
 }
 
-/** The Activity tab's day groups: Today, Yesterday, then dates. */
-export function byDay(entries: any[]): [string, any[]][] {
-	const days = new Map<string, any[]>();
-	for (const e of entries) {
-		const k = dayLabel(e.at);
-		days.set(k, [...(days.get(k) ?? []), e]);
+/** A section with a heading, "Title (n)" when counted. */
+export const section = (
+	title: string,
+	n: number | null,
+	opts: { dot?: 'accent' | 'muted'; cls?: string } = {},
+	...body: Child[]
+) =>
+	h(
+		'section',
+		{ class: `fw-section${opts.cls ? ` ${opts.cls}` : ''}` },
+		h(
+			'h2',
+			{ class: 'fw-section-title' },
+			opts.dot ? h('span', { class: `fw-dot fw-dot-${opts.dot}` }) : null,
+			n === null ? title : `${title} (${n})`
+		),
+		...body
+	);
+
+export const empty = (text: string) => h('p', { class: 'fw-empty' }, text);
+
+/** A card in the side column. */
+export const side = (title: string, ...body: Child[]) =>
+	h('section', { class: 'fw-side-card' }, h('h3', { class: 'fw-side-title' }, title), ...body);
+
+export const pageTitle = () => `Falcon Work v${PLUGIN_VERSION.replace(/^[^-]+-/, '')}`;
+
+/** The search field; submitting it opens the results. */
+export function searchField(c: Ctx, value = '') {
+	const input = h('input', {
+		class: 'fw-search-input',
+		type: 'search',
+		placeholder: 'Search Jobs, Projects and Tasks…',
+		'aria-label': 'Search Falcon Work',
+		value
+	});
+	return h(
+		'form',
+		{
+			class: 'fw-search',
+			role: 'search',
+			on: {
+				submit: (e: Event) => {
+					e.preventDefault();
+					const q = input.value.trim();
+					q ? c.go({ q }) : c.go({});
+				}
+			}
+		},
+		icon('search'),
+		input
+	);
+}
+
+export const backLink = (c: Ctx) =>
+	h(
+		'a',
+		{
+			class: 'fw-back',
+			href: c.href({}),
+			on: { click: (e: Event) => (e.preventDefault(), c.go({})) }
+		},
+		icon('back'),
+		'Falcon Work'
+	);
+
+/** Status words and tone for a Task or Job status. */
+export function status(s: string): { label: string; tone: 'ok' | 'run' | 'warn' | 'muted' } {
+	switch (s) {
+		case 'completed':
+			return { label: 'Done', tone: 'ok' };
+		case 'in_progress':
+			return { label: 'In progress', tone: 'run' };
+		case 'active':
+			return { label: 'Active', tone: 'run' };
+		case 'waiting':
+			return { label: 'Waiting', tone: 'warn' };
+		case 'paused':
+			return { label: 'Paused', tone: 'warn' };
+		case 'ready':
+			return { label: 'Ready', tone: 'muted' };
+		case 'abandoned':
+			return { label: 'Abandoned', tone: 'muted' };
+		case 'retired':
+			return { label: 'Retired', tone: 'muted' };
+		default:
+			return { label: s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' '), tone: 'muted' };
 	}
-	return [...days];
+}
+
+/** "Waiting on you: the export" → "Waiting on you". */
+const waitingShort = (w: string | null) => (w ? w.split(':')[0] : 'Waiting');
+
+/** The status mark at the start of a Task row: a check when done, otherwise a coloured dot. */
+export const statusMark = (s: string) =>
+	s === 'completed'
+		? h('span', { class: 'fw-mark fw-tone-ok' }, icon('tick'))
+		: h(
+				'span',
+				{ class: `fw-mark fw-tone-${status(s).tone}` },
+				h('span', { class: 'fw-mark-dot' })
+			);
+
+export const statusPill = (t: Pick<TaskLine, 'status' | 'waiting'>) => {
+	const s = status(t.status);
+	return h(
+		'span',
+		{ class: `fw-pill fw-pill-${s.tone}`, title: t.waiting ?? undefined },
+		t.status === 'waiting' ? waitingShort(t.waiting) : s.label
+	);
+};
+
+/** "Task · ● In progress" above a detail page's title. */
+export const kindLine = (kind: ItemKind, s?: string) =>
+	h(
+		'div',
+		{ class: 'fw-kind-line' },
+		KIND[kind],
+		s
+			? [
+					' · ',
+					h(
+						'span',
+						{ class: `fw-state fw-tone-${status(s).tone}` },
+						h('span', { class: 'fw-mark-dot' }),
+						status(s).label
+					)
+				]
+			: null
+	);
+
+/** The head of a Project, Task or Job page. */
+export function detailHead(
+	c: Ctx,
+	o: {
+		kind: ItemKind;
+		status?: string;
+		title: string;
+		line: string | null;
+		waiting?: string | null;
+		meta: Child[];
+	}
+) {
+	return h(
+		'header',
+		{ class: 'fw-detail-head' },
+		backLink(c),
+		kindLine(o.kind, o.status),
+		h('h1', { class: 'fw-title' }, o.title),
+		o.line ? h('p', { class: 'fw-lede' }, o.line) : null,
+		o.waiting && o.waiting !== o.line ? h('p', { class: 'fw-waiting' }, o.waiting) : null,
+		h('p', { class: 'fw-meta' }, dotted(...o.meta))
+	);
+}
+
+/** The item was not found (removed, or a stale link). */
+export const missing = (c: Ctx, kind: ItemKind) =>
+	h(
+		'div',
+		{ class: 'fw-detail' },
+		detailHead(c, { kind, title: 'Not found', line: null, meta: [] }),
+		empty(`This ${KIND[kind]} no longer exists.`)
+	);
+
+/** Main column and side column. */
+export const columns = (main: Child[], aside: Child[]) =>
+	h(
+		'div',
+		{ class: 'fw-columns' },
+		h('div', { class: 'fw-main' }, main),
+		h('aside', { class: 'fw-aside' }, aside)
+	);
+
+/**
+ * Needs you. On Home each item is a card naming the item it concerns; on an item's own page it is a
+ * row with the session on the right.
+ */
+export function needsYou(c: Ctx, items: NeedsYouItem[], opts: { page?: string } = {}) {
+	if (opts.page === undefined)
+		return h(
+			'div',
+			{ class: 'fw-needs' },
+			items.map((n) =>
+				h(
+					'article',
+					{ class: 'fw-need' },
+					n.about ? h('h3', { class: 'fw-need-title' }, itemLink(c, n.about)) : null,
+					h('p', { class: 'fw-need-prompt' }, n.prompt),
+					n.session ? h('div', null, sessionChip(c, n.session, n.since)) : null
+				)
+			)
+		);
+	return h(
+		'div',
+		{ class: 'fw-needs' },
+		items.map((n) =>
+			h(
+				'article',
+				{ class: 'fw-need fw-need-row' },
+				h(
+					'div',
+					{ class: 'fw-need-body' },
+					n.about && n.about.id !== opts.page
+						? h('div', { class: 'fw-need-about' }, itemLink(c, n.about))
+						: null,
+					h('p', { class: 'fw-need-prompt' }, n.prompt)
+				),
+				n.session ? sessionChip(c, n.session, n.since) : null
+			)
+		)
+	);
+}
+
+/** The sessions an item's work happened in, newest first. */
+export const sessionList = (c: Ctx, list: SessionRef[]) =>
+	list.length
+		? h(
+				'div',
+				{ class: 'fw-session-list' },
+				list.map((s) => sessionChip(c, s.key, s.last_seen_at))
+			)
+		: h('p', { class: 'fw-side-empty' }, 'No sessions yet');
+
+/** One evidence chip per outcome or source. */
+export const evidence = (items: { label?: string; ref?: string }[]) =>
+	items.length
+		? h(
+				'div',
+				{ class: 'fw-evidence' },
+				items.map((o) =>
+					h(
+						'span',
+						{ class: 'fw-evidence-chip', title: o.ref ?? o.label ?? '' },
+						o.label ?? o.ref ?? ''
+					)
+				)
+			)
+		: null;
+
+/**
+ * What happened: one sentence per entry with a muted "— William, 2h ago", on a thin guide line,
+ * newest first. The item it is about links to its page, unless that is the page being shown.
+ */
+export function happened(
+	c: Ctx,
+	entries: Entry[],
+	opts: { page?: string; evidence?: boolean } = {}
+) {
+	return h(
+		'ul',
+		{ class: 'fw-happened' },
+		entries
+			.filter((e) => e.summary || (opts.evidence && e.outcomes.length))
+			.map((e) =>
+				h(
+					'li',
+					{ class: 'fw-happened-entry' },
+					h(
+						'p',
+						{ class: 'fw-happened-line' },
+						e.summary ?? h('span', { class: 'fw-muted' }, count(e.outcomes.length, 'outcome')),
+						h(
+							'span',
+							{ class: 'fw-attribution' },
+							` — ${who(e.agent || e.by, c.owner)}, ${ago(e.at)}`,
+							e.item && e.item.id !== opts.page
+								? [' · ', itemLink(c, e.item, 'fw-item-link fw-quiet-link')]
+								: null
+						)
+					),
+					opts.evidence ? evidence(e.outcomes) : null
+				)
+			)
+	);
+}
+
+/** A Task as a row inside a Milestone or list: mark, title, pill. */
+export const taskRow = (c: Ctx, t: TaskLine) =>
+	h(
+		'div',
+		{ class: `fw-task-row${t.status === 'completed' ? ' is-done' : ''}` },
+		statusMark(t.status),
+		itemLink(c, { id: t.id, kind: 'task', title: t.title }, 'fw-item-link fw-task-title'),
+		statusPill(t)
+	);
+
+/**
+ * A dense Task row (a Job's tasks): mark, title, its status line, when, and its latest session.
+ */
+export const denseTaskRow = (c: Ctx, t: TaskLine) =>
+	h(
+		'div',
+		{ class: 'fw-dense-row' },
+		statusMark(t.status),
+		itemLink(c, { id: t.id, kind: 'task', title: t.title }, 'fw-item-link fw-dense-title'),
+		h(
+			'span',
+			{ class: 'fw-dense-line', title: t.waiting ?? t.status_line ?? '' },
+			t.waiting ?? t.status_line ?? status(t.status).label
+		),
+		h('span', { class: 'fw-dense-at' }, ago(t.updated_at)),
+		t.sessions[0] ? sessionChip(c, t.sessions[0].key) : h('span')
+	);
+
+/** A collapsible row ("Done this week (12)") that remembers whether it was open. */
+export function expander(c: Ctx, name: string, label: string, ...body: Child[]) {
+	const d = h(
+		'details',
+		{ class: 'fw-expander', open: c.expanded.has(name) },
+		h('summary', null, h('span', null, label), icon('chevron')),
+		h('div', { class: 'fw-expander-body' }, ...body)
+	);
+	d.addEventListener('toggle', () => (d.open ? c.expanded.add(name) : c.expanded.delete(name)));
+	return d;
 }

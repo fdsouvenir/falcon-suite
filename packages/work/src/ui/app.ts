@@ -1,144 +1,130 @@
 import type { ControlUiHost, ControlUiViewContext } from 'openclaw/plugin-sdk/control-ui';
 import { createFeatureClient } from 'openclaw/plugin-sdk/feature-contract';
 import { contract } from '../contract.js';
-import { PLUGIN_VERSION } from '../identity.js';
-import { h, who } from './dom.js';
-import { overviewView } from './views/overview.js';
-import { objectivesView, objectiveView } from './views/objectives.js';
-import { areasView, projectView } from './views/areas.js';
-import { activityView } from './views/activity.js';
-import { panelView } from './views/panel.js';
+import { h } from './dom.js';
+import { sessionChip } from './parts.js';
+import type { ItemRef } from './types.js';
+import { homeView } from './views/home.js';
+import { projectView } from './views/project.js';
+import { taskView } from './views/task.js';
+import { jobView } from './views/job.js';
+import { searchView } from './views/search.js';
 
 export const PAGE_ID = 'work';
 export type Params = Readonly<Record<string, string>>;
+type ReadInput = {
+	view: 'home' | 'project' | 'task' | 'job' | 'search';
+	id?: string;
+	text?: string;
+	since?: string;
+};
 
-/** What every view gets: data access, navigation, sessions and a way to refresh. */
+/** A session as the chips show it; `undefined` while the session list is still loading. */
+export type SessionInfo = { title: string; active: boolean } | null | undefined;
+
+/** What every view gets: data access, navigation and sessions. The pages are read-only. */
 export type Ctx = {
 	host: ControlUiHost;
 	signal: AbortSignal;
 	params: Params;
-	read: (input: Record<string, unknown>) => Promise<any>;
-	act: (
-		command: string,
-		id: string | undefined,
-		input: Record<string, unknown>,
-		version?: number
-	) => Promise<any>;
-	go: (params: Record<string, string | undefined>, opts?: { replace?: boolean }) => void;
+	/** When the person was last here before this visit (from this browser). */
+	lastVisit: string | null;
+	/** The person this Gateway's Work belongs to, when the read says so. */
+	owner: string | null;
+	read: <T>(input: ReadInput) => Promise<T>;
+	go: (params: Record<string, string | undefined>) => void;
 	href: (params: Record<string, string | undefined>) => string;
-	sessionTitle: (key: string) => string | null;
+	open: (ref: Pick<ItemRef, 'id' | 'kind'>) => void;
+	hrefFor: (ref: Pick<ItemRef, 'id' | 'kind'>) => string;
+	session: (key: string) => SessionInfo;
 	openSession: (key: string) => void;
-	refresh: () => void;
+	/** Remembered open/closed state of the "Done this week" expanders across redraws. */
+	expanded: Set<string>;
 };
 
-const TABS = [
-	{ id: 'overview', label: 'Overview' },
-	{ id: 'objectives', label: 'Objectives' },
-	{ id: 'areas', label: 'Areas & Projects' },
-	{ id: 'activity', label: 'Activity' }
-] as const;
+const LAST_VISIT = 'falcon-work:last-visit';
 
-/** The Work page: header, tabs, the routed view and the side panel. */
+/** Read the previous visit and remember this one. */
+function visit(): string | null {
+	try {
+		const previous = localStorage.getItem(LAST_VISIT);
+		localStorage.setItem(LAST_VISIT, new Date().toISOString());
+		return previous && !Number.isNaN(Date.parse(previous)) ? previous : null;
+	} catch {
+		return null;
+	}
+}
+
+/** The Work page: routes on page params to Home, a Project, Task or Job, or search results. */
 export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 	let context = first;
 	const feature = createFeatureClient(contract, context.host);
-	const titles = new Map<string, string>();
-	let needsYouCount: number | null = null;
+	const lastVisit = visit();
+	const expanded = new Set<string>();
+	let owner: string | null = null;
+	const root = h('div', { class: 'fw-page' });
+	container.append(root);
 
-	const sessions = context.host.sessions.observe(
-		{ includeDerivedTitles: true, limit: 200 },
+	// Session titles for the chips. A session missing from the list once it has loaded is gone.
+	const sessions = new Map<string, { title: string; active: boolean }>();
+	let sessionsLoaded = false;
+	const watch = context.host.sessions.observe(
+		{ includeDerivedTitles: true, limit: 500 },
 		(snap) => {
-			for (const s of snap.result?.sessions ?? []) {
-				const row = s as unknown as {
-					key: string;
-					label?: string;
-					displayName?: string;
-					derivedTitle?: string;
-				};
-				titles.set(row.key, row.label ?? row.displayName ?? row.derivedTitle ?? row.key);
-			}
+			if (!snap.result) return;
+			sessions.clear();
+			for (const s of snap.result.sessions)
+				sessions.set(s.key, {
+					title: s.label ?? s.displayName ?? s.derivedTitle ?? s.key,
+					active: !!s.hasActiveRun
+				});
+			sessionsLoaded = true;
+			repaintChips();
 		}
 	);
 
-	const root = h('div', { class: 'fw-page' });
-	container.append(root);
 	let generation = 0;
+	let shown: string | null = null;
 
 	const clean = (p: Record<string, string | undefined>) =>
 		Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== '')) as Record<
 			string,
 			string
 		>;
+	const target = (ref: Pick<ItemRef, 'id' | 'kind'>) => ({ [ref.kind]: ref.id });
 
-	const ctx = (): Ctx => ({
-		host: context.host,
-		signal: context.signal,
-		params: context.props,
-		read: (input) => feature.invoke('read', input as any),
-		act: async (command, id, input, version) => {
-			const request = {
-				command,
-				...(id ? { id } : {}),
-				...(version ? { expected_version: version } : {}),
-				input
-			};
-			const r: any = await feature.invoke('do', request as any);
-			if (r?.outcome === 'rejected') throw new Error(r.reason);
-			render(true);
-			return r;
-		},
-		go: (params, opts) =>
-			context.host.navigation.openPage(
-				{ id: PAGE_ID, params: clean(params) },
-				{ replace: opts?.replace }
-			),
-		href: (params) => context.host.navigation.pageHref({ id: PAGE_ID, params: clean(params) }),
-		sessionTitle: (key) => titles.get(key) ?? null,
-		openSession: (key) => {
-			const agentId = /^agent:([^:]+):/.exec(key)?.[1];
-			context.host.sessions.open({ sessionKey: key, ...(agentId ? { agentId } : {}) } as any);
-		},
-		refresh: () => render(true)
-	});
+	// A function declaration: the session observer may call back before this point is reached.
+	function ctx(): Ctx {
+		return {
+			host: context.host,
+			signal: context.signal,
+			params: context.props,
+			lastVisit,
+			owner,
+			read: async <T>(input: ReadInput) => {
+				const r: unknown = await feature.invoke('read', input as never);
+				const o = r && typeof r === 'object' ? (r as { owner?: unknown }).owner : undefined;
+				if (typeof o === 'string') owner = o;
+				return r as T;
+			},
+			go: (params) => context.host.navigation.openPage({ id: PAGE_ID, params: clean(params) }),
+			href: (params) => context.host.navigation.pageHref({ id: PAGE_ID, params: clean(params) }),
+			open: (ref) => context.host.navigation.openPage({ id: PAGE_ID, params: target(ref) }),
+			hrefFor: (ref) => context.host.navigation.pageHref({ id: PAGE_ID, params: target(ref) }),
+			session: (key) => sessions.get(key) ?? (sessionsLoaded ? null : undefined),
+			openSession: (key) => {
+				const agentId = /^agent:([^:]+):/.exec(key)?.[1];
+				context.host.sessions.open({ sessionKey: key, ...(agentId ? { agentId } : {}) });
+			},
+			expanded
+		};
+	}
 
-	function header(c: Ctx) {
-		const tab = c.params.tab ?? 'overview';
-		const search = h('input', {
-			class: 'fw-search',
-			type: 'search',
-			placeholder: 'Search work…',
-			'aria-label': 'Search work',
-			value: c.params.q ?? ''
-		});
-		search.addEventListener('change', () => c.go({ tab: 'areas', q: search.value || undefined }));
-		return h(
-			'header',
-			{ class: 'fw-header' },
-			h(
-				'div',
-				{ class: 'fw-header-row' },
-				h('h1', { class: 'fw-title' }, `Falcon Work v${PLUGIN_VERSION.replace(/^[^-]+-/, '')}`),
-				h('div', { class: 'fw-toolbar' }, search)
-			),
-			h(
-				'nav',
-				{ class: 'fw-tabs', 'aria-label': 'Work views' },
-				TABS.map((t) =>
-					h(
-						'a',
-						{
-							class: `fw-tab${tab === t.id && !c.params.project && !c.params.objective ? ' is-active' : ''}`,
-							href: c.href({ tab: t.id }),
-							on: { click: (e: Event) => (e.preventDefault(), c.go({ tab: t.id })) }
-						},
-						t.label,
-						t.id === 'overview' && needsYouCount
-							? h('span', { class: 'fw-count' }, String(needsYouCount))
-							: null
-					)
-				)
-			)
-		);
+	// Chips carry their session key; when titles arrive or change, each one is redrawn in place.
+	function repaintChips() {
+		const c = ctx();
+		for (const el of root.querySelectorAll<HTMLElement>('[data-session]'))
+			el.replaceWith(sessionChip(c, el.dataset.session!, el.dataset.at ?? null));
 	}
 
 	async function page(c: Ctx): Promise<Node> {
@@ -146,134 +132,65 @@ export function mountWork(container: HTMLElement, first: ControlUiViewContext) {
 			const p = c.params;
 			return p.project
 				? await projectView(c, p.project)
-				: p.objective
-					? await objectiveView(c, p.objective)
-					: p.tab === 'objectives'
-						? await objectivesView(c)
-						: p.tab === 'areas'
-							? await areasView(c)
-							: p.tab === 'activity'
-								? await activityView(c)
-								: await overviewView(c, (n) => (needsYouCount = n));
+				: p.task
+					? await taskView(c, p.task)
+					: p.job
+						? await jobView(c, p.job)
+						: p.q !== undefined
+							? await searchView(c, p.q)
+							: await homeView(c);
 		} catch (error) {
 			return h(
 				'div',
 				{ class: 'fw-error', role: 'alert' },
-				h('p', null, String((error as Error).message ?? error)),
-				h('button', { class: 'fw-btn', on: { click: () => render(true) } }, 'Retry')
+				h('p', null, String((error as Error).message ?? error))
 			);
 		}
 	}
 
-	// The header, page and drawer stay mounted. Opening or switching a panel redraws only the
-	// drawer; navigating redraws the page; a data change redraws both in place.
-	const main = h('main', { class: 'fw-main' });
-	const drawer = h('div', { class: 'fw-drawer' });
-	let head: HTMLElement | null = null;
-	let shownPage: string | null = null;
-	let shownPanel: string | null = null;
-	let stale = false; // data changed since the shown page and panel were read
-	root.append(h('div', { class: 'fw-body' }, main, drawer));
-
-	// The panel ends at the bottom of what is visible, wherever it starts, so its own scroll
-	// reaches its last line without the page having to move. The host scrolls an inner element,
-	// not the window, and the panel starts below the header until it sticks.
-	const scroller = (() => {
+	// The host scrolls an inner element, not the window; a new page starts at its top.
+	const scroller = () => {
 		for (let el = container.parentElement; el; el = el.parentElement)
 			if (/auto|scroll/.test(getComputedStyle(el).overflowY)) return el;
 		return null;
-	})();
-	let fitQueued = false;
-	const fitPanel = () => {
-		if (fitQueued) return;
-		fitQueued = true;
-		requestAnimationFrame(() => {
-			fitQueued = false;
-			const panel = drawer.querySelector<HTMLElement>('.fw-panel');
-			if (!panel) return;
-			const gap = parseFloat(getComputedStyle(panel).top) || 0;
-			const bottom = Math.min(
-				window.innerHeight,
-				scroller?.getBoundingClientRect().bottom ?? window.innerHeight
-			);
-			const max = bottom - panel.getBoundingClientRect().top - gap;
-			drawer.style.setProperty('--fw-panel-max', `${Math.max(max, 160)}px`);
-		});
 	};
-	const fitTarget = scroller ?? window;
-	fitTarget.addEventListener('scroll', fitPanel, { passive: true });
-	window.addEventListener('resize', fitPanel);
-	const resized = new ResizeObserver(fitPanel);
-	if (scroller) resized.observe(scroller);
-	resized.observe(root);
 
-	const pageKey = (p: Params) =>
-		JSON.stringify(
-			Object.entries(p)
-				.filter(([k]) => k !== 'panel')
-				.sort()
-		);
-
-	async function render(fresh = false) {
+	async function render() {
 		const mine = ++generation;
-		if (fresh) stale = true;
 		const c = ctx();
-		const key = pageKey(c.params);
-		const panelId = c.params.panel ?? null;
-		const newPage = stale || key !== shownPage;
-		const newPanel = panelId !== null && (newPage || panelId !== shownPanel);
-		if (newPanel && panelId !== shownPanel) drawer.classList.add('is-loading');
-		const [body, panel] = await Promise.all([
-			newPage ? page(c) : null,
-			newPanel
-				? panelView(c, panelId).catch((e) => h('aside', { class: 'fw-panel' }, String(e)))
-				: null
-		]);
+		const key = JSON.stringify(Object.entries(c.params).sort());
+		const body = await page(c);
 		if (mine !== generation || context.signal.aborted) return;
-		if (body) {
-			// Keep the search box (and what is typed in it) when only the data changed.
-			if (key !== shownPage || !head?.contains(document.activeElement)) {
-				const next = header(c);
-				head ? head.replaceWith(next) : root.prepend(next);
-				head = next;
+		// Keep what is being typed in the search field when only the data changed.
+		const typing = root.querySelector<HTMLInputElement>('.fw-search-input');
+		const keep = typing && typing === document.activeElement ? typing : null;
+		root.replaceChildren(body);
+		if (keep) {
+			const next = root.querySelector<HTMLInputElement>('.fw-search-input');
+			if (next) {
+				next.value = keep.value;
+				next.focus();
+				next.setSelectionRange(keep.selectionStart, keep.selectionEnd);
 			}
-			main.replaceChildren(body);
-			shownPage = key;
-			stale = false;
 		}
-		if (panel) drawer.replaceChildren(panel);
-		else if (!panelId) drawer.replaceChildren();
-		drawer.classList.remove('is-loading');
-		drawer.classList.toggle('is-open', panelId !== null);
-		shownPanel = panelId;
-		fitPanel();
-		for (const row of main.querySelectorAll<HTMLElement>('[data-panel]'))
-			row.classList.toggle('is-selected', row.dataset.panel === panelId);
+		if (key !== shown && shown !== null) {
+			const s = scroller();
+			if (s) s.scrollTop = 0;
+		}
+		shown = key;
 	}
 
-	const onKey = (e: KeyboardEvent) => {
-		const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select');
-		if (e.key === 'Escape' && context.props.panel && !typing)
-			ctx().go({ ...context.props, panel: undefined });
-	};
-	document.addEventListener('keydown', onKey);
-	const off = feature.on('changed', () => render(true));
-	render();
+	const off = feature.on('changed', () => void render());
+	void render();
 	return {
 		update(next: ControlUiViewContext) {
 			context = next;
-			render();
+			void render();
 		},
 		dispose() {
 			off();
-			document.removeEventListener('keydown', onKey);
-			fitTarget.removeEventListener('scroll', fitPanel);
-			window.removeEventListener('resize', fitPanel);
-			resized.disconnect();
-			sessions.dispose();
+			watch.dispose();
 			root.remove();
 		}
 	};
 }
-
-export { who };

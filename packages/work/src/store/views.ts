@@ -363,6 +363,7 @@ export class Views {
 	home(person: string = this.owner, since: string | null = null) {
 		const catchup = this.one<{ value: string }>("SELECT value FROM meta WHERE key = 'catchup'");
 		return {
+			owner: person,
 			since,
 			catching_up: catchup
 				? json<{ read: number; total: number; done: boolean }>(catchup.value, {
