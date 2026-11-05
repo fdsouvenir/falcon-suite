@@ -37,7 +37,12 @@ export async function projectView(c: Ctx, id: string) {
 		columns(
 			[
 				p.needs_you.length
-					? section('Needs you', p.needs_you.length, {}, needsYou(c, p.needs_you, { page: p.id }))
+					? section(
+							'Needs you',
+							p.needs_you_total,
+							{},
+							needsYou(c, p.needs_you, { page: p.id, total: p.needs_you_total })
+						)
 					: null,
 				section(
 					'Milestones',

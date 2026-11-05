@@ -87,14 +87,23 @@ export async function taskView(c: Ctx, id: string) {
 				side(
 					'Questions',
 					t.needs_you.length
-						? t.needs_you.map((n) =>
-								h(
-									'div',
-									{ class: 'fw-side-question' },
-									h('p', { class: 'fw-side-text' }, n.prompt),
-									n.session ? sessionChip(c, n.session, n.since) : null
-								)
-							)
+						? [
+								...t.needs_you.map((n) =>
+									h(
+										'div',
+										{ class: 'fw-side-question' },
+										h('p', { class: 'fw-side-text' }, n.prompt),
+										n.session ? sessionChip(c, n.session, n.since) : null
+									)
+								),
+								t.needs_you_total > t.needs_you.length
+									? h(
+											'p',
+											{ class: 'fw-side-text fw-muted' },
+											`and ${t.needs_you_total - t.needs_you.length} more on Home`
+										)
+									: null
+							]
 						: h('p', { class: 'fw-side-text fw-muted' }, 'Nothing open')
 				)
 			]

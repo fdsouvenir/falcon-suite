@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { take, type Size } from './bounds.js';
 
 /**
  * What the pages show (spec §6): Home, Project, Task, Job and search. Read-only projections; every
@@ -32,6 +33,39 @@ export type Card = {
 	done_this_week?: number;
 };
 export type DoneRow = Ref & { at: string };
+/** One page of a long list: the items, how many there are in all, and where the next page starts. */
+export type Page<T> = { items: T[]; total: number; next: string | null };
+export type Column = 'moving' | 'waiting' | 'done';
+
+/**
+ * What each part of a page may take of the Gateway's limits (bounds.ts), so a page always fits
+ * however much work there is. Home's parts add up to under the limit; the rest load in pages.
+ */
+const BUDGET = {
+	needs: { nodes: 1300, bytes: 80_000 },
+	column: { nodes: 600, bytes: 35_000 },
+	happened: { nodes: 600, bytes: 45_000 },
+	page: { nodes: 3000, bytes: 180_000 },
+	about: { nodes: 600, bytes: 40_000 }
+} satisfies Record<string, Size>;
+const PAGE_MAX = 200;
+const HOME_MAX = 100;
+const COLUMN_MAX = 40;
+
+/** Needs you, newest first; the cursor is the last item shown. */
+const newestFirst = (a: NeedsYouItem, b: NeedsYouItem) =>
+	b.since.localeCompare(a.since) || b.id.localeCompare(a.id);
+const cursorOf = (n: NeedsYouItem) => `${n.since}|${n.id}`;
+const after = (n: NeedsYouItem, cursor: string) => {
+	const [since, id = ''] = cursor.split('|');
+	return n.since < since || (n.since === since && n.id < id);
+};
+
+function paged<T>(all: T[], start: number, budget: Size, max: number): Page<T> {
+	const items = take(all.slice(start), budget, max);
+	const end = start + items.length;
+	return { items, total: all.length, next: end < all.length ? String(end) : null };
+}
 export type Entry = {
 	id: string;
 	at: string;
@@ -179,6 +213,32 @@ export class Views {
 					: t.waiting_on_ref
 				: t.waiting_on_ref;
 		return `Waiting on ${on ?? 'something'}${t.waiting_for ? `: ${t.waiting_for}` : ''}`;
+	}
+
+	/**
+	 * Needs you a page at a time, newest first. `cursor` is the `next` of the page before; the Home
+	 * page carries the first page, and the rest load as the person asks for them.
+	 */
+	needsYouPage(
+		person: string = this.owner,
+		cursor: string | null = null,
+		budget: Size = BUDGET.page,
+		max = PAGE_MAX
+	): Page<NeedsYouItem> {
+		const all = this.needsYou(person).sort(newestFirst);
+		const rest = cursor ? all.filter((n) => after(n, cursor)) : all;
+		const items = take(rest, budget, max);
+		return {
+			items,
+			total: all.length,
+			next: items.length < rest.length ? cursorOf(items[items.length - 1]) : null
+		};
+	}
+
+	/** One column of the board a page at a time; `cursor` is the `next` of the page before. */
+	boardPage(column: Column, person: string = this.owner, cursor: string | null = null) {
+		const start = Math.max(0, Number.parseInt(cursor ?? '0', 10) || 0);
+		return paged<Card | DoneRow>(this.board(person)[column], start, BUDGET.page, PAGE_MAX);
 	}
 
 	/** The board (spec §6, Home): Jobs and Projects are one card each; only standalone Tasks get their own. */
@@ -364,8 +424,19 @@ export class Views {
 			: this.entries('WHERE summary IS NOT NULL', [], limit);
 	}
 
+	/**
+	 * Home (spec §6). Each part gets its share of the Gateway's limits, so Home loads however much
+	 * work there is: Needs you and each board column carry their first page, their total, and the
+	 * cursor for the rest.
+	 */
 	home(person: string = this.owner, since: string | null = null) {
 		const catchup = this.one<{ value: string }>("SELECT value FROM meta WHERE key = 'catchup'");
+		const needs = this.needsYouPage(person, null, BUDGET.needs, HOME_MAX);
+		const board = this.board(person);
+		const col = <T>(list: T[]) => paged(list, 0, BUDGET.column, COLUMN_MAX);
+		const moving = col(board.moving);
+		const waiting = col(board.waiting);
+		const done = col(board.done);
 		return {
 			owner: person,
 			since,
@@ -376,13 +447,27 @@ export class Views {
 						done: true
 					})
 				: null,
-			needs_you: this.needsYou(person),
-			board: this.board(person),
-			happened: this.happened(since)
+			needs_you: needs.items,
+			needs_you_total: needs.total,
+			needs_you_next: needs.next,
+			board: {
+				moving: moving.items,
+				waiting: waiting.items,
+				done: done.items,
+				totals: { moving: moving.total, waiting: waiting.total, done: done.total },
+				next: { moving: moving.next, waiting: waiting.next, done: done.next }
+			},
+			happened: take(this.happened(since), BUDGET.happened)
 		};
 	}
 
-	private questionsAbout(ids: string[], person: string) {
+	/** The asks about an item, newest first, within the item page's share; the total says if more. */
+	private asksAbout(ids: string[], person: string) {
+		const all = this.questionsAboutAll(ids, person).sort(newestFirst);
+		return { needs_you: take(all, BUDGET.about, 50), needs_you_total: all.length };
+	}
+
+	private questionsAboutAll(ids: string[], person: string) {
 		const set = new Set(ids);
 		return this.needsYou(person).filter((n) => {
 			const targets = this.all<{ target_id: string }>(
@@ -477,7 +562,7 @@ export class Views {
 			result: result
 				? { content: result.content, sources: json(result.sources, []), at: result.at }
 				: null,
-			needs_you: this.questionsAbout([id], person),
+			...this.asksAbout([id], person),
 			sessions: this.sessions(id),
 			findings: this.findings([id]),
 			happened: this.entries('WHERE subject_id = ?', [id], 50)
@@ -535,10 +620,7 @@ export class Views {
 				tasks: tasks.filter((t) => t.milestone_id === m.id).map((t) => this.taskLine(t.id))
 			})),
 			other_tasks: tasks.filter((t) => !t.milestone_id).map((t) => this.taskLine(t.id)),
-			needs_you: this.questionsAbout(
-				[id, ...tasks.map((t) => t.id), ...ms.map((m) => m.id)],
-				person
-			),
+			...this.asksAbout([id, ...tasks.map((t) => t.id), ...ms.map((m) => m.id)], person),
 			sessions: this.sessions(id),
 			findings: this.findings([id, ...tasks.map((t) => t.id)]),
 			happened: this.entries(
@@ -587,7 +669,7 @@ export class Views {
 			),
 			open_tasks: open.map((t) => this.taskLine(t.id)),
 			done_this_week: doneWeek.map((t) => this.taskLine(t.id)),
-			needs_you: this.questionsAbout([id, ...open.map((t) => t.id)], person),
+			...this.asksAbout([id, ...open.map((t) => t.id)], person),
 			sessions: this.sessions(id),
 			happened: this.entries(
 				`WHERE summary IS NOT NULL AND (subject_id = ? OR subject_id IN (SELECT id FROM task WHERE job_id = ?))`,

@@ -35,7 +35,12 @@ export async function jobView(c: Ctx, id: string) {
 		columns(
 			[
 				j.needs_you.length
-					? section('Needs you', j.needs_you.length, {}, needsYou(c, j.needs_you, { page: j.id }))
+					? section(
+							'Needs you',
+							j.needs_you_total,
+							{},
+							needsYou(c, j.needs_you, { page: j.id, total: j.needs_you_total })
+						)
 					: null,
 				section(
 					'Open tasks',

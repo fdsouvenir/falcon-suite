@@ -253,6 +253,13 @@ the Back link, search, filters and expanders. To act on something you go back to
 start a new one. Mockups: Stitch
 project _Falcon Work 5_, with copies in `media/preview/work-home-2026-11-03/`.
 
+Pages load however much work there is. Every read the Gateway carries must fit its plugin limits
+(4,096 values, 256 KB), so each part of a page has a share of them: Home carries the first page of
+Needs you and of each board column with their totals, and the rest load a page at a time (Needs you
+in the background, so its groups, counts and filters cover every ask; a column on "Show more"). An
+item page shows its newest asks and how many more are on Home. As a last guard, a read that would
+still not fit has its largest lists shortened and names them in `truncated`.
+
 ### Home (screen `a0c126201da946a4b5c0224b02d9ed5b`)
 
 Title and "Since you were here …" line, with search. Then three stacked sections:

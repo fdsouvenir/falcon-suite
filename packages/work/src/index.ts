@@ -13,6 +13,7 @@ import type { Actor, Envelope } from './store/types.js';
 import { outcome } from './plugin/outcomes.js';
 import { currentHuman } from './plugin/identity.js';
 import { Clerk, type Msg } from './clerk/clerk.js';
+import { bounded } from './store/bounds.js';
 
 /** How long a session stays quiet before the writer looks at it (spec §3.1). */
 const IDLE_MS = 10 * 60 * 1000;
@@ -114,6 +115,35 @@ const textOf = (content: unknown): string =>
 					.map((p) => p.text)
 					.join('\n')
 			: '';
+
+/** The read views (falcon_work_read and the Control UI). */
+function view(w: Work, i: Record<string, any>): unknown {
+	switch (i.view) {
+		case 'home':
+			return w.views.home(w.owner, i.since ?? null);
+		case 'project':
+		case 'task':
+		case 'job':
+			return i.id
+				? ((w.views as any)[i.view](i.id) ?? { error: 'not_found' })
+				: { error: 'id_required' };
+		case 'search':
+			return { results: i.text ? w.views.search(i.text) : [] };
+		case 'get':
+			return i.id ? (w.views.get(i.id) ?? { error: 'not_found' }) : { error: 'id_required' };
+		case 'needs_you':
+			return w.views.needsYouPage(w.owner, i.cursor ?? null);
+		case 'board':
+			return i.column
+				? w.views.boardPage(i.column, w.owner, i.cursor ?? null)
+				: { error: 'column_required' };
+		case 'help':
+			return i.command
+				? (w.help(i.command) ?? { error: 'unknown_command' })
+				: { commands: w.catalog() };
+	}
+	return { error: 'unknown_view' };
+}
 
 const feature = defineFeaturePlugin({
 	contract: base,
@@ -440,29 +470,8 @@ const feature = defineFeaturePlugin({
 		return {
 			read(input, context) {
 				actorFor(context); // a signed-in person or a calling agent
-				const w = ready();
-				const i = input as any;
-				switch (i.view) {
-					case 'home':
-						return w.views.home(w.owner, i.since ?? null);
-					case 'project':
-					case 'task':
-					case 'job':
-						return i.id
-							? ((w.views as any)[i.view](i.id) ?? { error: 'not_found' })
-							: { error: 'id_required' };
-					case 'search':
-						return { results: i.text ? w.views.search(i.text) : [] };
-					case 'get':
-						return i.id ? (w.views.get(i.id) ?? { error: 'not_found' }) : { error: 'id_required' };
-					case 'needs_you':
-						return w.views.needsYou();
-					case 'help':
-						return i.command
-							? (w.help(i.command) ?? { error: 'unknown_command' })
-							: { commands: w.catalog() };
-				}
-				return { error: 'unknown_view' };
+				// Whatever the record holds, the answer fits what the Gateway carries.
+				return bounded(view(ready(), input as any));
 			},
 			do(input, context) {
 				const w = ready();

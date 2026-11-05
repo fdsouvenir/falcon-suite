@@ -22,6 +22,7 @@ export const VIEWS = [
 	'search',
 	'get',
 	'needs_you',
+	'board',
 	'help'
 ] as const;
 
@@ -75,7 +76,7 @@ export const contract = defineFeatureContract({
 		read: {
 			kind: 'query',
 			description:
-				'Read Falcon Work, the record of what your agents are doing for the person. view: home (what needs the person, what is in motion, what happened) · project, task, job (id) · search (text) · get (any id) · needs_you · help (command: the full input of one falcon_work command).',
+				'Read Falcon Work, the record of what your agents are doing for the person. view: home (what needs the person, what is in motion, what happened; long lists carry their first page, total and next cursor) · project, task, job (id) · search (text) · get (any id) · needs_you (cursor?: a page of open asks, newest first) · board (column: moving, waiting or done; cursor?) · help (command: the full input of one falcon_work command).',
 			input: Type.Object(
 				{
 					view: Lit(VIEWS),
@@ -84,7 +85,14 @@ export const contract = defineFeatureContract({
 					since: Type.Optional(
 						Type.String({ maxLength: 64, ...d('home: show what happened after this time') })
 					),
-					command: Type.Optional(Type.String({ maxLength: 64 }))
+					command: Type.Optional(Type.String({ maxLength: 64 })),
+					column: Type.Optional(Lit(['moving', 'waiting', 'done'])),
+					cursor: Type.Optional(
+						Type.String({
+							maxLength: 300,
+							...d('needs_you, board: the next cursor of the page before')
+						})
+					)
 				},
 				{ additionalProperties: false }
 			),

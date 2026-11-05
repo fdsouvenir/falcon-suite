@@ -232,7 +232,8 @@ export const columns = (main: Child[], aside: Child[]) =>
  * Needs you on an item's own page: a row per ask with the session on the right. (Home groups the
  * asks by session; see views/needs.ts.)
  */
-export function needsYou(c: Ctx, items: NeedsYouItem[], opts: { page: string }) {
+export function needsYou(c: Ctx, items: NeedsYouItem[], opts: { page: string; total?: number }) {
+	const more = (opts.total ?? items.length) - items.length;
 	return h(
 		'div',
 		{ class: 'fw-needs' },
@@ -250,7 +251,14 @@ export function needsYou(c: Ctx, items: NeedsYouItem[], opts: { page: string }) 
 				),
 				n.session ? sessionChip(c, n.session, n.since) : null
 			)
-		)
+		),
+		more > 0
+			? h(
+					'p',
+					{ class: 'fw-needs-more' },
+					h('a', { href: c.href({}) }, `${count(more, 'more ask')} on Home`)
+				)
+			: null
 	);
 }
 

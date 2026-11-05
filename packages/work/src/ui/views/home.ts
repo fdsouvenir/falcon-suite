@@ -21,7 +21,7 @@ export async function homeView(c: Ctx) {
 	});
 	const since = d.since ?? c.lastVisit;
 	const moved = new Set(d.happened.map((e) => e.item?.id).filter(Boolean)).size;
-	const { moving, waiting, done } = d.board;
+	const { moving, waiting, done, totals, next } = d.board;
 	const catching = d.catching_up && !d.catching_up.done ? d.catching_up : null;
 
 	return h(
@@ -53,9 +53,11 @@ export async function homeView(c: Ctx) {
 			: null,
 		section(
 			'Needs you',
-			d.needs_you.length,
+			d.needs_you_total,
 			{ dot: 'accent' },
-			d.needs_you.length ? needsBySession(c, d.needs_you) : empty('Nothing needs you.')
+			d.needs_you.length
+				? needsBySession(c, d.needs_you, { total: d.needs_you_total, next: d.needs_you_next })
+				: empty('Nothing needs you.')
 		),
 		section(
 			'Everything in motion',
@@ -65,19 +67,34 @@ export async function homeView(c: Ctx) {
 				'div',
 				{ class: 'fw-board' },
 				column(
+					c,
+					'moving',
 					'Moving',
-					moving.length,
-					moving.length ? moving.map((x) => card(c, x)) : empty('Nothing moving.')
+					totals.moving,
+					moving,
+					next.moving,
+					(x) => card(c, x as Card),
+					'Nothing moving.'
 				),
 				column(
+					c,
+					'waiting',
 					'Waiting',
-					waiting.length,
-					waiting.length ? waiting.map((x) => card(c, x)) : empty('Nothing waiting.')
+					totals.waiting,
+					waiting,
+					next.waiting,
+					(x) => card(c, x as Card),
+					'Nothing waiting.'
 				),
 				column(
+					c,
+					'done',
 					'Done this week',
-					done.length,
-					done.length ? done.map((x) => doneRow(c, x)) : empty('Nothing finished this week.')
+					totals.done,
+					done,
+					next.done,
+					(x) => doneRow(c, x as DoneRow),
+					'Nothing finished this week.'
 				)
 			)
 		),
@@ -92,18 +109,60 @@ export async function homeView(c: Ctx) {
 	);
 }
 
-const column = (title: string, n: number, body: Node | Node[]) =>
-	h(
+/**
+ * A board column: its first page, with "Show N more" loading the next page of that column when
+ * there are more than Home carries.
+ */
+function column<T>(
+	c: Ctx,
+	name: 'moving' | 'waiting' | 'done',
+	title: string,
+	total: number,
+	first: T[],
+	next: string | null,
+	draw: (x: T) => Node,
+	none: string
+) {
+	const body = h('div', { class: 'fw-column-body' }, first.length ? first.map(draw) : empty(none));
+	let shown = first.length;
+	let cursor = next;
+	const more = h('button', { type: 'button', class: 'fw-column-more' }) as HTMLButtonElement;
+	const label = () => {
+		more.textContent = `Show more (${total - shown})`;
+		more.hidden = !cursor;
+	};
+	more.addEventListener('click', async () => {
+		if (!cursor) return;
+		more.disabled = true;
+		try {
+			const page = await c.read<{ items: T[]; next: string | null }>({
+				view: 'board',
+				column: name,
+				cursor
+			});
+			body.append(...page.items.map(draw));
+			shown += page.items.length;
+			cursor = page.next;
+		} catch (error) {
+			more.title = (error as Error).message;
+		}
+		more.disabled = false;
+		label();
+	});
+	label();
+	return h(
 		'div',
 		{ class: 'fw-column' },
 		h(
 			'h3',
 			{ class: 'fw-column-title' },
 			title,
-			h('span', { class: 'fw-column-count' }, String(n))
+			h('span', { class: 'fw-column-count' }, String(total))
 		),
-		h('div', { class: 'fw-column-body' }, body)
+		body,
+		more
 	);
+}
 
 function card(c: Ctx, x: Card) {
 	const t = x.tasks;

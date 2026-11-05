@@ -246,3 +246,21 @@ test('a Work 5 database is set aside untouched and 2.0 starts clean', () => {
 	w.close();
 	assert.equal(setAsideWork5(file), null, 'a 2.0 database is left alone');
 });
+
+test('the last guard shortens the largest lists until a read fits, and says which', async () => {
+	const { bounded, fits } = await import('../dist/store/bounds.js');
+	const big = {
+		owner: 'x',
+		rows: Array.from({ length: 5000 }, (_, i) => ({ id: `r${i}`, tags: ['a', 'b'] })),
+		note: 'y'.repeat(70_000),
+		small: [1, 2, 3]
+	};
+	assert.equal(fits(big), false);
+	const out = bounded(big);
+	assert.equal(fits(out), true);
+	assert.deepEqual(out.truncated, ['rows']);
+	assert.deepEqual(out.small, [1, 2, 3]);
+	assert.ok(out.rows.length > 100);
+	const fine = { a: [1, 2] };
+	assert.equal(bounded(fine), fine, 'a read that fits is returned as it is');
+});

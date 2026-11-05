@@ -340,3 +340,115 @@ test('a Control UI call with operator scopes is the Gateway owner; without them 
 		/signed-in person/
 	);
 });
+
+// A large record (2026-11-04: 297 open asks made Home fail as "Feature output must be bounded
+// JSON"). Every read goes through the real tool, which refuses answers past the Gateway's limits.
+test('every view loads however much work there is, and paging reaches every item once', async () => {
+	const { call } = await started();
+	const w = (await import('../dist/plugin/runtime.js')).currentWork();
+	const AGENT = { kind: 'agent', id: 'agent:verl' };
+	const ok = (env) => {
+		const r = w.do(env, AGENT);
+		assert.ok(r.outcome.startsWith('committed'), JSON.stringify(r));
+		return r.id;
+	};
+	const long = (n) => `${'A long and specific question about the work. '.repeat(12)}#${n}`;
+	const tasks = [];
+	for (let i = 0; i < 400; i++) {
+		const id = ok({
+			command: 'create_task',
+			input: {
+				title: `Task ${i} ${'with a long title '.repeat(4)}`,
+				description: 'd',
+				done_when: 'x'
+			}
+		});
+		ok({ command: 'start', id, input: { claim: true } });
+		if (i % 4 === 1)
+			ok({
+				command: 'wait',
+				id,
+				input: {
+					waiting_for: 'A reply',
+					waiting_on: { kind: 'external', ref: 'vendor' },
+					resume_when: 'Replied'
+				}
+			});
+		if (i % 4 === 2)
+			ok({ command: 'complete', id, input: { content: 'Done', sources: [{ ref: 'x' }] } });
+		tasks.push(id);
+	}
+	const project = ok({
+		command: 'create_project',
+		input: {
+			title: 'Big project',
+			outcome: 'o',
+			milestones: [
+				{
+					title: 'M1',
+					success_condition: 's',
+					tasks: Array.from({ length: 100 }, (_, i) => ({
+						title: `Step ${i}`,
+						description: 'd',
+						done_when: 'x'
+					}))
+				}
+			]
+		}
+	});
+	const asks = new Set();
+	for (let i = 0; i < 1000; i++)
+		asks.add(
+			ok({
+				command: 'raise_question',
+				input: {
+					prompt: long(i),
+					impact: 'i',
+					answerable_by: [w.owner],
+					session: `agent:verl:s${i % 40}`,
+					...(i % 3 === 0 ? { targets: [{ kind: 'project', id: project }] } : {}),
+					...(i % 3 === 1 ? { targets: [{ kind: 'task', id: tasks[i % 50] }] } : {})
+				}
+			})
+		);
+
+	const home = await call('falcon_work_read', { view: 'home' });
+	assert.equal(home.needs_you_total, 1000);
+	assert.ok(home.needs_you.length > 0 && home.needs_you_next, 'Home carries the first page');
+	assert.ok(!home.truncated, 'Home sizes itself; the last guard is not needed');
+	const { totals, next } = home.board;
+	assert.equal(totals.done, 100, JSON.stringify(totals));
+	assert.ok(totals.moving > 40 && totals.waiting > 40, JSON.stringify(totals));
+	assert.ok(next.moving && next.done, 'the longer columns carry more than Home shows');
+
+	// Needs you: every ask exactly once, newest first.
+	const seen = [...home.needs_you.map((n) => n.id)];
+	for (let cursor = home.needs_you_next; cursor;) {
+		const page = await call('falcon_work_read', { view: 'needs_you', cursor });
+		assert.equal(page.total, 1000);
+		seen.push(...page.items.map((n) => n.id));
+		cursor = page.next;
+	}
+	assert.equal(seen.length, 1000);
+	assert.deepEqual(new Set(seen), asks);
+
+	// Each board column pages to its total.
+	for (const column of ['moving', 'waiting', 'done']) {
+		const ids = home.board[column].map((x) => x.id);
+		for (let cursor = next[column]; cursor;) {
+			const page = await call('falcon_work_read', { view: 'board', column, cursor });
+			ids.push(...page.items.map((x) => x.id));
+			cursor = page.next;
+		}
+		assert.equal(ids.length, totals[column], column);
+		assert.equal(new Set(ids).size, ids.length, `${column}: no card twice`);
+	}
+
+	// Item pages carry a capped list of their asks and the total.
+	const p = await call('falcon_work_read', { view: 'project', id: project });
+	assert.ok(p.needs_you_total >= 334 && p.needs_you.length < p.needs_you_total);
+	const t = await call('falcon_work_read', { view: 'task', id: tasks[1] });
+	assert.ok(t.needs_you_total >= 1);
+	await call('falcon_work_read', { view: 'get', id: project });
+	await call('falcon_work_read', { view: 'search', text: 'Task' });
+});

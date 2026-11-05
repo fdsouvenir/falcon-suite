@@ -24,8 +24,10 @@ Agents see Work as tools named for what they want to do. Each tool's description
 keeps its own record and that the tool is for changes the person asks for.
 
 - **`falcon_work_read`** — `view`: `home` (Needs you, the board, what happened; optional
-  `since`) · `project`, `task`, `job` (`id`) · `search` (`text`) · `get` (any id) · `needs_you` ·
-  `help` (`command`: one command's full input). Never changes anything.
+  `since`) · `project`, `task`, `job` (`id`) · `search` (`text`) · `get` (any id) · `needs_you`
+  (`cursor`) · `board` (`column`: `moving`, `waiting` or `done`; `cursor`) · `help` (`command`: one
+  command's full input). Never changes anything. Long lists come a page at a time as
+  `{items, total, next}`; pass `next` as `cursor` for the following page.
 - **`falcon_work_plan`** — create a Project with its Milestones and Tasks (`new_project`), or add
   Milestones and Tasks to one (`project`).
 - **`falcon_work_task`** — `create` (standalone, or `project` / `milestone` / `job`; `start` to start

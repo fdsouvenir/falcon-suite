@@ -13,10 +13,12 @@ import { searchView } from './views/search.js';
 export const PAGE_ID = 'work';
 export type Params = Readonly<Record<string, string>>;
 type ReadInput = {
-	view: 'home' | 'project' | 'task' | 'job' | 'search';
+	view: 'home' | 'project' | 'task' | 'job' | 'search' | 'needs_you' | 'board';
 	id?: string;
 	text?: string;
 	since?: string;
+	column?: 'moving' | 'waiting' | 'done';
+	cursor?: string;
 };
 
 /** A session as the chips show it; `undefined` while the session list is still loading. */

@@ -472,9 +472,37 @@ button.fw-group-open:hover {
 	color: var(--muted);
 }
 .fw-groups-more:hover,
-.fw-ask-more button:hover {
+.fw-ask-more button:hover,
+.fw-column-more:hover {
 	text-decoration: underline;
 	text-underline-offset: 2px;
+}
+/* Long lists load the rest a page at a time. */
+.fw-column-more {
+	margin-top: var(--space-2);
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--accent);
+	font: inherit;
+	font-size: var(--control-ui-text-sm);
+	cursor: pointer;
+}
+.fw-column-more[hidden] {
+	display: none;
+}
+.fw-column-more:disabled {
+	opacity: 0.6;
+	cursor: progress;
+}
+.fw-needs-loading,
+.fw-needs-more {
+	margin: var(--space-2) 0 0;
+	color: var(--muted);
+	font-size: var(--control-ui-text-sm);
+}
+.fw-needs-more a {
+	color: var(--accent);
 }
 
 /* Session chips */

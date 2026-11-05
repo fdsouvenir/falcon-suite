@@ -36,7 +36,13 @@ function groups(items: NeedsYouItem[]): Group[] {
  * Needs you on Home (spec §6): the asks grouped by session in one dense accordion. Read-only apart
  * from Dismiss; a session that no longer exists offers "Dismiss all", since nothing else clears it.
  */
-export function needsBySession(c: Ctx, all: NeedsYouItem[]) {
+export function needsBySession(
+	c: Ctx,
+	first: NeedsYouItem[],
+	more: { total: number; next: string | null } = { total: first.length, next: null }
+) {
+	const all = [...first];
+	let loading = !!more.next;
 	const open = c.expanded;
 	const f = filters.get(open) ?? { kind: 'all' as Kind, agent: '' };
 	filters.set(open, f);
@@ -295,6 +301,28 @@ export function needsBySession(c: Ctx, all: NeedsYouItem[]) {
 		delete root.dataset.error;
 	}
 
+	// Home carries the newest asks; the rest load a page at a time, so the groups, counts and
+	// filters cover every ask however many there are.
+	async function loadRest(cursor: string | null) {
+		const seen = new Set(all.map((n) => n.id));
+		try {
+			while (cursor && !c.signal.aborted) {
+				const page = await ctx.read<{ items: NeedsYouItem[]; next: string | null }>({
+					view: 'needs_you',
+					cursor
+				});
+				for (const n of page.items ?? []) if (!seen.has(n.id)) (seen.add(n.id), all.push(n));
+				cursor = page.next ?? null;
+				if (cursor) draw();
+			}
+		} catch (error) {
+			root.dataset.error = `Could not load every ask: ${(error as Error).message}`;
+		}
+		loading = false;
+		if (!c.signal.aborted) draw();
+	}
+
 	draw();
+	if (more.next) void loadRest(more.next);
 	return root;
 }
