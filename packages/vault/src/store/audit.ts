@@ -28,6 +28,16 @@ CREATE TRIGGER events_no_delete BEFORE DELETE ON events
 `;
 const SCHEMA_VERSION = 1;
 
+export type HistoryFilter = {
+	path?: string;
+	entry?: string;
+	match?: string;
+	actor?: string;
+	action?: string;
+	before?: number;
+	limit?: number;
+};
+
 export type Outcome = 'ok' | 'rejected' | 'not_found' | 'failed';
 export type Event = {
 	id: number;
@@ -115,13 +125,20 @@ export class Audit {
 		return row ? event(row) : null;
 	}
 
-	/** Newest first, filtered by path, actor or action. */
-	history(
-		f: { path?: string; actor?: string; action?: string; before?: number; limit?: number } = {}
-	) {
+	/**
+	 * Newest first, filtered by path (exact), match (text anywhere in the path), actor or action.
+	 * `entry` (a UUID) follows one entry through renames and moves; rows written before entries
+	 * were recorded by UUID fall back to `path`.
+	 */
+	history(f: HistoryFilter = {}) {
 		const where: string[] = [];
 		const args: (string | number)[] = [];
-		if (f.path) (where.push('path = ?'), args.push(f.path));
+		const uuid = `COALESCE(json_extract(detail, '$.entry'), json_extract(detail, '$.uuid'))`;
+		if (f.entry) {
+			where.push(`(${uuid} = ?${f.path ? ` OR (path = ? AND ${uuid} IS NULL)` : ''})`);
+			args.push(f.entry, ...(f.path ? [f.path] : []));
+		} else if (f.path) (where.push('path = ?'), args.push(f.path));
+		if (f.match) (where.push('instr(lower(path), lower(?)) > 0'), args.push(f.match));
 		if (f.actor) (where.push('actor = ?'), args.push(f.actor));
 		if (f.action) (where.push('action = ?'), args.push(f.action));
 		if (f.before) (where.push('id < ?'), args.push(f.before));

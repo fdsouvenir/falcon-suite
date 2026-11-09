@@ -19,6 +19,7 @@ export type EntryDetail = EntrySummary & {
 	notes: string;
 	usages: Usage[];
 	duplicates: number;
+	versions: Version[];
 	history: {
 		id: number;
 		at: string;
@@ -27,6 +28,16 @@ export type EntryDetail = EntrySummary & {
 		outcome: string;
 		detail: any;
 	}[];
+};
+/** A previous version of an entry (KeePassXC entry history): what it held, never a value. */
+export type Version = {
+	version: number;
+	modified: string | null;
+	title: string;
+	username: string;
+	url: string;
+	set: { Password: boolean; UserName: boolean; URL: boolean; Notes: boolean };
+	changed: string[];
 };
 export type Overview = {
 	name: string;
@@ -83,7 +94,8 @@ export type Ctx = {
 	reveal: (
 		e: { path: string; uuid: string },
 		field: 'Password',
-		purpose: 'reveal' | 'copy'
+		purpose: 'reveal' | 'copy',
+		version?: number
 	) => Promise<string>;
 	go: (params: Record<string, string | undefined>, opts?: { replace?: boolean }) => void;
 	href: (params: Record<string, string | undefined>) => string;
@@ -100,6 +112,9 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 	let overview: Overview | null = null;
 	let entries: Entry[] = [];
 	let events: HistoryEvent[] | null = null;
+	/** Whether History has older events than those shown (a full page came back). */
+	let olderEvents = false;
+	const HISTORY_PAGE = 200;
 	let detail: EntryDetail | null = null;
 	let sheetOpen = false;
 	let handles: { dispose: () => void }[] = [];
@@ -129,12 +144,13 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 			void load();
 			return r;
 		},
-		reveal: async (e, field, purpose) => {
+		reveal: async (e, field, purpose, version) => {
 			const r: any = await feature.invoke('reveal', {
 				path: e.path,
 				uuid: e.uuid,
 				field,
-				purpose
+				purpose,
+				...(version !== undefined ? { version } : {})
 			} as any);
 			if (r?.outcome !== 'committed') throw new Error(r?.reason ?? 'Could not read the value');
 			return r.value as string;
@@ -227,16 +243,11 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 			if (mine !== generation || context.signal.aborted) return;
 			if (ov?.unavailable) return unavailable(ov.unavailable);
 			if (p.v === 'history') {
-				const r: any = await feature.invoke('browse', {
-					view: 'history',
-					limit: 200,
-					...(p.hp ? { path: p.hp } : {}),
-					...(p.ha ? { actor: p.ha } : {}),
-					...(p.hx ? { action: p.hx } : {})
-				} as any);
+				const r: any = await feature.invoke('browse', historyQuery(p) as any);
 				if (mine !== generation || context.signal.aborted) return;
 				overview = ov;
 				events = r?.events ?? [];
+				olderEvents = events!.length >= HISTORY_PAGE;
 				return draw();
 			}
 			events = null;
@@ -270,6 +281,32 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 			if (mine !== generation || context.signal.aborted) return;
 			problem((error as Error).message);
 		}
+	}
+
+	/** History's filters (spec §8): text in the path, one entry by UUID, actor, action. */
+	function historyQuery(p: Params, before?: number) {
+		return {
+			view: 'history',
+			limit: HISTORY_PAGE,
+			...(p.hp ? { match: p.hp } : {}),
+			...(p.hu ? { entry: p.hu } : {}),
+			...(p.ha ? { actor: p.ha } : {}),
+			...(p.hx ? { action: p.hx } : {}),
+			...(before ? { before } : {})
+		};
+	}
+
+	/** The next page of History, older than the last event shown. */
+	async function showOlder() {
+		const last = events?.[events.length - 1];
+		if (!last) return;
+		const mine = generation;
+		const r: any = await feature.invoke('browse', historyQuery(context.props, last.id) as any);
+		if (mine !== generation || context.signal.aborted || !events) return;
+		const more: HistoryEvent[] = r?.events ?? [];
+		events = [...events, ...more];
+		olderEvents = more.length >= HISTORY_PAGE;
+		draw();
 	}
 
 	function unavailable(reason: string) {
@@ -416,7 +453,7 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 				'div',
 				{ class: 'fv-main' },
 				mobileFilters(c),
-				events ? historyView(c, events) : list(c, entries)
+				events ? historyView(c, events, olderEvents ? showOlder : null) : list(c, entries)
 			),
 			...(pane ? [pane] : [])
 		);

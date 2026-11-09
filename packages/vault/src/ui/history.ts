@@ -24,6 +24,7 @@ const ACTIONS = [
 	['dismiss_request', 'Request dismissed'],
 	['create_entry', 'Created'],
 	['edit_entry', 'Edited'],
+	['restore_version', 'Previous version restored'],
 	['recycle_entry', 'Moved to Recycle Bin'],
 	['delete_forever', 'Deleted forever'],
 	['create_group', 'Group created'],
@@ -33,10 +34,11 @@ const ACTIONS = [
 ] as const;
 
 /**
- * The whole Vault's history (spec §8), filtered by path, actor or action. Who did what to which
- * path, when, and whether it worked; never a value.
+ * The whole Vault's history (spec §8), in one place: every change, read and reveal, newest first,
+ * filtered by text in the path (a folder or an entry), one entry, actor or action. Who did what to
+ * which path, when, and whether it worked; never a value.
  */
-export function historyView(c: Ctx, events: HistoryEvent[]) {
+export function historyView(c: Ctx, events: HistoryEvent[], older: (() => void) | null) {
 	const p = c.params;
 	const filter = (key: 'hp' | 'ha', label: string, placeholder: string) => {
 		const el = h('input', {
@@ -46,7 +48,13 @@ export function historyView(c: Ctx, events: HistoryEvent[]) {
 			'aria-label': label
 		});
 		el.value = p[key] ?? '';
-		el.addEventListener('change', () => c.go({ ...p, [key]: el.value.trim() || undefined }));
+		el.addEventListener('change', () =>
+			c.go({
+				...p,
+				[key]: el.value.trim() || undefined,
+				...(key === 'hp' ? { hu: undefined } : {})
+			})
+		);
 		return el;
 	};
 	const action = h(
@@ -62,14 +70,21 @@ export function historyView(c: Ctx, events: HistoryEvent[]) {
 	);
 	const rows = events.map((ev) => {
 		const line = historyLine(ev);
+		// A path narrows History to that entry: by UUID when the event recorded one, so it follows
+		// the entry through renames and moves.
+		const entry: string | undefined = ev.detail?.entry ?? ev.detail?.uuid;
+		const narrow = entry
+			? { hu: entry, hp: undefined }
+			: { hp: ev.path ?? undefined, hu: undefined };
 		const open = ev.path
 			? h(
 					'a',
 					{
 						class: 'fv-link fv-mono',
-						href: c.href({ e: ev.path }),
+						href: c.href({ ...p, ...narrow }),
+						title: 'Show only this entry',
 						on: {
-							click: (e: Event) => (e.preventDefault(), c.go({ ...p, hp: ev.path! }))
+							click: (e: Event) => (e.preventDefault(), c.go({ ...p, ...narrow }))
 						}
 					},
 					shownPath(ev.path)
@@ -96,17 +111,53 @@ export function historyView(c: Ctx, events: HistoryEvent[]) {
 			'h2',
 			{ class: 'fv-list-head' },
 			h('span', { class: 'fv-dot fv-dot-muted', 'aria-hidden': 'true' }),
-			`History · ${events.length}${events.length >= 200 ? '+' : ''}`
+			`History · ${events.length}${older ? '+' : ''}`
 		),
 		h(
 			'div',
 			{ class: 'fv-history-filters' },
-			filter('hp', 'Path', 'Path, e.g. Services/Cloudflare/dns-edit'),
+			filter('hp', 'Path', 'Folder or entry, e.g. Cloudflare'),
 			filter('ha', 'Actor', 'Actor, e.g. agent:verl, resolver'),
 			action
 		),
+		p.hu
+			? h(
+					'p',
+					{ class: 'fv-history-scope fv-small' },
+					h('span', { class: 'fv-muted' }, 'One entry'),
+					events[0]?.path
+						? h('span', { class: 'fv-mono' }, ` · ${shownPath(events[0].path)}`)
+						: null,
+					' ',
+					h(
+						'a',
+						{
+							class: 'fv-link',
+							href: c.href({ ...p, hu: undefined }),
+							on: { click: (e: Event) => (e.preventDefault(), c.go({ ...p, hu: undefined })) }
+						},
+						'Show everything'
+					)
+				)
+			: null,
 		rows.length
 			? h('ul', { class: 'fv-history fv-history-page' }, rows)
-			: h('p', { class: 'fv-empty' }, 'Nothing recorded yet.')
+			: h('p', { class: 'fv-empty' }, 'Nothing recorded yet.'),
+		older
+			? h(
+					'button',
+					{
+						class: 'fv-btn fv-btn-quiet fv-history-more',
+						type: 'button',
+						on: {
+							click: (e: Event) => {
+								(e.currentTarget as HTMLButtonElement).disabled = true;
+								older();
+							}
+						}
+					},
+					'Show older'
+				)
+			: null
 	);
 }

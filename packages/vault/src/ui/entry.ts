@@ -1,4 +1,5 @@
-import type { Ctx, EntryDetail } from './app.js';
+import type { Ctx, EntryDetail, Version } from './app.js';
+import { formDialog } from './dialog.js';
 import { ago, h, icon, iconButton, shownPath, who } from './dom.js';
 import { menuButton } from './menu.js';
 
@@ -25,8 +26,11 @@ export function historyLine(ev: { actor: string; action: string; outcome: string
 			request: 'asked for a value',
 			fill_request: 'filled in the password',
 			dismiss_request: 'dismissed the request',
-			reveal: `revealed ${field}`,
-			copy: `copied ${field}`,
+			reveal: d.version_of ? `revealed an earlier ${field}` : `revealed ${field}`,
+			copy: d.version_of ? `copied an earlier ${field}` : `copied ${field}`,
+			restore_version: fields.length
+				? `restored an earlier ${fields.join(', ')}`
+				: 'restored a previous version',
 			edit_entry: d.to
 				? `moved it to ${shownPath(d.to)}`
 				: fields.length
@@ -196,7 +200,7 @@ export function usages(e: EntryDetail, intro = true) {
 }
 
 /** A short History (spec §9): the last few lines, repeats folded into one ("OpenClaw · read ×4"). */
-function history(e: EntryDetail) {
+function history(c: Ctx, e: EntryDetail) {
 	const lines: { who: string; verb: string; at: string; times: number }[] = [];
 	for (const ev of e.history) {
 		const line = historyLine(ev);
@@ -212,7 +216,18 @@ function history(e: EntryDetail) {
 			'h3',
 			{ class: 'fv-section-title' },
 			h('span', { class: 'fv-dot fv-dot-muted', 'aria-hidden': 'true' }),
-			'History'
+			'History',
+			h(
+				'a',
+				{
+					class: 'fv-link fv-section-link',
+					href: c.href({ v: 'history', hu: e.uuid }),
+					on: {
+						click: (ev: Event) => (ev.preventDefault(), c.go({ v: 'history', hu: e.uuid }))
+					}
+				},
+				'See all'
+			)
 		),
 		h(
 			'ul',
@@ -237,6 +252,147 @@ function history(e: EntryDetail) {
 					)
 				)
 		)
+	);
+}
+
+/** Put an entry in the Recycle Bin back where it was removed from (or at the top level). */
+function restoreFromBin(c: Ctx, e: EntryDetail) {
+	formDialog(c.host, {
+		title: 'Restore entry',
+		description: `${e.title} goes back to ${e.from ? shownPath(e.from) : 'the top level'}.`,
+		fields: [],
+		submitLabel: 'Restore',
+		submit: async () => {
+			const r = await c.edit('update_entry', {
+				path: e.path,
+				uuid: e.uuid,
+				fields: { group: e.from ?? '' }
+			});
+			c.go({ e: r.path, u: e.uuid });
+		}
+	});
+}
+
+const VERSION_WORD: Record<string, string> = { ...FIELD_WORD, Title: 'title' };
+
+/**
+ * Previous versions (KeePassXC entry history): what the entry held before each change, newest
+ * first. A person reveals or copies an earlier password, or restores a version; restoring keeps
+ * what the entry holds now as a version too, so it can be undone.
+ */
+function versions(c: Ctx, e: EntryDetail) {
+	if (!e.versions?.length) return null;
+	const row = (v: Version) => {
+		const key = `${e.uuid}:Password@${v.version}`;
+		const value = h('span', { class: 'fv-secret-value fv-small' });
+		const status = h('span', { class: 'fv-error-text', role: 'status' });
+		let toggle: HTMLButtonElement | null = null;
+		const show = () => {
+			const shown = c.secrets.get(key);
+			value.textContent = shown ?? (v.set.Password ? MASK.slice(0, 10) : 'no password');
+			value.classList.toggle('is-masked', shown === null);
+			if (toggle) {
+				toggle.replaceChildren(icon(shown === null ? 'eye' : 'eyeOff'));
+				toggle.title = shown === null ? 'Reveal' : 'Hide';
+			}
+		};
+		if (v.set.Password)
+			toggle = iconButton('eye', 'Reveal this password', async () => {
+				status.textContent = '';
+				if (c.secrets.get(key) !== null) return c.secrets.hide(key);
+				try {
+					c.secrets.show(key, await c.reveal(e, 'Password', 'reveal', v.version));
+				} catch (err) {
+					status.textContent = (err as Error).message;
+				}
+			}) as HTMLButtonElement;
+		const copy = v.set.Password
+			? iconButton('copy', 'Copy this password', async () => {
+					status.textContent = '';
+					try {
+						await copyText(
+							copy,
+							c.secrets.get(key) ?? (await c.reveal(e, 'Password', 'copy', v.version))
+						);
+					} catch (err) {
+						status.textContent = (err as Error).message;
+					}
+				})
+			: null;
+		c.secrets.watch(key, show, value);
+		show();
+		const restore = h(
+			'button',
+			{
+				class: 'fv-btn fv-btn-text fv-small',
+				type: 'button',
+				disabled: e.recycled,
+				title: e.recycled ? 'Restore the entry from the Recycle Bin first' : null,
+				on: {
+					click: () =>
+						formDialog(c.host, {
+							title: 'Restore this version?',
+							description: `${e.title} goes back to how it was ${v.modified ? new Date(v.modified).toLocaleString() : 'then'}. What it holds now is kept as a previous version.`,
+							fields: [],
+							submitLabel: 'Restore',
+							submit: async () => {
+								const r = await c.edit('restore_version', {
+									path: e.path,
+									uuid: e.uuid,
+									version: v.version
+								});
+								c.go({ ...c.params, e: r.path, u: e.uuid, m: undefined });
+							}
+						})
+				}
+			},
+			'Restore'
+		);
+		const changed = v.changed.map((f) => VERSION_WORD[f] ?? f);
+		return h(
+			'li',
+			{ class: 'fv-version' },
+			h(
+				'div',
+				{ class: 'fv-version-head' },
+				h(
+					'span',
+					{
+						class: 'fv-mono fv-muted',
+						title: v.modified ? new Date(v.modified).toLocaleString() : ''
+					},
+					v.modified ? ago(v.modified) : 'unknown time'
+				),
+				h(
+					'span',
+					{ class: 'fv-muted fv-small' },
+					changed.length ? `then changed: ${changed.join(', ')}` : ''
+				),
+				restore
+			),
+			h(
+				'div',
+				{ class: 'fv-version-body fv-small' },
+				v.title !== e.title ? h('span', { class: 'fv-muted' }, `Title: ${v.title}`) : null,
+				v.username !== e.username
+					? h('span', { class: 'fv-muted' }, `Username: ${v.username || 'not set'}`)
+					: null,
+				v.url !== e.url ? h('span', { class: 'fv-muted' }, `URL: ${v.url || 'not set'}`) : null,
+				h('div', { class: 'fv-secret' }, value, toggle, copy)
+			),
+			status
+		);
+	};
+	return h(
+		'section',
+		{ class: 'fv-section' },
+		h(
+			'h3',
+			{ class: 'fv-section-title' },
+			h('span', { class: 'fv-dot fv-dot-muted', 'aria-hidden': 'true' }),
+			`Previous versions · ${e.versions.length}`
+		),
+		h('ul', { class: 'fv-versions' }, e.versions.map(row))
 	);
 }
 
@@ -284,7 +440,7 @@ function confirmRemove(c: Ctx, e: EntryDetail, forever: boolean) {
 				? 'This removes it from the database for good. It cannot be undone.'
 				: n
 					? `OpenClaw uses this entry for ${n} setting${n > 1 ? 's' : ''}. ${n > 1 ? 'They' : 'It'} will stop working until you point ${n > 1 ? 'them' : 'it'} at another entry.`
-					: 'You can move it back from the Recycle Bin by editing its group.'
+					: 'You can restore it from the Recycle Bin.'
 		),
 		n && !forever
 			? h(
@@ -359,6 +515,14 @@ export function entryView(c: Ctx, e: EntryDetail) {
 			hint: e.reference_problem ?? ''
 		},
 		{ label: 'Edit', run: edit },
+		...(e.recycled
+			? [
+					{
+						label: e.from ? `Restore to ${shownPath(e.from)}` : 'Restore',
+						run: () => restoreFromBin(c, e)
+					}
+				]
+			: []),
 		e.recycled
 			? { label: 'Delete forever', run: () => c.go({ ...p, m: 'forever' }), danger: true }
 			: { label: 'Move to Recycle Bin', run: () => c.go({ ...p, m: 'delete' }), danger: true }
@@ -419,6 +583,7 @@ export function entryView(c: Ctx, e: EntryDetail) {
 		),
 		removing ? confirmRemove(c, e, p.m === 'forever') : null,
 		removing ? null : usages(e),
-		removing ? null : history(e)
+		removing ? null : versions(c, e),
+		removing ? null : history(c, e)
 	);
 }

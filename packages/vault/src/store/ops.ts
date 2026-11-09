@@ -1,4 +1,10 @@
-import { Audit, type Event, type Outcome as AuditOutcome, type Request } from './audit.js';
+import {
+	Audit,
+	type Event,
+	type HistoryFilter,
+	type Outcome as AuditOutcome,
+	type Request
+} from './audit.js';
 import { fieldText, kdbxweb, setField, type Kdbx, type KdbxEntry } from './kdbx.js';
 import {
 	allEntries,
@@ -155,7 +161,8 @@ export class VaultOps {
 				notes: fieldText(e, 'Notes'),
 				usages: usagesOf(config, pluginId, path, e.uuid.id),
 				duplicates: allEntries(db).filter((x) => x.path === path).length - 1,
-				history: this.audit.history({ path, limit: 40 })
+				versions: versionsOf(e),
+				history: this.audit.history({ entry: e.uuid.id, path, limit: 40 })
 			};
 		});
 	}
@@ -204,7 +211,7 @@ export class VaultOps {
 		});
 	}
 
-	history(f: { path?: string; actor?: string; action?: string; before?: number; limit?: number }) {
+	history(f: HistoryFilter) {
 		return this.audit.history(f);
 	}
 
@@ -214,11 +221,11 @@ export class VaultOps {
 	create(actor: Actor, f: EntryFields, opts: { key?: string; action?: string } = {}) {
 		const action = opts.action ?? 'create_entry';
 		const path = joinPath(f.group ?? '', (f.title ?? '').trim());
-		return this.attempt(actor, action, path, opts.key, async () => {
+		return this.attempt(actor, action, path, opts.key, async (commit) => {
 			checkFields(f);
 			const title = checkName(f.title ?? '', 'Title');
 			if (f.group) for (const n of f.group.split('/')) checkName(n, 'Group name');
-			const reference = await this.vault.change((db) => {
+			return commit((db) => {
 				if (hasEntryAt(db, path)) reject('exists', `An entry already exists at ${path}`);
 				const group = this.ensureGroup(db, f.group ?? '');
 				const e = db.createEntry(group);
@@ -227,9 +234,13 @@ export class VaultOps {
 				setField(e, 'Password', f.password ?? '');
 				setField(e, 'URL', f.url ?? '');
 				setField(e, 'Notes', f.notes ?? '');
-				return referenceFor(e.uuid.id);
+				return {
+					path,
+					entry: e.uuid.id,
+					reference: referenceFor(e.uuid.id),
+					detail: { fields: setNames(f) }
+				};
 			});
-			return { path, reference, detail: { fields: setNames(f) } };
 		});
 	}
 
@@ -240,14 +251,14 @@ export class VaultOps {
 		key?: string
 	) {
 		const path = joinPath(f.group ?? '', (f.title ?? '').trim());
-		return this.attempt(actor, 'request', path, key, async () => {
+		return this.attempt(actor, 'request', path, key, async (commit) => {
 			checkFields(f);
 			const reason = f.reason?.trim();
 			if (!reason) reject('invalid_input', 'Say in one line why you need it (reason)');
 			if (reason.length > 500) reject('invalid_input', 'reason is too long');
 			const title = checkName(f.title ?? '', 'Title');
 			if (f.group) for (const n of f.group.split('/')) checkName(n, 'Group name');
-			const reference = await this.vault.change((db) => {
+			return commit((db) => {
 				if (hasEntryAt(db, path)) reject('exists', `An entry already exists at ${path}`);
 				const e = db.createEntry(this.ensureGroup(db, f.group ?? ''));
 				setField(e, 'Title', title);
@@ -255,15 +266,20 @@ export class VaultOps {
 				setField(e, 'Password', '');
 				setField(e, 'URL', f.url ?? '');
 				setField(e, 'Notes', f.notes ?? '');
-				return referenceFor(e.uuid.id);
+				return {
+					path,
+					entry: e.uuid.id,
+					reference: referenceFor(e.uuid.id),
+					detail: { reason, session: f.session ?? null }
+				};
 			});
-			return { path, reference, detail: { reason, session: f.session ?? null } };
 		});
 	}
 
 	/**
 	 * Edit any field, rename (title) or move (group), in one write. A person's action, and an
 	 * agent's `update` (`live`: the entry must be outside the Recycle Bin and stay out of it).
+	 * The entry as it was is kept first as a previous version, as KeePassXC does.
 	 */
 	update(
 		actor: Actor,
@@ -272,9 +288,9 @@ export class VaultOps {
 		key?: string,
 		opts: { live?: boolean } = {}
 	) {
-		return this.attempt(actor, 'edit_entry', at.path, key, async () => {
+		return this.attempt(actor, 'edit_entry', at.path, key, async (commit) => {
 			checkFields(f);
-			const changed = await this.vault.change((db) => {
+			return commit((db) => {
 				const e = entryAt(db, at.path, at.uuid);
 				if (opts.live && inRecycleBin(db, e)) reject('not_found', `No entry at ${at.path}`);
 				const title = f.title !== undefined ? checkName(f.title, 'Title') : fieldText(e, 'Title');
@@ -289,71 +305,120 @@ export class VaultOps {
 				const to = joinPath(group, title);
 				if (to !== at.path && hasEntryAt(db, to))
 					reject('exists', `An entry already exists at ${to}`);
-				const fields: string[] = [];
-				const set = (name: string, v: string | undefined) => {
-					if (v !== undefined && v !== fieldText(e, name)) {
-						setField(e, name, v);
-						fields.push(name);
+				const changes = (
+					[
+						['Title', f.title !== undefined ? title : undefined],
+						['UserName', f.username],
+						['Password', f.password],
+						['URL', f.url],
+						['Notes', f.notes]
+					] as const
+				).filter(([name, v]) => v !== undefined && v !== fieldText(e, name));
+				if (changes.length) {
+					keepVersion(db, e);
+					for (const [name, v] of changes) setField(e, name, v!);
+					e.times.update();
+				}
+				if (group !== groupPathNow) db.move(e, groupAt(db, group));
+				return {
+					path: to,
+					entry: e.uuid.id,
+					reference: inRecycleBin(db, e) ? null : referenceFor(e.uuid.id),
+					detail: {
+						fields: changes.map(([name]) => name),
+						...(to !== at.path ? { to } : {})
 					}
 				};
-				set('Title', f.title !== undefined ? title : undefined);
-				set('UserName', f.username);
-				set('Password', f.password);
-				set('URL', f.url);
-				set('Notes', f.notes);
-				if (group !== groupPathNow) db.move(e, groupAt(db, group));
-				if (fields.length) e.times.update();
-				return { fields, to, reference: inRecycleBin(db, e) ? null : referenceFor(e.uuid.id) };
 			});
-			return {
-				path: changed.to,
-				reference: changed.reference,
-				detail: {
-					fields: changed.fields,
-					...(changed.to !== at.path ? { to: changed.to } : {})
-				}
-			};
 		});
+	}
+
+	/**
+	 * A person puts back one previous version's fields (Title, UserName, Password, URL, Notes). What
+	 * the entry holds now is kept as a previous version first, so a restore can be undone too.
+	 */
+	restoreVersion(actor: Actor, at: { path: string; uuid?: string }, version: number, key?: string) {
+		return this.attempt(actor, 'restore_version', at.path, key, async (commit) =>
+			commit((db) => {
+				const e = entryAt(db, at.path, at.uuid);
+				if (inRecycleBin(db, e)) reject('invalid_input', 'Restore it from the Recycle Bin first');
+				const v =
+					(Number.isInteger(version) ? e.history[version] : undefined) ??
+					reject('not_found', 'No such previous version');
+				const group = e.parentGroup ? groupPath(db, e.parentGroup) : '';
+				const to = joinPath(group, fieldText(v, 'Title'));
+				if (to !== at.path && hasEntryAt(db, to))
+					reject('exists', `An entry already exists at ${to}`);
+				const fields = STANDARD.filter((name) => fieldText(v, name) !== fieldText(e, name));
+				if (!fields.length) reject('invalid_input', 'The entry already matches that version');
+				const from = v.times.lastModTime?.toISOString() ?? null;
+				keepVersion(db, e);
+				for (const name of fields) setField(e, name, fieldText(v, name));
+				e.times.update();
+				return {
+					path: to,
+					entry: e.uuid.id,
+					reference: referenceFor(e.uuid.id),
+					detail: { fields, version_of: from, ...(to !== at.path ? { to } : {}) }
+				};
+			})
+		);
 	}
 
 	/** Remove: to the Recycle Bin, as KeePassXC does (spec §4). Forever when the database has none. */
 	recycle(actor: Actor, at: { path: string; uuid?: string }, key?: string) {
-		return this.attempt(actor, 'recycle_entry', at.path, key, async () => {
-			const to = await this.vault.change((db) => {
+		return this.attempt(actor, 'recycle_entry', at.path, key, async (commit) =>
+			commit((db) => {
 				const e = entryAt(db, at.path, at.uuid);
 				if (inRecycleBin(db, e)) reject('invalid_input', 'It is already in the Recycle Bin');
 				db.remove(e);
-				return inRecycleBin(db, e) ? entryPath(db, e) : null;
-			});
-			return { path: at.path, detail: to ? { to } : { forever: true } };
-		});
+				const to = inRecycleBin(db, e) ? entryPath(db, e) : null;
+				return { path: at.path, entry: e.uuid.id, detail: to ? { to } : { forever: true } };
+			})
+		);
 	}
 
 	/** Delete forever, from the Recycle Bin only (spec §9). */
 	deleteForever(actor: Actor, at: { path: string; uuid?: string }, key?: string) {
-		return this.attempt(actor, 'delete_forever', at.path, key, async () => {
-			await this.vault.change((db) => {
+		return this.attempt(actor, 'delete_forever', at.path, key, async (commit) =>
+			commit((db) => {
 				const e = entryAt(db, at.path, at.uuid);
 				if (!inRecycleBin(db, e))
 					reject('invalid_input', 'Only entries in the Recycle Bin can be deleted forever');
 				db.move(e, null);
-			});
-			return { path: at.path };
-		});
+				return { path: at.path, entry: e.uuid.id };
+			})
+		);
 	}
 
-	/** A person reveals or copies one field of one entry (spec §6). */
+	/** A person reveals or copies one field of one entry, or of one of its previous versions (spec §6). */
 	async reveal(
 		actor: Actor,
 		at: { path: string; uuid?: string },
 		field: Field,
-		purpose: 'reveal' | 'copy'
+		purpose: 'reveal' | 'copy',
+		version?: number
 	) {
 		let value = '';
-		const r = await this.attempt(actor, purpose, at.path, undefined, async () => {
-			value = await this.vault.read((db) => fieldText(entryAt(db, at.path, at.uuid), field));
-			return { path: at.path, detail: { field } };
-		});
+		const r = await this.attempt(actor, purpose, at.path, undefined, async () =>
+			this.vault.read((db) => {
+				const e = entryAt(db, at.path, at.uuid);
+				const from =
+					(version === undefined ? e : e.history[version]) ??
+					reject('not_found', 'No such previous version');
+				value = fieldText(from, field);
+				return {
+					path: at.path,
+					entry: e.uuid.id,
+					detail: {
+						field,
+						...(version !== undefined
+							? { version_of: from.times.lastModTime?.toISOString() ?? null }
+							: {})
+					}
+				};
+			})
+		);
 		return r.outcome === 'committed' ? { ...r, value } : r;
 	}
 
@@ -364,13 +429,18 @@ export class VaultOps {
 		field: Field,
 		context: { session: string | null }
 	) {
-		const detail = { field, session: context.session, ...(at.uuid ? { uuid: at.uuid } : {}) };
+		const detail: Record<string, unknown> = {
+			field,
+			session: context.session,
+			...(at.uuid ? { uuid: at.uuid } : {})
+		};
 		let value: string;
 		try {
 			if (!at.path) reject('invalid_input', 'retrieve: give the entry path');
 			value = await this.vault.read((db) => {
 				const entry = entryAt(db, at.path, at.uuid);
 				if (inRecycleBin(db, entry)) reject('not_found', `No entry at ${at.path}`);
+				detail.entry = entry.uuid.id;
 				return fieldText(entry, field);
 			});
 		} catch (error) {
@@ -395,18 +465,24 @@ export class VaultOps {
 	/** A person fills a Request's password (spec §9). Returns whom to tell. */
 	async fill(actor: Actor, at: { path: string; uuid?: string }, password: string, key?: string) {
 		let request: Request | null = null;
-		const r = await this.attempt(actor, 'fill_request', at.path, key, async () => {
+		const r = await this.attempt(actor, 'fill_request', at.path, key, async (commit) => {
 			if (!password) reject('invalid_input', 'Enter the password');
 			checkFields({ password });
-			const reference = await this.vault.change((db) => {
+			return commit((db) => {
 				const e = entryAt(db, at.path, at.uuid);
-				request = this.requests(db).get(at.path) ?? null;
-				if (!request) reject('not_found', `${at.path} is not waiting for a value`);
+				const asked =
+					this.requests(db).get(at.path) ??
+					reject('not_found', `${at.path} is not waiting for a value`);
+				request = asked;
 				setField(e, 'Password', password);
 				e.times.update();
-				return referenceFor(e.uuid.id);
+				return {
+					path: at.path,
+					entry: e.uuid.id,
+					reference: referenceFor(e.uuid.id),
+					detail: { requested_by: asked.actor }
+				};
 			});
-			return { path: at.path, reference, detail: { requested_by: request!.actor } };
 		});
 		return { result: r, request: r.outcome === 'committed' ? (request as Request | null) : null };
 	}
@@ -414,15 +490,17 @@ export class VaultOps {
 	/** A person declines a Request: it leaves Needs a value and goes to the Recycle Bin. */
 	async dismiss(actor: Actor, at: { path: string; uuid?: string }, key?: string) {
 		let request: Request | null = null;
-		const r = await this.attempt(actor, 'dismiss_request', at.path, key, async () => {
-			await this.vault.change((db) => {
+		const r = await this.attempt(actor, 'dismiss_request', at.path, key, async (commit) =>
+			commit((db) => {
 				const e = entryAt(db, at.path, at.uuid);
-				request = this.requests(db).get(at.path) ?? null;
-				if (!request) reject('not_found', `${at.path} is not waiting for a value`);
+				const asked =
+					this.requests(db).get(at.path) ??
+					reject('not_found', `${at.path} is not waiting for a value`);
+				request = asked;
 				db.remove(e);
-			});
-			return { path: at.path, detail: { requested_by: request!.actor } };
-		});
+				return { path: at.path, entry: e.uuid.id, detail: { requested_by: asked.actor } };
+			})
+		);
 		return { result: r, request: r.outcome === 'committed' ? (request as Request | null) : null };
 	}
 
@@ -564,17 +642,17 @@ export class VaultOps {
 	/**
 	 * Run one operation and record it (spec §8): ok, rejected, not_found or failed. A repeated
 	 * idempotency key returns the first result without doing it again (spec §10).
+	 *
+	 * An agent's change is strict: its History row is written before the change is released, still
+	 * holding the lock, and if that row cannot be written the saved change is undone. A person's
+	 * change is recorded best effort afterwards (a full disk must not undo what they did).
 	 */
 	private async attempt(
 		actor: Actor,
 		action: string,
 		path: string,
 		key: string | undefined,
-		run: () => Promise<{
-			path: string;
-			reference?: string | null;
-			detail?: Record<string, unknown>;
-		}>
+		run: (commit: Commit) => Promise<Done>
 	): Promise<Result> {
 		if (key) {
 			const done = this.audit.replayed(key);
@@ -587,11 +665,39 @@ export class VaultOps {
 				};
 		}
 		const at = this.now().toISOString();
+		const strict = actor.startsWith('agent:');
+		let sealed = false;
+		const row = (r: Done) => ({
+			at,
+			actor,
+			action,
+			path,
+			outcome: 'ok' as const,
+			detail: {
+				...r.detail,
+				reference: r.reference ?? null,
+				...(r.entry ? { entry: r.entry } : {})
+			},
+			key
+		});
+		const commit: Commit = (fn) =>
+			this.vault.change(
+				fn,
+				strict
+					? (r) => {
+							try {
+								this.audit.record(row(r));
+							} catch {
+								throw new AuditUnavailable();
+							}
+							sealed = true;
+						}
+					: undefined
+			);
 		try {
-			const r = await run();
-			const reference = r.reference ?? null;
-			this.log({ at, actor, action, path, outcome: 'ok', detail: { ...r.detail, reference }, key });
-			return { outcome: 'committed', path: r.path, reference };
+			const r = await run(commit);
+			if (!sealed) this.log(row(r));
+			return { outcome: 'committed', path: r.path, reference: r.reference ?? null };
 		} catch (error) {
 			if (error instanceof Rejection) {
 				const outcome: AuditOutcome = error.code === 'not_found' ? 'not_found' : 'rejected';
@@ -599,6 +705,12 @@ export class VaultOps {
 				return { outcome: 'rejected', code: error.code, reason: error.message };
 			}
 			this.log({ at, actor, action, path, outcome: 'failed', detail: { code: errorName(error) } });
+			if (error instanceof AuditUnavailable)
+				return {
+					outcome: 'rejected',
+					code: 'unavailable',
+					reason: 'Falcon Vault could not record this change in History, so it was not made'
+				};
 			throw error;
 		}
 	}
@@ -611,6 +723,55 @@ export class VaultOps {
 			/* the change stands; history misses one row */
 		}
 	}
+}
+
+type Done = {
+	path: string;
+	reference?: string | null;
+	detail?: Record<string, unknown>;
+	/** The entry's UUID, so its History follows it through renames and moves. */
+	entry?: string;
+};
+type Commit = <T extends Done>(fn: (db: Kdbx) => T) => Promise<T>;
+
+class AuditUnavailable extends Error {}
+
+const STANDARD = ['Title', 'UserName', 'Password', 'URL', 'Notes'] as const;
+
+/**
+ * Keep the entry as it is now as a previous version (KeePassXC's entry history), then trim to the
+ * database's limit: Maximum history items, 10 when unset, none when -1, as KeePassXC does.
+ */
+function keepVersion(db: Kdbx, e: KdbxEntry) {
+	e.pushHistory();
+	const max = db.meta.historyMaxItems;
+	const limit = max === undefined ? 10 : max;
+	if (limit >= 0 && e.history.length > limit) e.removeHistory(0, e.history.length - limit);
+}
+
+/** An entry's previous versions for a person, newest first: what each held, never a value. */
+export function versionsOf(e: KdbxEntry) {
+	const all = e.history;
+	return all
+		.map((v, version) => {
+			const next = all[version + 1] ?? e;
+			return {
+				version,
+				modified: v.times.lastModTime?.toISOString() ?? null,
+				title: fieldText(v, 'Title'),
+				username: fieldText(v, 'UserName'),
+				url: fieldText(v, 'URL'),
+				set: {
+					Password: !!fieldText(v, 'Password'),
+					UserName: !!fieldText(v, 'UserName'),
+					URL: !!fieldText(v, 'URL'),
+					Notes: !!fieldText(v, 'Notes')
+				},
+				/** What the next change after this version altered. */
+				changed: STANDARD.filter((n) => fieldText(v, n) !== fieldText(next, n))
+			};
+		})
+		.reverse();
 }
 
 const setNames = (f: EntryFields) =>

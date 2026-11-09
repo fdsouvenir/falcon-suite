@@ -178,6 +178,9 @@ groups: those stay with a person in the Vault tab.
 
 ## 8. Audit history
 
+Revised 2026-11-09 (Fred): one History for the whole Vault, previous versions, strict audit for
+agents.
+
 - `<state>/falcon-vault/audit.db`: append-only and STRICT. Triggers reject updates and deletes.
 - One Event per operation attempt and its outcome: action, path, actor (`person:<id>`,
   `agent:<id>` or `resolver`), time, outcome. No values, ever.
@@ -186,6 +189,28 @@ groups: those stay with a person in the Vault tab.
 - The Vault tab shows each entry's history in its detail view, and the whole Vault's history in a
   History view filtered by path, actor or action.
 - There is no retention limit in 5.0.
+- **One place for everything:** the History view lists every Event, newest first, with older pages
+  on request. It narrows by text anywhere in the path (a folder such as `Cloudflare`, or an entry),
+  by one entry, by actor and by action. The group tree keeps History and the Recycle Bin in view.
+- **History follows the entry:** Events about an entry record its UUID, so its History survives
+  renames and moves. Events from before this was recorded are matched by path.
+- **Agent changes are strict:** an agent's change and its Event stand or fall together. The Event
+  is written while the lock is still held; if it cannot be written, the saved change is undone and
+  the agent is told nothing was changed. A person's change is recorded best effort, so a full disk
+  never undoes what they did.
+
+### Previous versions
+
+Before any change to an entry's fields (an edit, an agent `update`, or a restore), Vault keeps the
+entry as it was in the entry's own KeePassXC history, inside the encrypted database. KeePassXC
+shows the same versions. They are trimmed to the database's Maximum history items (10 when unset;
+-1 keeps all), as KeePassXC does.
+
+The entry pane lists them newest first: when, what the next change altered, and any Title,
+UserName or URL that differed. A person can reveal or copy an earlier password (recorded like any
+reveal) and **Restore** a version, which puts back its Title, UserName, Password, URL and Notes and
+keeps what the entry held as another version, so a restore can be undone too. Agents cannot list,
+read or restore previous versions.
 
 ## 9. The human's view
 

@@ -253,6 +253,8 @@ const feature = defineFeaturePlugin({
 						return {
 							events: ops.history({
 								path: input.path,
+								entry: input.entry,
+								match: input.match,
 								actor: input.actor,
 								action: input.action,
 								before: input.before,
@@ -269,7 +271,8 @@ const feature = defineFeaturePlugin({
 					actorFor(context),
 					{ path: input.path, uuid: input.uuid },
 					input.field,
-					input.purpose
+					input.purpose,
+					input.version
 				);
 			},
 
@@ -287,6 +290,9 @@ const feature = defineFeaturePlugin({
 						return needPath() ?? committed(await ops.update(actor, at, f, key));
 					case 'recycle_entry':
 						return needPath() ?? committed(await ops.recycle(actor, at, key));
+					case 'restore_version':
+						if (input.version === undefined) return invalid('restore_version: give the version');
+						return needPath() ?? committed(await ops.restoreVersion(actor, at, input.version, key));
 					case 'delete_forever':
 						return needPath() ?? committed(await ops.deleteForever(actor, at, key));
 					case 'fill_request': {

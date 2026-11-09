@@ -13,6 +13,7 @@ export const EDIT_COMMANDS = [
 	'update_entry',
 	'recycle_entry',
 	'delete_forever',
+	'restore_version',
 	'fill_request',
 	'dismiss_request',
 	'create_group',
@@ -66,7 +67,7 @@ export const contract = defineFeatureContract({
 		browse: {
 			kind: 'query',
 			description:
-				'The Vault tab: overview (group tree and counts) · list (group, scope, search) · entry (path) · history (path, actor, action).',
+				'The Vault tab: overview (group tree and counts) · list (group, scope, search) · entry (path; with previous versions) · history (path, entry, match, actor, action, before).',
 			input: Type.Object(
 				{
 					view: Lit(['overview', 'list', 'entry', 'history']),
@@ -75,6 +76,10 @@ export const contract = defineFeatureContract({
 					search: Type.Optional(Type.String({ maxLength: 200 })),
 					path: Type.Optional(Path),
 					uuid: Type.Optional(Uuid),
+					entry: Type.Optional(Type.String({ maxLength: 64, ...d('history: one entry by UUID') })),
+					match: Type.Optional(
+						Type.String({ maxLength: 1024, ...d('history: text anywhere in the path') })
+					),
 					actor: Type.Optional(Type.String({ maxLength: 200 })),
 					action: Type.Optional(Type.String({ maxLength: 64 })),
 					before: Type.Optional(Type.Integer({ minimum: 1 })),
@@ -86,13 +91,15 @@ export const contract = defineFeatureContract({
 		},
 		reveal: {
 			kind: 'action',
-			description: 'A person reveals or copies one field of one entry (spec §6).',
+			description:
+				'A person reveals or copies one field of one entry, or of one of its previous versions (spec §6).',
 			input: Type.Object(
 				{
 					path: Path,
 					uuid: Type.Optional(Uuid),
 					field: Lit(FIELDS),
-					purpose: Lit(['reveal', 'copy'])
+					purpose: Lit(['reveal', 'copy']),
+					version: Type.Optional(Type.Integer({ minimum: 0, ...d('a previous version') }))
 				},
 				{ additionalProperties: false }
 			),
@@ -123,6 +130,9 @@ export const contract = defineFeatureContract({
 						Type.String({ maxLength: 1024, ...d('Group path; "" is the top') })
 					),
 					name: Type.Optional(Type.String({ maxLength: 240 })),
+					version: Type.Optional(
+						Type.Integer({ minimum: 0, ...d('restore_version: which previous version') })
+					),
 					idempotency_key: Type.Optional(Type.String({ minLength: 1, maxLength: 128 }))
 				},
 				{ additionalProperties: false }

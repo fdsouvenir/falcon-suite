@@ -396,3 +396,37 @@ test('when the database cannot open, the tab says why instead of showing an empt
 	const out = r.result ?? r;
 	assert.match(out.unavailable, /passwords\.kdbx is missing/);
 });
+
+test("a person undoes an agent's update from Previous versions; agents cannot reach versions", async () => {
+	const { call, ui } = await started(ENTRIES);
+	assert.equal(
+		(await call({ action: 'update', path: 'Channels/telegram', password: 'wrong-SECRET' })).outcome,
+		'committed'
+	);
+	const entry = await ui('browse', { view: 'entry', path: 'Channels/telegram' });
+	assert.equal(entry.versions.length, 1);
+	assert.deepEqual(entry.versions[0].changed, ['Password']);
+	assert.doesNotMatch(JSON.stringify(entry), /SECRET/);
+	const was = await ui('reveal', {
+		path: 'Channels/telegram',
+		field: 'Password',
+		purpose: 'reveal',
+		version: 0
+	});
+	assert.equal(was.value, 'tg-SECRET');
+	const back = await ui('edit', {
+		command: 'restore_version',
+		path: 'Channels/telegram',
+		version: 0
+	});
+	assert.equal(back.outcome, 'committed');
+	assert.equal((await call({ action: 'retrieve', path: 'Channels/telegram' })).value, 'tg-SECRET');
+	assert.ok(!('versions' in (await call({ action: 'get', path: 'Channels/telegram' }))));
+	await assert.rejects(call({ action: 'restore_version', path: 'Channels/telegram', version: 0 }));
+	await assert.rejects(call({ action: 'retrieve', path: 'Channels/telegram', version: 0 }));
+	const all = await ui('browse', { view: 'history', match: 'telegram' });
+	assert.deepEqual(
+		all.events.map((e) => e.action),
+		['retrieve', 'restore_version', 'reveal', 'edit_entry']
+	);
+});
