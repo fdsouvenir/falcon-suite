@@ -4,8 +4,9 @@ import { PLUGIN_ID } from './identity.js';
 import { FIELDS } from './store/paths.js';
 
 // Browser-safe: shared by the plugin backend, the agent tool and the native UI (spec §10).
-// Only `agent` has a tool. Reveal, copy and every write a person makes are Control UI operations
-// with no tool declaration, so no agent can reach them.
+// Only `agent` has a tool. Reveal, copy, delete forever, Requests and groups are Control UI
+// operations with no tool declaration, so no agent can reach them. Agents may update and recycle
+// entries through `agent`.
 
 export const EDIT_COMMANDS = [
 	'create_entry',
@@ -32,25 +33,25 @@ export const contract = defineFeatureContract({
 		agent: {
 			kind: 'action',
 			description:
-				'Falcon Vault supplies credentials for authorized jobs. list/get browse metadata without Password or Notes values. retrieve (path, field? default Password, uuid? for duplicate paths) immediately returns one stored field to you; prefer existing protected authenticated integrations when available. Retrieved values reach your model provider, transcripts and subsequent tool arguments. Retrieval does not authorize actions: stay within the user’s task. store (title, group?, username?, password, url?, notes?) creates a credential you already hold, never overwrites or echoes it. request (title, group?, username?, url?, notes?, reason) asks the person for a missing credential and tells this session when filled. No Vault approval tiers or standing grants. You cannot edit, move, rename or remove entries',
+				'Falcon Vault supplies credentials for authorized jobs. list/get browse metadata without Password or Notes values. retrieve (path, field? default Password, uuid? for duplicate paths) immediately returns one stored field to you; prefer existing protected authenticated integrations when available. Retrieved values reach your model provider, transcripts and subsequent tool arguments. Retrieval does not authorize actions: stay within the user’s task. store (title, group?, username?, password, url?, notes?) creates a credential you already hold, never overwrites or echoes it. update (path, uuid?, then any of title, group, username, password, url, notes) changes an existing entry in place: use it when you rotate a credential or correct its details; group moves it to an existing group. recycle (path, uuid?) moves an entry to the Recycle Bin, where a person can restore it; only a person deletes forever. request (title, group?, username?, url?, notes?, reason) asks the person for a missing credential and tells this session when filled. No Vault approval tiers or standing grants. Change or remove only what the user’s task calls for',
 			input: Type.Object(
 				{
-					action: Lit(['list', 'get', 'retrieve', 'store', 'request']),
+					action: Lit(['list', 'get', 'retrieve', 'store', 'update', 'recycle', 'request']),
 					path: Type.Optional(Path),
 					uuid: Type.Optional(Uuid),
 					field: Type.Optional(Lit(FIELDS)),
 					group: Type.Optional(
 						Text(
 							1024,
-							'list: only under this group · store/request: the group (created if missing)'
+							'list: only under this group · store/request: the group (created if missing) · update: move to this existing group'
 						)
 					),
 					search: Type.Optional(Text(200, 'list: text in a path, username or URL')),
-					title: Type.Optional(Text(240, 'store/request: the entry title')),
-					username: Type.Optional(Text(1000, 'store/request')),
-					password: Type.Optional(Text(10_000, 'store: the password you already hold')),
-					url: Type.Optional(Text(2000, 'store/request')),
-					notes: Type.Optional(Text(20_000, 'store/request: what it is for; never a secret')),
+					title: Type.Optional(Text(240, 'store/request: the entry title · update: the new title')),
+					username: Type.Optional(Text(1000, 'store/request/update')),
+					password: Type.Optional(Text(10_000, 'store: the password you already hold · update: the new password')),
+					url: Type.Optional(Text(2000, 'store/request/update')),
+					notes: Type.Optional(Text(20_000, 'store/request/update: what it is for; never a secret')),
 					reason: Type.Optional(Text(500, 'request: one line on why you need it'))
 				},
 				{ additionalProperties: false }

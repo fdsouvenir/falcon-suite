@@ -23,9 +23,11 @@ they already hold, and ask for missing ones.
 - A SecretRef **resolver**, declared by the plugin, so `openclaw.json` holds no file path.
 
 Agents get one tool, `falcon_vault`: `list`, `get`, `store` (a credential the agent already holds,
-create-only, never echoed back) and `request` (ask you for one). `retrieve` (path, optional field, optional uuid for duplicate paths) immediately returns one field,
+create-only, never echoed back), `update` (change an existing entry's fields in place, or move it to
+another group, for example after rotating a credential), `recycle` (move an entry to the Recycle
+Bin) and `request` (ask you for one). `retrieve` (path, optional field, optional uuid for duplicate paths) immediately returns one field,
 Password by default, from the same database. There are no Vault approval tiers, prompts or standing
-grants. Agents cannot edit, move or remove entries.
+grants. Only a person deletes forever, restores from the Recycle Bin, fills Requests or changes groups.
 
 Prefer an existing protected authenticated integration when available. Retrieval works independently
 of the SecretRef subprocess, including when the host's executable-ownership policy blocks that path.

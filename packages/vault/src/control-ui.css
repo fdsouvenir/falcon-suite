@@ -159,13 +159,13 @@
 /* Tree | list | pane */
 .fv-body {
 	display: grid;
-	grid-template-columns: 220px minmax(0, 1fr);
+	grid-template-columns: 240px minmax(0, 1fr);
 	gap: var(--space-6);
 	align-items: stretch;
 	min-height: calc(100vh - 220px);
 }
 .fv-body.has-pane {
-	grid-template-columns: 220px minmax(0, 1fr) minmax(340px, 400px);
+	grid-template-columns: 240px minmax(0, 1fr) minmax(340px, 400px);
 }
 .fv-main {
 	display: flex;
@@ -178,6 +178,7 @@
 .fv-side {
 	display: flex;
 	flex-direction: column;
+	min-width: 0;
 }
 
 /* Group tree */
@@ -191,6 +192,8 @@
 .fv-tree-top,
 .fv-tree-groups {
 	display: grid;
+	/* One track no wider than the sidebar: a long group name truncates instead of widening every row. */
+	grid-template-columns: minmax(0, 1fr);
 	gap: 2px;
 }
 .fv-tree-top {
@@ -205,10 +208,12 @@
 	position: relative;
 	display: flex;
 	align-items: center;
+	min-width: 0;
 	border-radius: var(--radius-sm);
 }
 .fv-tree-children {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 2px;
 	margin-left: calc(var(--space-2) + 9px);
 	padding-left: var(--space-2);
@@ -237,11 +242,13 @@
 }
 .fv-tree-name {
 	flex: 1;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 .fv-tree-count {
+	flex: none;
 	color: var(--muted);
 	font-family: var(--mono);
 	font-size: var(--control-ui-text-xs);
@@ -266,6 +273,7 @@
 	cursor: pointer;
 }
 .fv-tree-row .fv-menu-btn {
+	flex: none;
 	width: 24px;
 	height: 24px;
 	margin-right: var(--space-1);

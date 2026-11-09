@@ -205,7 +205,64 @@ test('retrieve supplies only the requested field and records trusted context wit
 	assert.doesNotMatch(JSON.stringify(events), /SECRET/);
 });
 
-test('store is create-only and never overwrites; the agent cannot change or remove entries', async () => {
+test('an agent updates an entry in place and recycles it; only a person deletes forever', async () => {
+	const { call, ui } = await started(ENTRIES);
+	const up = await call({ action: 'update', path: 'Home-Assistant', password: 'rotated-SECRET' });
+	assert.equal(up.outcome, 'committed');
+	assert.equal(up.path, 'Home-Assistant');
+	assert.doesNotMatch(JSON.stringify(up), /SECRET/);
+	assert.equal(
+		(await call({ action: 'retrieve', path: 'Home-Assistant' })).value,
+		'rotated-SECRET'
+	);
+	const moved = await call({
+		action: 'update',
+		path: 'Home-Assistant',
+		group: 'Providers',
+		title: 'home-assistant',
+		username: 'ha-bot'
+	});
+	assert.equal(moved.path, 'Providers/home-assistant');
+	assert.equal((await call({ action: 'get', path: 'Providers/home-assistant' })).username, 'ha-bot');
+	assert.equal((await call({ action: 'update', path: 'Providers/home-assistant' })).code, 'invalid_input');
+	assert.equal(
+		(await call({ action: 'update', path: 'Channels/telegram', group: 'Missing' })).code,
+		'not_found'
+	);
+	assert.equal(
+		(await call({ action: 'update', path: 'Channels/telegram', title: 'google-gemini', group: 'Providers' })).code,
+		'exists'
+	);
+
+	const gone = await call({ action: 'recycle', path: 'Providers/home-assistant' });
+	assert.equal(gone.outcome, 'committed');
+	assert.equal((await call({ action: 'get', path: 'Providers/home-assistant' })).code, 'not_found');
+	const bin = await ui('browse', { view: 'list', scope: 'recycle' });
+	assert.deepEqual(
+		bin.entries.map((e) => [e.title, e.from]),
+		[['home-assistant', 'Providers']]
+	);
+	const binPath = bin.entries[0].path;
+	assert.equal((await call({ action: 'recycle', path: binPath })).code, 'invalid_input');
+	assert.equal(
+		(await call({ action: 'update', path: binPath, password: 'x' })).code,
+		'not_found',
+		'an agent cannot change what is in the Recycle Bin'
+	);
+	assert.equal(
+		(await call({ action: 'update', path: 'Channels/telegram', group: 'Recycle Bin' })).code,
+		'invalid_input',
+		'update does not recycle'
+	);
+	await assert.rejects(call({ action: 'delete_forever', path: binPath }));
+
+	const { events } = await ui('browse', { view: 'history', actor: 'agent:verl' });
+	assert.ok(events.some((e) => e.action === 'edit_entry' && e.outcome === 'ok'));
+	assert.ok(events.some((e) => e.action === 'recycle_entry' && e.outcome === 'ok'));
+	assert.doesNotMatch(JSON.stringify(events), /SECRET/);
+});
+
+test('store is create-only and never overwrites', async () => {
 	const { call, ui } = await started(ENTRIES);
 	const r = await call({ action: 'store', title: 'Home-Assistant', password: 'replacement' });
 	assert.equal(r.outcome, 'rejected');

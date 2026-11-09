@@ -261,18 +261,30 @@ export class VaultOps {
 		});
 	}
 
-	/** Edit any field, rename (title) or move (group), in one write. A person's action. */
-	update(actor: Actor, at: { path: string; uuid?: string }, f: EntryFields, key?: string) {
+	/**
+	 * Edit any field, rename (title) or move (group), in one write. A person's action, and an
+	 * agent's `update` (`live`: the entry must be outside the Recycle Bin and stay out of it).
+	 */
+	update(
+		actor: Actor,
+		at: { path: string; uuid?: string },
+		f: EntryFields,
+		key?: string,
+		opts: { live?: boolean } = {}
+	) {
 		return this.attempt(actor, 'edit_entry', at.path, key, async () => {
 			checkFields(f);
 			const changed = await this.vault.change((db) => {
 				const e = entryAt(db, at.path, at.uuid);
+				if (opts.live && inRecycleBin(db, e)) reject('not_found', `No entry at ${at.path}`);
 				const title = f.title !== undefined ? checkName(f.title, 'Title') : fieldText(e, 'Title');
 				const groupPathNow = e.parentGroup ? groupPath(db, e.parentGroup) : '';
 				const group = f.group ?? groupPathNow;
 				if (f.group !== undefined && f.group !== '') {
 					for (const n of f.group.split('/')) checkName(n, 'Group name');
 					if (!hasGroupAt(db, f.group)) reject('not_found', `No group ${f.group}`);
+					if (opts.live && inRecycleBin(db, groupAt(db, f.group)))
+						reject('invalid_input', 'Use recycle to move an entry to the Recycle Bin');
 				}
 				const to = joinPath(group, title);
 				if (to !== at.path && hasEntryAt(db, to))

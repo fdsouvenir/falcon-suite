@@ -182,6 +182,25 @@ const feature = defineFeaturePlugin({
 						);
 						return committed(r);
 					}
+					case 'update': {
+						if (!i.path) return invalid('update: give the entry path');
+						if (i.reason) return invalid('update: reason is for request');
+						const given = { ...fields, password: i.password };
+						if (Object.values(given).every((v) => v === undefined))
+							return invalid('update: give at least one field to change');
+						// The result names the path, the changed field names and the Reference; never a value.
+						return committed(
+							await ops.update(actor, { path: i.path, uuid: i.uuid }, given, keyFor(context), {
+								live: true
+							})
+						);
+					}
+					case 'recycle':
+						if (!i.path) return invalid('recycle: give the entry path');
+						// Reversible: a person restores it from the Recycle Bin; only a person deletes forever.
+						return committed(
+							await ops.recycle(actor, { path: i.path, uuid: i.uuid }, keyFor(context))
+						);
 					case 'request': {
 						if (!i.title) return invalid('request: give a title');
 						if (i.password)

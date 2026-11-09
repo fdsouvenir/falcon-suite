@@ -9,6 +9,8 @@ Settled before drafting (Fred, 2026-10-08):
    when an integration already supports them. No approval tiers or executor grants, one entry kind.
 3. Kept from 4.4: audit history, group management, an agent tool. Recovery snapshots are out.
 4. Agents may store a password they chose themselves: create-only, never overwriting (§7).
+   Revised 2026-11-09 (Fred): agents may also update an entry in place and move it to the Recycle
+   Bin (§7); deleting forever stays with a person.
 5. The plugin reads and writes the database itself with a JavaScript KDBX library. `keepassxc-cli`
    is not a prerequisite, and agents use the `falcon_vault` tool, not the CLI. Installing the
    plugin is the whole install.
@@ -161,11 +163,18 @@ One tool, `falcon_vault`, with these actions:
 - `store` — create a new entry with Title, UserName, **Password**, URL and Notes, for a credential
   the agent already holds (for example, one it chose when signing up for a service). Create-only: it
   fails if the path exists. The result confirms the path and Reference, never the value.
+- `update` — change an existing entry in place: any of Title, UserName, **Password**, URL and Notes,
+  or move it to an existing group. For a credential the agent rotated or whose details changed. The
+  path must name a live entry (not one in the Recycle Bin), a rename or move fails if the new path
+  exists, and the result confirms the path and Reference, never a value. Recorded as `edit_entry`.
+- `recycle` — move an entry to the Recycle Bin, as the Vault tab's Remove does. A person can restore
+  it; only a person deletes forever. Recorded as `recycle_entry`.
 - `request` — create an entry with Title, UserName, URL and Notes but **no password**, plus a
   one-line reason, for a credential only the person has. The Vault tab shows it under **Needs a
   value** until a person fills in the password. Never overwrites an existing path.
 
-An agent cannot edit, move, rename or remove entries, and cannot change a password once stored.
+An agent cannot delete forever, restore from the Recycle Bin, fill or dismiss Requests, or change
+groups: those stay with a person in the Vault tab.
 
 ## 8. Audit history
 

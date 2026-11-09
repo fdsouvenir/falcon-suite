@@ -139,7 +139,7 @@ export function tree(c: Ctx, onPick: () => void = () => {}) {
 				},
 				opts.dot ? h('span', { class: 'fv-dot fv-dot-accent', 'aria-hidden': 'true' }) : null,
 				opts.iconName ? icon(opts.iconName, 14) : null,
-				h('span', { class: 'fv-tree-name' }, opts.label),
+				h('span', { class: 'fv-tree-name', title: opts.label }, opts.label),
 				opts.count >= 0 ? h('span', { class: 'fv-tree-count' }, String(opts.count)) : null
 			),
 			opts.menu ?? null
