@@ -22,6 +22,7 @@ const ACTIONS = [
 	['request', 'Asked for a value'],
 	['fill_request', 'Filled in'],
 	['dismiss_request', 'Request dismissed'],
+	['withdraw_request', 'Request withdrawn'],
 	['create_entry', 'Created'],
 	['edit_entry', 'Edited'],
 	['restore_version', 'Previous version restored'],

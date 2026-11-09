@@ -430,3 +430,40 @@ test("a person undoes an agent's update from Previous versions; agents cannot re
 		['retrieve', 'restore_version', 'reveal', 'edit_entry']
 	);
 });
+
+test('an agent withdraws a Request; the asking agent is told when another agent withdraws it', async () => {
+	const { call, ui, told } = await started(ENTRIES);
+	const ask = (title, agent) =>
+		call(
+			{ action: 'request', group: 'Cloudflare', title, reason: 'needs a token' },
+			agent,
+			`agent:${agent}:main`
+		);
+	assert.equal((await ask('creator-a', 'verl')).outcome, 'committed');
+	assert.equal((await ask('creator-b', 'ricky')).outcome, 'committed');
+	assert.equal((await ui('browse', { view: 'overview' })).needs, 2);
+
+	assert.equal(
+		(await call({ action: 'withdraw', path: 'Cloudflare/creator-a' })).outcome,
+		'committed'
+	);
+	assert.equal(told.length, 0, 'withdrawing your own Request tells no one');
+	assert.equal(
+		(await call({ action: 'withdraw', path: 'Cloudflare/creator-b' })).outcome,
+		'committed'
+	);
+	assert.equal(told.length, 1);
+	assert.equal(told[0].sessionKey, 'agent:ricky:main');
+	assert.match(told[0].text, /withdrawn by agent:verl/);
+	assert.equal((await ui('browse', { view: 'overview' })).needs, 0);
+	const bin = await ui('browse', { view: 'list', scope: 'recycle' });
+	assert.deepEqual(bin.entries.map((e) => e.title).sort(), ['creator-a', 'creator-b']);
+
+	assert.equal(
+		(await call({ action: 'withdraw', path: 'Channels/telegram' })).code,
+		'not_found',
+		'only an open Request can be withdrawn'
+	);
+	const { events } = await ui('browse', { view: 'history', action: 'withdraw_request' });
+	assert.equal(events.filter((e) => e.outcome === 'ok').length, 2);
+});

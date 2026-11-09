@@ -201,6 +201,21 @@ const feature = defineFeaturePlugin({
 						return committed(
 							await ops.recycle(actor, { path: i.path, uuid: i.uuid }, keyFor(context))
 						);
+					case 'withdraw': {
+						if (!i.path) return invalid('withdraw: give the path of the Request');
+						const { result, request } = await ops.withdraw(
+							actor,
+							{ path: i.path, uuid: i.uuid },
+							keyFor(context)
+						);
+						// Another agent's Request: tell the agent that asked, never silently.
+						if (result.outcome === 'committed' && request && request.actor !== actor)
+							tell(
+								request,
+								`Falcon Vault: your request for ${i.path} was withdrawn by ${actor}; it will not be filled.`
+							);
+						return committed(result);
+					}
 					case 'request': {
 						if (!i.title) return invalid('request: give a title');
 						if (i.password)

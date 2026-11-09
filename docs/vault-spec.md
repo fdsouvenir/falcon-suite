@@ -172,6 +172,10 @@ One tool, `falcon_vault`, with these actions:
 - `request` — create an entry with Title, UserName, URL and Notes but **no password**, plus a
   one-line reason, for a credential only the person has. The Vault tab shows it under **Needs a
   value** until a person fills in the password. Never overwrites an existing path.
+- `withdraw` — take back an open Request that is no longer needed, before it is filled. Any agent
+  may withdraw one (for example a duplicate another agent made); if it was another agent's, that
+  agent's session is told. It moves to the Recycle Bin, as a person's Dismiss does, and is recorded
+  as `withdraw_request`. A filled entry is not a Request: use `recycle`.
 
 An agent cannot delete forever, restore from the Recycle Bin, fill or dismiss Requests, or change
 groups: those stay with a person in the Vault tab.

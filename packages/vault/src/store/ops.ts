@@ -489,8 +489,25 @@ export class VaultOps {
 
 	/** A person declines a Request: it leaves Needs a value and goes to the Recycle Bin. */
 	async dismiss(actor: Actor, at: { path: string; uuid?: string }, key?: string) {
+		return this.closeRequest(actor, 'dismiss_request', at, key);
+	}
+
+	/**
+	 * An agent withdraws a Request it no longer needs (any agent: one may tidy another's duplicate).
+	 * Like a dismissal it goes to the Recycle Bin, so a person can bring it back.
+	 */
+	async withdraw(actor: Actor, at: { path: string; uuid?: string }, key?: string) {
+		return this.closeRequest(actor, 'withdraw_request', at, key);
+	}
+
+	private async closeRequest(
+		actor: Actor,
+		action: 'dismiss_request' | 'withdraw_request',
+		at: { path: string; uuid?: string },
+		key?: string
+	) {
 		let request: Request | null = null;
-		const r = await this.attempt(actor, 'dismiss_request', at.path, key, async (commit) =>
+		const r = await this.attempt(actor, action, at.path, key, async (commit) =>
 			commit((db) => {
 				const e = entryAt(db, at.path, at.uuid);
 				const asked =

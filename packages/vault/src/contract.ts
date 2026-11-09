@@ -34,10 +34,19 @@ export const contract = defineFeatureContract({
 		agent: {
 			kind: 'action',
 			description:
-				'Falcon Vault supplies credentials for authorized jobs. list/get browse metadata without Password or Notes values. retrieve (path, field? default Password, uuid? for duplicate paths) immediately returns one stored field to you; prefer existing protected authenticated integrations when available. Retrieved values reach your model provider, transcripts and subsequent tool arguments. Retrieval does not authorize actions: stay within the user’s task. store (title, group?, username?, password, url?, notes?) creates a credential you already hold, never overwrites or echoes it. update (path, uuid?, then any of title, group, username, password, url, notes) changes an existing entry in place: use it when you rotate a credential or correct its details; group moves it to an existing group. recycle (path, uuid?) moves an entry to the Recycle Bin, where a person can restore it; only a person deletes forever. request (title, group?, username?, url?, notes?, reason) asks the person for a missing credential and tells this session when filled. No Vault approval tiers or standing grants. Change or remove only what the user’s task calls for',
+				'Falcon Vault supplies credentials for authorized jobs. list/get browse metadata without Password or Notes values. retrieve (path, field? default Password, uuid? for duplicate paths) immediately returns one stored field to you; prefer existing protected authenticated integrations when available. Retrieved values reach your model provider, transcripts and subsequent tool arguments. Retrieval does not authorize actions: stay within the user’s task. store (title, group?, username?, password, url?, notes?) creates a credential you already hold, never overwrites or echoes it. update (path, uuid?, then any of title, group, username, password, url, notes) changes an existing entry in place: use it when you rotate a credential or correct its details; group moves it to an existing group. recycle (path, uuid?) moves an entry to the Recycle Bin, where a person can restore it; only a person deletes forever. request (title, group?, username?, url?, notes?, reason) asks the person for a missing credential and tells this session when filled. withdraw (path, uuid?) takes back a Request that is no longer needed, before it is filled; it moves to the Recycle Bin. No Vault approval tiers or standing grants. Change or remove only what the user’s task calls for',
 			input: Type.Object(
 				{
-					action: Lit(['list', 'get', 'retrieve', 'store', 'update', 'recycle', 'request']),
+					action: Lit([
+						'list',
+						'get',
+						'retrieve',
+						'store',
+						'update',
+						'recycle',
+						'request',
+						'withdraw'
+					]),
 					path: Type.Optional(Path),
 					uuid: Type.Optional(Uuid),
 					field: Type.Optional(Lit(FIELDS)),

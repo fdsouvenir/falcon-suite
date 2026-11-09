@@ -26,6 +26,7 @@ export function historyLine(ev: { actor: string; action: string; outcome: string
 			request: 'asked for a value',
 			fill_request: 'filled in the password',
 			dismiss_request: 'dismissed the request',
+			withdraw_request: 'withdrew the request',
 			reveal: d.version_of ? `revealed an earlier ${field}` : `revealed ${field}`,
 			copy: d.version_of ? `copied an earlier ${field}` : `copied ${field}`,
 			restore_version: fields.length

@@ -151,13 +151,13 @@ export class Audit {
 	}
 
 	/**
-	 * Requests not yet filled or dismissed, by path. Whether the entry still exists and still has
+	 * Requests not yet filled, dismissed or withdrawn, by path. Whether the entry still exists and still has
 	 * no password is for the caller to check against the database.
 	 */
 	openRequests(): Map<string, Request> {
 		const rows = this.db
 			.prepare(
-				`SELECT * FROM events WHERE outcome = 'ok' AND action IN ('request', 'fill_request', 'dismiss_request', 'store', 'create_entry') ORDER BY id`
+				`SELECT * FROM events WHERE outcome = 'ok' AND action IN ('request', 'fill_request', 'dismiss_request', 'withdraw_request', 'store', 'create_entry') ORDER BY id`
 			)
 			.all() as Row[];
 		const open = new Map<string, Request>();
