@@ -223,14 +223,27 @@ test('an agent updates an entry in place and recycles it; only a person deletes 
 		username: 'ha-bot'
 	});
 	assert.equal(moved.path, 'Providers/home-assistant');
-	assert.equal((await call({ action: 'get', path: 'Providers/home-assistant' })).username, 'ha-bot');
-	assert.equal((await call({ action: 'update', path: 'Providers/home-assistant' })).code, 'invalid_input');
+	assert.equal(
+		(await call({ action: 'get', path: 'Providers/home-assistant' })).username,
+		'ha-bot'
+	);
+	assert.equal(
+		(await call({ action: 'update', path: 'Providers/home-assistant' })).code,
+		'invalid_input'
+	);
 	assert.equal(
 		(await call({ action: 'update', path: 'Channels/telegram', group: 'Missing' })).code,
 		'not_found'
 	);
 	assert.equal(
-		(await call({ action: 'update', path: 'Channels/telegram', title: 'google-gemini', group: 'Providers' })).code,
+		(
+			await call({
+				action: 'update',
+				path: 'Channels/telegram',
+				title: 'google-gemini',
+				group: 'Providers'
+			})
+		).code,
 		'exists'
 	);
 

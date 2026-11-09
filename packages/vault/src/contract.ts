@@ -49,9 +49,13 @@ export const contract = defineFeatureContract({
 					search: Type.Optional(Text(200, 'list: text in a path, username or URL')),
 					title: Type.Optional(Text(240, 'store/request: the entry title · update: the new title')),
 					username: Type.Optional(Text(1000, 'store/request/update')),
-					password: Type.Optional(Text(10_000, 'store: the password you already hold · update: the new password')),
+					password: Type.Optional(
+						Text(10_000, 'store: the password you already hold · update: the new password')
+					),
 					url: Type.Optional(Text(2000, 'store/request/update')),
-					notes: Type.Optional(Text(20_000, 'store/request/update: what it is for; never a secret')),
+					notes: Type.Optional(
+						Text(20_000, 'store/request/update: what it is for; never a secret')
+					),
 					reason: Type.Optional(Text(500, 'request: one line on why you need it'))
 				},
 				{ additionalProperties: false }
