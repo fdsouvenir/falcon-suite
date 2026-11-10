@@ -168,7 +168,9 @@ One tool, `falcon_vault`, with these actions:
   path must name a live entry (not one in the Recycle Bin), a rename or move fails if the new path
   exists, and the result confirms the path and Reference, never a value. Recorded as `edit_entry`.
 - `recycle` — move an entry to the Recycle Bin, as the Vault tab's Remove does. A person can restore
-  it; only a person deletes forever. Recorded as `recycle_entry`.
+  it; only a person deletes forever. Recorded as `recycle_entry`. An agent's removal is always
+  recoverable: when the database has no Recycle Bin (KeePassXC would delete for good), `recycle` and
+  `withdraw` are refused and nothing changes.
 - `request` — create an entry with Title, UserName, URL and Notes but **no password**, plus a
   one-line reason, for a credential only the person has. The Vault tab shows it under **Needs a
   value** until a person fills in the password. Never overwrites an existing path.

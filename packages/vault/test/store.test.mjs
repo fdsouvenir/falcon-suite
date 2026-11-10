@@ -480,3 +480,25 @@ test('History for a group covers everything in it, at any depth, and nothing tha
 		['Cloudflare/Access/b', 'Cloudflare/a']
 	);
 });
+
+test('without a Recycle Bin an agent cannot remove anything; a person still can, for good', async () => {
+	const dir = tempState();
+	await externalDatabase(dir, [
+		['', 'k', { Password: 'p' }],
+		['', 'person-k', { Password: 'p' }]
+	]);
+	const outside = await openOutside(dir);
+	outside.meta.recycleBinEnabled = false;
+	writeFileSync(join(dir, 'passwords.kdbx'), new Uint8Array(await outside.save()));
+	const ops = await openOps(dir);
+	const before = sha(join(dir, 'passwords.kdbx'));
+	const r = await ops.recycle(VERL, { path: 'k' });
+	assert.equal(r.outcome, 'rejected');
+	assert.match(r.reason, /no Recycle Bin/);
+	assert.equal(sha(join(dir, 'passwords.kdbx')), before, 'nothing changed');
+	ok(await ops.request(VERL, { title: 'wanted', reason: 'r' }));
+	assert.equal((await ops.withdraw(VERL, { path: 'wanted' })).result.code, 'invalid_input');
+	assert.ok((await onDisk(dir)).wanted, 'the Request stays');
+	ok(await ops.recycle(FRED, { path: 'person-k' }));
+	assert.equal((await onDisk(dir))['person-k'], undefined);
+});
