@@ -121,6 +121,25 @@ export function historyView(c: Ctx, events: HistoryEvent[], older: (() => void) 
 			filter('ha', 'Actor', 'Actor, e.g. agent:verl, resolver'),
 			action
 		),
+		p.hg
+			? h(
+					'p',
+					{ class: 'fv-history-scope fv-small' },
+					h('span', { class: 'fv-muted' }, 'In '),
+					h('span', { class: 'fv-mono' }, shownPath(p.hg)),
+					h('span', { class: 'fv-muted' }, ' and everything in it'),
+					' ',
+					h(
+						'a',
+						{
+							class: 'fv-link',
+							href: c.href({ ...p, hg: undefined }),
+							on: { click: (e: Event) => (e.preventDefault(), c.go({ ...p, hg: undefined })) }
+						},
+						'Show everything'
+					)
+				)
+			: null,
 		p.hu
 			? h(
 					'p',

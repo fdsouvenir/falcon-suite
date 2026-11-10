@@ -270,6 +270,7 @@ const feature = defineFeaturePlugin({
 								path: input.path,
 								entry: input.entry,
 								match: input.match,
+								under: input.under,
 								actor: input.actor,
 								action: input.action,
 								before: input.before,

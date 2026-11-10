@@ -210,6 +210,32 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 				},
 				'New group'
 			),
+			// History from any page, for what is on it: the open entry, the group, or everything.
+			h(
+				'button',
+				{
+					class: 'fv-btn fv-btn-quiet fv-history-btn',
+					type: 'button',
+					title: 'History of what this page shows',
+					'aria-label': 'History',
+					on: {
+						click: () => {
+							if (!overview) return;
+							const p = context.props;
+							if (p.v === 'history') return;
+							ctx().go(
+								p.e && detail
+									? { v: 'history', hu: detail.uuid }
+									: p.g && !p.v && !p.q
+										? { v: 'history', hg: p.g }
+										: { v: 'history' }
+							);
+						}
+					}
+				},
+				icon('history', 16),
+				h('span', { class: 'fv-desktop-inline' }, 'History')
+			),
 			h(
 				'button',
 				{
@@ -290,6 +316,7 @@ export function mountVault(container: HTMLElement, first: ControlUiViewContext) 
 			limit: HISTORY_PAGE,
 			...(p.hp ? { match: p.hp } : {}),
 			...(p.hu ? { entry: p.hu } : {}),
+			...(p.hg ? { under: p.hg } : {}),
 			...(p.ha ? { actor: p.ha } : {}),
 			...(p.hx ? { action: p.hx } : {}),
 			...(before ? { before } : {})

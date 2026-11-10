@@ -195,7 +195,8 @@ agents.
 - There is no retention limit in 5.0.
 - **One place for everything:** the History view lists every Event, newest first, with older pages
   on request. It narrows by text anywhere in the path (a folder such as `Cloudflare`, or an entry),
-  by one entry, by actor and by action. The group tree keeps History and the Recycle Bin in view.
+  by one entry, by actor and by action. The group tree keeps History and the Recycle Bin in view, and every page's header has a History
+  button for what the page shows: the open entry, the group and everything in it, or the whole Vault.
 - **History follows the entry:** Events about an entry record its UUID, so its History survives
   renames and moves. Events from before this was recorded are matched by path.
 - **Agent changes are strict:** an agent's change and its Event stand or fall together. The Event

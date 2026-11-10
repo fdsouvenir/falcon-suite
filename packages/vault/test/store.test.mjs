@@ -467,3 +467,16 @@ test("an agent's change does not stand without its History row; a person's does"
 	ok(await ops.update(FRED, { path: 'k' }, { password: 'three' }));
 	assert.equal((await onDisk(dir)).k.Password, 'three');
 });
+
+test('History for a group covers everything in it, at any depth, and nothing that only shares a prefix', async () => {
+	const dir = tempState();
+	const ops = await openOps(dir);
+	ok(await ops.create(FRED, { group: 'Cloudflare', title: 'a', password: 'p' }));
+	ok(await ops.create(FRED, { group: 'Cloudflare/Access', title: 'b', password: 'p' }));
+	ok(await ops.create(FRED, { group: 'Cloudflare Old', title: 'c', password: 'p' }));
+	ok(await ops.create(FRED, { group: 'Slack', title: 'Cloudflare alerts', password: 'p' }));
+	assert.deepEqual(
+		ops.history({ under: 'Cloudflare' }).map((e) => e.path),
+		['Cloudflare/Access/b', 'Cloudflare/a']
+	);
+});

@@ -32,6 +32,8 @@ export type HistoryFilter = {
 	path?: string;
 	entry?: string;
 	match?: string;
+	/** A group: events for it and for everything in it, at any depth. */
+	under?: string;
 	actor?: string;
 	action?: string;
 	before?: number;
@@ -126,7 +128,8 @@ export class Audit {
 	}
 
 	/**
-	 * Newest first, filtered by path (exact), match (text anywhere in the path), actor or action.
+	 * Newest first, filtered by path (exact), match (text anywhere in the path), under (a group and
+	 * everything in it), actor or action.
 	 * `entry` (a UUID) follows one entry through renames and moves; rows written before entries
 	 * were recorded by UUID fall back to `path`.
 	 */
@@ -139,6 +142,9 @@ export class Audit {
 			args.push(f.entry, ...(f.path ? [f.path] : []));
 		} else if (f.path) (where.push('path = ?'), args.push(f.path));
 		if (f.match) (where.push('instr(lower(path), lower(?)) > 0'), args.push(f.match));
+		if (f.under)
+			(where.push('(path = ? OR substr(path, 1, ?) = ?)'),
+				args.push(f.under, f.under.length + 1, `${f.under}/`));
 		if (f.actor) (where.push('actor = ?'), args.push(f.actor));
 		if (f.action) (where.push('action = ?'), args.push(f.action));
 		if (f.before) (where.push('id < ?'), args.push(f.before));

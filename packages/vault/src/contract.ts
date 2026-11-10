@@ -76,7 +76,7 @@ export const contract = defineFeatureContract({
 		browse: {
 			kind: 'query',
 			description:
-				'The Vault tab: overview (group tree and counts) · list (group, scope, search) · entry (path; with previous versions) · history (path, entry, match, actor, action, before).',
+				'The Vault tab: overview (group tree and counts) · list (group, scope, search) · entry (path; with previous versions) · history (path, entry, match, under, actor, action, before).',
 			input: Type.Object(
 				{
 					view: Lit(['overview', 'list', 'entry', 'history']),
@@ -88,6 +88,9 @@ export const contract = defineFeatureContract({
 					entry: Type.Optional(Type.String({ maxLength: 64, ...d('history: one entry by UUID') })),
 					match: Type.Optional(
 						Type.String({ maxLength: 1024, ...d('history: text anywhere in the path') })
+					),
+					under: Type.Optional(
+						Type.String({ maxLength: 1024, ...d('history: a group and everything in it') })
 					),
 					actor: Type.Optional(Type.String({ maxLength: 200 })),
 					action: Type.Optional(Type.String({ maxLength: 64 })),
