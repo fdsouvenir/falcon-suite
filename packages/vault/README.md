@@ -18,14 +18,19 @@ they already hold, and ask for missing ones.
 - **Needs a value** — credentials your agents asked for. Fill one in and the agent's session is
   told it is ready (never the value).
 - **Recycle Bin**, as in KeePassXC: removing an entry is undone by moving it back.
-- **History** of every operation and every read by OpenClaw: who, what, which entry, when. Never a
-  value.
+- **History** of every operation and every read by OpenClaw, in one place: who, what, which entry,
+  when, filtered by folder, entry, actor or action. Never a value. An entry's history follows it
+  through renames and moves, and an agent's change is undone if its History row cannot be written.
+- **Previous versions**, as in KeePassXC: every change keeps the entry as it was (the last 10 by
+  default). Reveal an earlier password, or restore a version in one click.
 - A SecretRef **resolver**, declared by the plugin, so `openclaw.json` holds no file path.
 
 Agents get one tool, `falcon_vault`: `list`, `get`, `store` (a credential the agent already holds,
-create-only, never echoed back) and `request` (ask you for one). `retrieve` (path, optional field, optional uuid for duplicate paths) immediately returns one field,
+create-only, never echoed back), `update` (change an existing entry's fields in place, or move it to
+another group, for example after rotating a credential), `recycle` (move an entry to the Recycle
+Bin), `request` (ask you for one) and `withdraw` (take back a request that is no longer needed). `retrieve` (path, optional field, optional uuid for duplicate paths) immediately returns one field,
 Password by default, from the same database. There are no Vault approval tiers, prompts or standing
-grants. Agents cannot edit, move or remove entries.
+grants. Only a person deletes forever, restores from the Recycle Bin, fills Requests or changes groups.
 
 Prefer an existing protected authenticated integration when available. Retrieval works independently
 of the SecretRef subprocess, including when the host's executable-ownership policy blocks that path.

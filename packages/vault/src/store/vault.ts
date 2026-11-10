@@ -75,7 +75,7 @@ export class Vault {
 	 * from the database it is given. It should reject (throw a Rejection) before changing anything;
 	 * any other failure drops the loaded copy so nothing half-applied survives.
 	 */
-	change<T>(fn: (db: Kdbx) => T): Promise<T> {
+	change<T>(fn: (db: Kdbx) => T, after?: (result: T) => void): Promise<T> {
 		return this.exclusive(async () => {
 			for (let attempt = 0; attempt < 3; attempt++) {
 				await this.refresh();
@@ -89,13 +89,24 @@ export class Vault {
 					throw error;
 				}
 				// The file on disk must still be the one this change was applied to.
-				if (sha256(this.readFile(this.dbFile)) !== this.loadedHash) {
+				const before = this.readFile(this.dbFile);
+				if (sha256(before) !== this.loadedHash) {
 					this.forget();
 					continue;
 				}
 				replaceFile(this.dbFile, bytes);
 				this.loadedHash = sha256(bytes);
 				this.loadedStamp = fileStamp(this.dbFile);
+				// `after` runs still holding the lock. If it fails, the saved change is undone: the
+				// strict audit for agents (a change with no History row does not stand).
+				if (after)
+					try {
+						after(result);
+					} catch (error) {
+						replaceFile(this.dbFile, before);
+						this.forget();
+						throw error;
+					}
 				return result;
 			}
 			throw new Error('The database kept changing on disk while saving; try again');

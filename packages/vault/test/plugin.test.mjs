@@ -205,7 +205,77 @@ test('retrieve supplies only the requested field and records trusted context wit
 	assert.doesNotMatch(JSON.stringify(events), /SECRET/);
 });
 
-test('store is create-only and never overwrites; the agent cannot change or remove entries', async () => {
+test('an agent updates an entry in place and recycles it; only a person deletes forever', async () => {
+	const { call, ui } = await started(ENTRIES);
+	const up = await call({ action: 'update', path: 'Home-Assistant', password: 'rotated-SECRET' });
+	assert.equal(up.outcome, 'committed');
+	assert.equal(up.path, 'Home-Assistant');
+	assert.doesNotMatch(JSON.stringify(up), /SECRET/);
+	assert.equal(
+		(await call({ action: 'retrieve', path: 'Home-Assistant' })).value,
+		'rotated-SECRET'
+	);
+	const moved = await call({
+		action: 'update',
+		path: 'Home-Assistant',
+		group: 'Providers',
+		title: 'home-assistant',
+		username: 'ha-bot'
+	});
+	assert.equal(moved.path, 'Providers/home-assistant');
+	assert.equal(
+		(await call({ action: 'get', path: 'Providers/home-assistant' })).username,
+		'ha-bot'
+	);
+	assert.equal(
+		(await call({ action: 'update', path: 'Providers/home-assistant' })).code,
+		'invalid_input'
+	);
+	assert.equal(
+		(await call({ action: 'update', path: 'Channels/telegram', group: 'Missing' })).code,
+		'not_found'
+	);
+	assert.equal(
+		(
+			await call({
+				action: 'update',
+				path: 'Channels/telegram',
+				title: 'google-gemini',
+				group: 'Providers'
+			})
+		).code,
+		'exists'
+	);
+
+	const gone = await call({ action: 'recycle', path: 'Providers/home-assistant' });
+	assert.equal(gone.outcome, 'committed');
+	assert.equal((await call({ action: 'get', path: 'Providers/home-assistant' })).code, 'not_found');
+	const bin = await ui('browse', { view: 'list', scope: 'recycle' });
+	assert.deepEqual(
+		bin.entries.map((e) => [e.title, e.from]),
+		[['home-assistant', 'Providers']]
+	);
+	const binPath = bin.entries[0].path;
+	assert.equal((await call({ action: 'recycle', path: binPath })).code, 'invalid_input');
+	assert.equal(
+		(await call({ action: 'update', path: binPath, password: 'x' })).code,
+		'not_found',
+		'an agent cannot change what is in the Recycle Bin'
+	);
+	assert.equal(
+		(await call({ action: 'update', path: 'Channels/telegram', group: 'Recycle Bin' })).code,
+		'invalid_input',
+		'update does not recycle'
+	);
+	await assert.rejects(call({ action: 'delete_forever', path: binPath }));
+
+	const { events } = await ui('browse', { view: 'history', actor: 'agent:verl' });
+	assert.ok(events.some((e) => e.action === 'edit_entry' && e.outcome === 'ok'));
+	assert.ok(events.some((e) => e.action === 'recycle_entry' && e.outcome === 'ok'));
+	assert.doesNotMatch(JSON.stringify(events), /SECRET/);
+});
+
+test('store is create-only and never overwrites', async () => {
 	const { call, ui } = await started(ENTRIES);
 	const r = await call({ action: 'store', title: 'Home-Assistant', password: 'replacement' });
 	assert.equal(r.outcome, 'rejected');
@@ -325,4 +395,75 @@ test('when the database cannot open, the tab says why instead of showing an empt
 	});
 	const out = r.result ?? r;
 	assert.match(out.unavailable, /passwords\.kdbx is missing/);
+});
+
+test("a person undoes an agent's update from Previous versions; agents cannot reach versions", async () => {
+	const { call, ui } = await started(ENTRIES);
+	assert.equal(
+		(await call({ action: 'update', path: 'Channels/telegram', password: 'wrong-SECRET' })).outcome,
+		'committed'
+	);
+	const entry = await ui('browse', { view: 'entry', path: 'Channels/telegram' });
+	assert.equal(entry.versions.length, 1);
+	assert.deepEqual(entry.versions[0].changed, ['Password']);
+	assert.doesNotMatch(JSON.stringify(entry), /SECRET/);
+	const was = await ui('reveal', {
+		path: 'Channels/telegram',
+		field: 'Password',
+		purpose: 'reveal',
+		version: 0
+	});
+	assert.equal(was.value, 'tg-SECRET');
+	const back = await ui('edit', {
+		command: 'restore_version',
+		path: 'Channels/telegram',
+		version: 0
+	});
+	assert.equal(back.outcome, 'committed');
+	assert.equal((await call({ action: 'retrieve', path: 'Channels/telegram' })).value, 'tg-SECRET');
+	assert.ok(!('versions' in (await call({ action: 'get', path: 'Channels/telegram' }))));
+	await assert.rejects(call({ action: 'restore_version', path: 'Channels/telegram', version: 0 }));
+	await assert.rejects(call({ action: 'retrieve', path: 'Channels/telegram', version: 0 }));
+	const all = await ui('browse', { view: 'history', match: 'telegram' });
+	assert.deepEqual(
+		all.events.map((e) => e.action),
+		['retrieve', 'restore_version', 'reveal', 'edit_entry']
+	);
+});
+
+test('an agent withdraws a Request; the asking agent is told when another agent withdraws it', async () => {
+	const { call, ui, told } = await started(ENTRIES);
+	const ask = (title, agent) =>
+		call(
+			{ action: 'request', group: 'Cloudflare', title, reason: 'needs a token' },
+			agent,
+			`agent:${agent}:main`
+		);
+	assert.equal((await ask('creator-a', 'verl')).outcome, 'committed');
+	assert.equal((await ask('creator-b', 'ricky')).outcome, 'committed');
+	assert.equal((await ui('browse', { view: 'overview' })).needs, 2);
+
+	assert.equal(
+		(await call({ action: 'withdraw', path: 'Cloudflare/creator-a' })).outcome,
+		'committed'
+	);
+	assert.equal(told.length, 0, 'withdrawing your own Request tells no one');
+	assert.equal(
+		(await call({ action: 'withdraw', path: 'Cloudflare/creator-b' })).outcome,
+		'committed'
+	);
+	assert.equal(told.length, 1);
+	assert.equal(told[0].sessionKey, 'agent:ricky:main');
+	assert.match(told[0].text, /withdrawn by agent:verl/);
+	assert.equal((await ui('browse', { view: 'overview' })).needs, 0);
+	const bin = await ui('browse', { view: 'list', scope: 'recycle' });
+	assert.deepEqual(bin.entries.map((e) => e.title).sort(), ['creator-a', 'creator-b']);
+
+	assert.equal(
+		(await call({ action: 'withdraw', path: 'Channels/telegram' })).code,
+		'not_found',
+		'only an open Request can be withdrawn'
+	);
+	const { events } = await ui('browse', { view: 'history', action: 'withdraw_request' });
+	assert.equal(events.filter((e) => e.outcome === 'ok').length, 2);
 });

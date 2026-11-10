@@ -159,13 +159,13 @@
 /* Tree | list | pane */
 .fv-body {
 	display: grid;
-	grid-template-columns: 220px minmax(0, 1fr);
+	grid-template-columns: 240px minmax(0, 1fr);
 	gap: var(--space-6);
 	align-items: stretch;
 	min-height: calc(100vh - 220px);
 }
 .fv-body.has-pane {
-	grid-template-columns: 220px minmax(0, 1fr) minmax(340px, 400px);
+	grid-template-columns: 240px minmax(0, 1fr) minmax(340px, 400px);
 }
 .fv-main {
 	display: flex;
@@ -176,8 +176,15 @@
 	flex: 1;
 }
 .fv-side {
+	/* The tree stays in view beside a long list, so History and the Recycle Bin are always reachable. */
+	position: sticky;
+	top: var(--space-4);
+	align-self: start;
 	display: flex;
 	flex-direction: column;
+	min-width: 0;
+	max-height: calc(100vh - var(--space-6));
+	overflow-y: auto;
 }
 
 /* Group tree */
@@ -191,13 +198,14 @@
 .fv-tree-top,
 .fv-tree-groups {
 	display: grid;
+	/* One track no wider than the sidebar: a long group name truncates instead of widening every row. */
+	grid-template-columns: minmax(0, 1fr);
 	gap: 2px;
 }
 .fv-tree-top {
 	padding-bottom: var(--space-2);
 }
 .fv-tree-bottom {
-	margin-top: auto;
 	padding-top: var(--space-3);
 	border-top: 1px solid var(--border);
 }
@@ -205,10 +213,12 @@
 	position: relative;
 	display: flex;
 	align-items: center;
+	min-width: 0;
 	border-radius: var(--radius-sm);
 }
 .fv-tree-children {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 2px;
 	margin-left: calc(var(--space-2) + 9px);
 	padding-left: var(--space-2);
@@ -237,11 +247,13 @@
 }
 .fv-tree-name {
 	flex: 1;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 .fv-tree-count {
+	flex: none;
 	color: var(--muted);
 	font-family: var(--mono);
 	font-size: var(--control-ui-text-xs);
@@ -265,7 +277,13 @@
 	color: var(--muted);
 	cursor: pointer;
 }
+/* Rows without a "⋯" menu keep their counts in line with the groups' counts. */
+.fv-tree-top .fv-tree-link,
+.fv-tree-bottom .fv-tree-link {
+	padding-right: calc(24px + var(--space-1) + var(--space-2));
+}
 .fv-tree-row .fv-menu-btn {
+	flex: none;
 	width: 24px;
 	height: 24px;
 	margin-right: var(--space-1);
@@ -1082,4 +1100,54 @@
 	.fv-sheet .fv-menu-btn {
 		opacity: 1;
 	}
+}
+
+/* Previous versions and History links */
+.fv-section-link {
+	margin-left: auto;
+	font-size: var(--control-ui-text-xs);
+	font-weight: 500;
+}
+.fv-versions {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.fv-version {
+	display: grid;
+	gap: var(--space-1);
+	padding: var(--space-2) 0;
+	border-bottom: 1px solid var(--border);
+}
+.fv-version:last-child {
+	border-bottom: 0;
+}
+.fv-version-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+}
+.fv-version-head .fv-btn {
+	margin-left: auto;
+}
+.fv-version-body {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.fv-history-scope {
+	margin: var(--space-2) var(--space-4);
+}
+.fv-history-more {
+	align-self: center;
+	margin-top: var(--space-3);
+}
+.fv-history-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
 }

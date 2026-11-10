@@ -182,6 +182,40 @@ const feature = defineFeaturePlugin({
 						);
 						return committed(r);
 					}
+					case 'update': {
+						if (!i.path) return invalid('update: give the entry path');
+						if (i.reason) return invalid('update: reason is for request');
+						const given = { ...fields, password: i.password };
+						if (Object.values(given).every((v) => v === undefined))
+							return invalid('update: give at least one field to change');
+						// The result names the path, the changed field names and the Reference; never a value.
+						return committed(
+							await ops.update(actor, { path: i.path, uuid: i.uuid }, given, keyFor(context), {
+								live: true
+							})
+						);
+					}
+					case 'recycle':
+						if (!i.path) return invalid('recycle: give the entry path');
+						// Reversible: a person restores it from the Recycle Bin; only a person deletes forever.
+						return committed(
+							await ops.recycle(actor, { path: i.path, uuid: i.uuid }, keyFor(context))
+						);
+					case 'withdraw': {
+						if (!i.path) return invalid('withdraw: give the path of the Request');
+						const { result, request } = await ops.withdraw(
+							actor,
+							{ path: i.path, uuid: i.uuid },
+							keyFor(context)
+						);
+						// Another agent's Request: tell the agent that asked, never silently.
+						if (result.outcome === 'committed' && request && request.actor !== actor)
+							tell(
+								request,
+								`Falcon Vault: your request for ${i.path} was withdrawn by ${actor}; it will not be filled.`
+							);
+						return committed(result);
+					}
 					case 'request': {
 						if (!i.title) return invalid('request: give a title');
 						if (i.password)
@@ -234,6 +268,9 @@ const feature = defineFeaturePlugin({
 						return {
 							events: ops.history({
 								path: input.path,
+								entry: input.entry,
+								match: input.match,
+								under: input.under,
 								actor: input.actor,
 								action: input.action,
 								before: input.before,
@@ -250,7 +287,8 @@ const feature = defineFeaturePlugin({
 					actorFor(context),
 					{ path: input.path, uuid: input.uuid },
 					input.field,
-					input.purpose
+					input.purpose,
+					input.version
 				);
 			},
 
@@ -268,6 +306,9 @@ const feature = defineFeaturePlugin({
 						return needPath() ?? committed(await ops.update(actor, at, f, key));
 					case 'recycle_entry':
 						return needPath() ?? committed(await ops.recycle(actor, at, key));
+					case 'restore_version':
+						if (input.version === undefined) return invalid('restore_version: give the version');
+						return needPath() ?? committed(await ops.restoreVersion(actor, at, input.version, key));
 					case 'delete_forever':
 						return needPath() ?? committed(await ops.deleteForever(actor, at, key));
 					case 'fill_request': {

@@ -374,3 +374,109 @@ test('entries whose paths have spaces have a machine-safe UUID Reference', async
 	assert.equal(e.reference, `entry/${Buffer.from(e.uuid, 'base64').toString('base64url')}`);
 	assert.equal(e.reference_problem, null);
 });
+
+test('every change keeps the entry as it was; a person reveals or restores a previous version', async () => {
+	const dir = tempState();
+	const ops = await openOps(dir);
+	ok(await ops.create(VERL, { group: 'Cloudflare', title: 'creator', password: 'old-SECRET' }));
+	ok(await ops.update(VERL, { path: 'Cloudflare/creator' }, { password: 'bad-SECRET' }));
+	ok(await ops.update(FRED, { path: 'Cloudflare/creator' }, { url: 'https://api.cloudflare.com' }));
+	ok(await ops.update(FRED, { path: 'Cloudflare/creator' }, { url: 'https://api.cloudflare.com' }));
+	let e = await ops.entry('Cloudflare/creator', undefined, {}, 'falcon-vault');
+	assert.equal(e.versions.length, 2, 'a save without changes keeps no version');
+	assert.deepEqual(
+		e.versions.map((v) => [v.version, v.changed]),
+		[
+			[1, ['URL']],
+			[0, ['Password']]
+		]
+	);
+	assert.doesNotMatch(JSON.stringify(e.versions), /SECRET/);
+	const earlier = await ops.reveal(FRED, { path: 'Cloudflare/creator' }, 'Password', 'reveal', 0);
+	assert.equal(earlier.value, 'old-SECRET');
+	assert.equal(
+		(await ops.reveal(FRED, { path: 'Cloudflare/creator' }, 'Password', 'reveal', 9)).code,
+		'not_found'
+	);
+
+	ok(await ops.restoreVersion(FRED, { path: 'Cloudflare/creator' }, 0));
+	const now = (await onDisk(dir))['Cloudflare/creator'];
+	assert.equal(now.Password, 'old-SECRET');
+	assert.equal(now.URL, '', 'the whole version comes back');
+	e = await ops.entry('Cloudflare/creator', undefined, {}, 'falcon-vault');
+	assert.equal(e.versions.length, 3, 'what it held before the restore is kept too');
+	assert.equal(
+		(await ops.restoreVersion(FRED, { path: 'Cloudflare/creator' }, 0)).code,
+		'invalid_input',
+		'version 0 (old password, no URL) is what it holds now'
+	);
+
+	// KeePassXC sees the same versions, and they are trimmed to its default of 10.
+	for (let i = 0; i < 12; i++)
+		ok(await ops.update(FRED, { path: 'Cloudflare/creator' }, { notes: `n${i}` }));
+	const outside = await openOutside(dir);
+	const entry = [...outside.getDefaultGroup().allEntries()].find(
+		(x) => x.fields.get('Title') === 'creator'
+	);
+	assert.equal(entry.history.length, 10);
+
+	const events = ops.history({ action: 'restore_version' });
+	assert.equal(events.length, 2);
+	assert.doesNotMatch(JSON.stringify(ops.history({})), /SECRET/);
+});
+
+test('an entry keeps its History through renames and moves; History can be narrowed to a folder', async () => {
+	const dir = tempState();
+	const ops = await openOps(dir);
+	ok(await ops.create(FRED, { group: 'Services', title: 'resend', password: 'p' }));
+	await ops.reveal(FRED, { path: 'Services/resend' }, 'Password', 'reveal');
+	ok(await ops.createGroup(FRED, '', 'Email'));
+	ok(await ops.update(FRED, { path: 'Services/resend' }, { group: 'Email', title: 'resend-api' }));
+	const e = await ops.entry('Email/resend-api', undefined, {}, 'falcon-vault');
+	assert.deepEqual(
+		e.history.map((ev) => ev.action),
+		['edit_entry', 'reveal', 'create_entry']
+	);
+	assert.deepEqual(
+		ops.history({ match: 'services' }).map((ev) => ev.action),
+		['edit_entry', 'reveal', 'create_entry'],
+		'text anywhere in the path, any case'
+	);
+	assert.deepEqual(
+		ops.history({ entry: e.uuid }).map((ev) => ev.action),
+		['edit_entry', 'reveal', 'create_entry']
+	);
+});
+
+test("an agent's change does not stand without its History row; a person's does", async () => {
+	const dir = tempState();
+	const ops = await openOps(dir);
+	ok(await ops.create(FRED, { title: 'k', password: 'one' }));
+	const record = ops.audit.record.bind(ops.audit);
+	ops.audit.record = (ev) => {
+		if (ev.outcome === 'ok' && (ev.action === 'edit_entry' || ev.action === 'recycle_entry'))
+			throw new Error('disk full');
+		return record(ev);
+	};
+	const r = await ops.update(VERL, { path: 'k' }, { password: 'two' });
+	assert.equal(r.outcome, 'rejected');
+	assert.equal(r.code, 'unavailable');
+	assert.equal((await onDisk(dir)).k.Password, 'one', 'undone');
+	assert.equal((await ops.recycle(VERL, { path: 'k' })).code, 'unavailable');
+	assert.ok((await onDisk(dir)).k, 'still where it was');
+	ok(await ops.update(FRED, { path: 'k' }, { password: 'three' }));
+	assert.equal((await onDisk(dir)).k.Password, 'three');
+});
+
+test('History for a group covers everything in it, at any depth, and nothing that only shares a prefix', async () => {
+	const dir = tempState();
+	const ops = await openOps(dir);
+	ok(await ops.create(FRED, { group: 'Cloudflare', title: 'a', password: 'p' }));
+	ok(await ops.create(FRED, { group: 'Cloudflare/Access', title: 'b', password: 'p' }));
+	ok(await ops.create(FRED, { group: 'Cloudflare Old', title: 'c', password: 'p' }));
+	ok(await ops.create(FRED, { group: 'Slack', title: 'Cloudflare alerts', password: 'p' }));
+	assert.deepEqual(
+		ops.history({ under: 'Cloudflare' }).map((e) => e.path),
+		['Cloudflare/Access/b', 'Cloudflare/a']
+	);
+});
