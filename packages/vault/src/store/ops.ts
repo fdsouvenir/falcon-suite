@@ -365,13 +365,17 @@ export class VaultOps {
 		);
 	}
 
-	/** Remove: to the Recycle Bin, as KeePassXC does (spec §4). Forever when the database has none. */
+	/**
+	 * Remove: to the Recycle Bin, as KeePassXC does (spec §4). For a person, forever when the
+	 * database has none; an agent's removal must stay recoverable, so without a Recycle Bin it is
+	 * refused.
+	 */
 	recycle(actor: Actor, at: { path: string; uuid?: string }, key?: string) {
 		return this.attempt(actor, 'recycle_entry', at.path, key, async (commit) =>
 			commit((db) => {
 				const e = entryAt(db, at.path, at.uuid);
 				if (inRecycleBin(db, e)) reject('invalid_input', 'It is already in the Recycle Bin');
-				db.remove(e);
+				toRecycleBin(db, e, actor);
 				const to = inRecycleBin(db, e) ? entryPath(db, e) : null;
 				return { path: at.path, entry: e.uuid.id, detail: to ? { to } : { forever: true } };
 			})
@@ -514,7 +518,7 @@ export class VaultOps {
 					this.requests(db).get(at.path) ??
 					reject('not_found', `${at.path} is not waiting for a value`);
 				request = asked;
-				db.remove(e);
+				toRecycleBin(db, e, actor);
 				return { path: at.path, entry: e.uuid.id, detail: { requested_by: asked.actor } };
 			})
 		);
@@ -754,6 +758,22 @@ type Commit = <T extends Done>(fn: (db: Kdbx) => T) => Promise<T>;
 class AuditUnavailable extends Error {}
 
 const STANDARD = ['Title', 'UserName', 'Password', 'URL', 'Notes'] as const;
+
+/**
+ * Remove an entry the KeePassXC way. An agent's removal is always recoverable: it is refused before
+ * anything changes when the database has no Recycle Bin (where KeePassXC would delete for good), and
+ * a removal that did not land in the Recycle Bin is never saved.
+ */
+function toRecycleBin(db: Kdbx, e: KdbxEntry, actor: Actor) {
+	const agent = actor.startsWith('agent:');
+	if (agent && !recycleBinOf(db))
+		reject(
+			'invalid_input',
+			'This database has no Recycle Bin, so removing would delete the entry for good. Only a person can do that, in the Vault tab.'
+		);
+	db.remove(e);
+	if (agent && !inRecycleBin(db, e)) throw new Error('The entry did not reach the Recycle Bin');
+}
 
 /**
  * Keep the entry as it is now as a previous version (KeePassXC's entry history), then trim to the
