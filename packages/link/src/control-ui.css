@@ -207,6 +207,20 @@
 	font-weight: 500;
 	margin: 0 0 var(--space-2) var(--space-3);
 }
+.fl-nav-group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+.fl-nav-group + .fl-nav-group {
+	margin-top: var(--space-3);
+}
+.fl-nav .fl-nav-group-label {
+	font-size: var(--control-ui-text-sm);
+	color: var(--muted);
+	font-weight: 600;
+	margin: 0 0 0 var(--space-3);
+}
 .fl-nav-copy {
 	display: grid;
 	gap: var(--space-1);

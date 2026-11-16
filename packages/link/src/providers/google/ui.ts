@@ -50,6 +50,7 @@ const GOOGLE_SERVICES: [string, string[]][] = [
 const ui: ProviderUi = {
 	id: 'google',
 	name: 'Google',
+	group: 'productivity',
 	cli: 'gog',
 	baseline: ['openid', 'email', 'https://www.googleapis.com/auth/userinfo.email'],
 	normalize: normalizeGoogle,

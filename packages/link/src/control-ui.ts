@@ -14,7 +14,7 @@ import {
 } from './model.js';
 import './control-ui.css';
 import { accessSummary, type AccessGroup } from './access-summary.js';
-import { PROVIDER_UI, uiOf } from './providers/ui.js';
+import { PROVIDER_GROUPS, PROVIDER_UI, uiOf } from './providers/ui.js';
 import type { Revoke } from './providers/types.js';
 // Official provider artwork, unmodified (see assets/brand/README.md).
 import googleSignIn from '../assets/brand/google-signin-light-square.svg' with { type: 'text' };
@@ -181,7 +181,7 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 	container.append(root);
 	let selected: Provider | null =
 		(context.props.integration as Provider) ||
-		(window.matchMedia('(max-width: 700px)').matches ? null : PROVIDER_UI[0].id);
+		(window.matchMedia('(max-width: 700px)').matches ? null : PROVIDER_GROUPS[0].providers[0].id);
 	let status:
 		| (Overview & {
 				catalogs: Record<Provider, Catalog | null>;
@@ -1235,6 +1235,44 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		);
 		return card;
 	}
+	function navButton(id: Provider, name: string) {
+		const b = button('', () => navigate(id));
+		b.className = `fl-integration${selected === id ? ' fl-selected' : ''}`;
+		b.setAttribute('aria-current', selected === id ? 'page' : 'false');
+		const count = accounts.filter((a) => a.provider === id).length;
+		const signedOut = accounts.filter(
+			(a) => a.provider === id && accountWord(a) === 'Signed out'
+		).length;
+		const label = el('span', undefined, 'fl-nav-copy');
+		label.append(
+			el('span', name, 'fl-integration-name'),
+			el(
+				'span',
+				!status
+					? 'Checking…'
+					: signedOut
+						? `${signedOut} need${signedOut === 1 ? 's' : ''} sign-in`
+						: count
+							? `${count} account${count === 1 ? '' : 's'}`
+							: 'No accounts',
+				'fl-muted'
+			)
+		);
+		b.append(mark(id), label);
+		const attention = status ? attentionWord(id) : null;
+		if (attention) {
+			const dot = el(
+				'span',
+				undefined,
+				`fl-dot ${attention === 'Signed out' ? 'fl-dot-error' : 'fl-dot-warn'}`
+			);
+			dot.setAttribute('role', 'img');
+			dot.setAttribute('aria-label', attention);
+			dot.title = attention;
+			b.append(dot);
+		}
+		return b;
+	}
 	function render() {
 		if (disposed) return;
 		const focused =
@@ -1244,43 +1282,16 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 				: null;
 		layout.classList.toggle('fl-show-detail', selected !== null);
 		nav.replaceChildren(el('h2', 'Integrations', 'fl-nav-label'));
-		for (const { id, name } of PROVIDER_UI) {
-			const b = button('', () => navigate(id));
-			b.className = `fl-integration${selected === id ? ' fl-selected' : ''}`;
-			b.setAttribute('aria-current', selected === id ? 'page' : 'false');
-			const count = accounts.filter((a) => a.provider === id).length;
-			const signedOut = accounts.filter(
-				(a) => a.provider === id && accountWord(a) === 'Signed out'
-			).length;
-			const label = el('span', undefined, 'fl-nav-copy');
-			label.append(
-				el('span', name, 'fl-integration-name'),
-				el(
-					'span',
-					!status
-						? 'Checking…'
-						: signedOut
-							? `${signedOut} need${signedOut === 1 ? 's' : ''} sign-in`
-							: count
-								? `${count} account${count === 1 ? '' : 's'}`
-								: 'No accounts',
-					'fl-muted'
-				)
-			);
-			b.append(mark(id), label);
-			const attention = status ? attentionWord(id) : null;
-			if (attention) {
-				const dot = el(
-					'span',
-					undefined,
-					`fl-dot ${attention === 'Signed out' ? 'fl-dot-error' : 'fl-dot-warn'}`
-				);
-				dot.setAttribute('role', 'img');
-				dot.setAttribute('aria-label', attention);
-				dot.title = attention;
-				b.append(dot);
-			}
-			nav.append(b);
+		// One labelled group per kind of service that has integrations.
+		for (const g of PROVIDER_GROUPS) {
+			const section = el('div', undefined, 'fl-nav-group');
+			section.setAttribute('role', 'group');
+			const groupHeading = el('h3', g.name, 'fl-nav-group-label');
+			groupHeading.id = `fl-nav-group-${g.id}`;
+			section.setAttribute('aria-labelledby', groupHeading.id);
+			section.append(groupHeading);
+			for (const { id, name } of g.providers) section.append(navButton(id, name));
+			nav.append(section);
 		}
 		// Keep the active form node mounted across status refreshes so input and focus survive.
 		detail.replaceChildren();
