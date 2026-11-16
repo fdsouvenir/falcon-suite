@@ -30,6 +30,9 @@ export type ProviderUi = Permissions & {
 	technical?: string[];
 	// A second way to connect with a pasted key (for example an API or service key).
 	key?: { action: string; field: string; help: string; note: string };
+	// An optional phone number on the sign-in form, for providers that can link by a code
+	// entered on the phone instead of a scanned QR code.
+	phone?: { label: string; help: string };
 	revoke?(a: Account): Revoke;
 	remove_note?(a: Account): string | null;
 	title?(a: Account): string | null;
@@ -82,7 +85,13 @@ export type Tool = {
 export type SkillSource = { repo: string; branch: string; prefix: string; path?: string };
 
 export type SignInMethod =
-	'hosted_callback' | 'paste_redirect' | 'paste_code' | 'device_code' | 'api_key';
+	| 'hosted_callback'
+	| 'paste_redirect'
+	| 'paste_code'
+	| 'device_code'
+	| 'api_key'
+	// The person scans a QR code that Link shows (it changes while the sign-in waits).
+	| 'qr_code';
 export type Login = {
 	provider: string;
 	id: string;
@@ -98,6 +107,8 @@ export type Login = {
 	expires_at: string;
 	url: string | null;
 	code: string | null;
+	// The current QR code payload, replaced whenever the provider rotates it.
+	qr?: string | null;
 	message: string;
 	// Set when the person pastes something back: a redirect address or a code.
 	paste?: { label: string; kind: 'url' | 'text' };
@@ -122,6 +133,7 @@ export type StartInput = {
 	purpose: Purpose;
 	permissions: string[];
 	email?: string;
+	phone?: string;
 };
 export type KeyInput = {
 	account_id?: string;
@@ -153,6 +165,9 @@ export interface Host {
 	fail(l: Login, message: string, code?: string): void;
 	cancel(id: string, actor: string): unknown;
 	finish(id: string, value: string, actor: string, fromCallback?: boolean): Promise<unknown>;
+	// Stops the account's follow process (see ProviderModule.follow) and waits until it has
+	// exited. It starts again once the account is confirmed connected.
+	pause(id: string): Promise<void>;
 }
 
 export interface ProviderModule {
@@ -182,6 +197,9 @@ export interface ProviderModule {
 	// Removes only this account's saved sign-in from the CLI store and confirms it is gone.
 	remove(host: Host, a: Account): Promise<void>;
 	invocation(host: Host, a: Account): Promise<Record<string, unknown>>;
+	// A process Link keeps running for each connected account while Link runs, started again
+	// with increasing delays whenever it exits.
+	follow?(host: Host, a: Account): { args: string[]; env: NodeJS.ProcessEnv };
 	identified?(a: Account): boolean;
 	brief: {
 		heading: string;

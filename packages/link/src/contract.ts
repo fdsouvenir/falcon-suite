@@ -34,7 +34,7 @@ export const contract = defineFeatureContract({
 		accounts: {
 			kind: 'query',
 			description:
-				'Read account identity, human/agent owner, purpose, connection state and selected, recorded or granted scopes. With account_id, returns the CLI arguments and storage environment for that account (for hubspot and dropbox also a command_prefix that selects the account; gtm needs none); the CLIs are on the normal PATH and the keyring password variables are already present in the command environment.',
+				'Read account identity, human/agent owner, purpose, connection state and selected, recorded or granted scopes. With account_id, returns the CLI arguments and storage environment for that account (for hubspot, dropbox, link-cli and wacli also a command_prefix that selects the account, for wacli in read-only mode; gtm needs none); the CLIs are on the normal PATH and the keyring password variables are already present in the command environment.',
 			input: obj({ account_id: Type.Optional(Type.String({ maxLength: 64 })) }),
 			output: Type.Unknown(),
 			tool: { name: 'falcon_link_accounts', label: 'Read account facts' }
@@ -52,7 +52,8 @@ export const contract = defineFeatureContract({
 					maxItems: 64,
 					uniqueItems: true
 				}),
-				email: Type.Optional(Type.String({ maxLength: 254 }))
+				email: Type.Optional(Type.String({ maxLength: 254 })),
+				phone: Type.Optional(Type.String({ maxLength: 32 }))
 			}),
 			output: Type.Unknown()
 		},
@@ -116,7 +117,7 @@ export const contract = defineFeatureContract({
 		remove: {
 			kind: 'action',
 			description:
-				'Remove this account’s saved sign-in from its CLI store and delete it from Link. Does not revoke provider consent, except for Stripe Link: link-cli’s own sign-out also revokes the saved sign-in at Link. For Google Health it also deletes the account’s ghcli archive.',
+				'Remove this account’s saved sign-in from its CLI store and delete it from Link. Does not revoke provider consent, except for Stripe Link and WhatsApp: link-cli’s own sign-out also revokes the saved sign-in at Link, and wacli’s removes this Office from the WhatsApp account’s linked devices. For Google Health it also deletes the account’s ghcli archive.',
 			input: obj({ account_id: Type.String({ maxLength: 64 }) }),
 			output: Type.Unknown()
 		},

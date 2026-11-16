@@ -245,6 +245,29 @@ Fred: "yes, google health. and it should use our callback worker"; for the OAuth
   in `checksums.txt`), first published with fdsouvenir/ghcli#1; ghcli's
   `google-health-local-archive` skill is installed for every agent.
 
+## WhatsApp (requested by Fred 2026-11-16)
+
+Fred: "yes, this is for reading whatsapp" (wacli is an unofficial WhatsApp Web client; the
+purpose is reading) and: yes — Link keeps `wacli sync --follow` running per connected account.
+
+- Eighth integration, in the Messaging group: WhatsApp through wacli (openclaw/wacli, MIT),
+  which links the Office as a WhatsApp Web linked device. Nothing to provision; nothing to choose
+  (permissions fixed, like ZoomInfo).
+- New sign-in method `qr_code`: the sign-in carries wacli's current QR code, which the server
+  replaces whenever wacli changes it and the page draws as an image (bundled encoder) on each
+  refresh. A phone number on the form links with a pairing code instead. Nothing opens a browser
+  on the Office; codes and phone numbers are never logged or saved.
+- One wacli store per account (`WACLI_STORE_DIR`). Link keeps `wacli sync --follow` running per
+  connected account — started after connecting and when Link starts, restarted with increasing
+  delays when it exits, stopped on removal or when the account is no longer linked. The card
+  shows Syncing or Sync stopped.
+- Agents get the account's store with `WACLI_READONLY=1` in the command prefix. wacli's reading
+  commands don't take the store's lock, so they work while sync runs. Removing runs wacli's own
+  sign-out (the Office leaves the phone's Linked devices) and deletes the store.
+- Installed from the latest GitHub release archive (Linux x64 and arm64), checked against
+  GitHub's SHA-256 digest and the release's `checksums.txt`. No agent skill (the repository's skill
+  is for developing wacli).
+
 ## Delivery tracking
 
 Parent: [Google and Microsoft onboarding #7](https://github.com/fdsouvenir/falcon-suite/issues/7).

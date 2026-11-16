@@ -25,6 +25,8 @@ import dropboxGlyph from '../assets/brand/dropbox-glyph.svg' with { type: 'text'
 import zoominfoLogo from '../assets/brand/zoominfo-logomark.svg' with { type: 'text' };
 import stripeLinkLogo from '../assets/brand/stripe-link-logo.svg' with { type: 'text' };
 import googleHealthLogo from '../assets/brand/google-health-heart.png' with { type: 'bytes' };
+import whatsappGlyph from '../assets/brand/whatsapp-glyph.svg' with { type: 'text' };
+import { qrSvg } from './qr.js';
 
 const svg = (source: string) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
 const png = (bytes: Uint8Array) => {
@@ -40,7 +42,8 @@ const LOGOS: Record<string, string> = {
 	dropbox: svg(dropboxGlyph),
 	zoominfo: svg(zoominfoLogo),
 	'stripe-link': svg(stripeLinkLogo),
-	'google-health': png(googleHealthLogo)
+	'google-health': png(googleHealthLogo),
+	wacli: svg(whatsappGlyph)
 };
 // Artwork with built-in clear space is shown larger so the mark matches the others.
 const PADDED = new Set(['dropbox']);
@@ -160,6 +163,7 @@ type Login = {
 	message: string;
 	url: string | null;
 	code: string | null;
+	qr?: string | null;
 	expires_at: string;
 	hosted?: boolean;
 	paste?: { label: string; kind: 'url' | 'text' };
@@ -172,6 +176,7 @@ type StartInput = {
 	permissions: string[];
 	account_id?: string;
 	email?: string;
+	phone?: string;
 };
 const ACTIVE = ['starting', 'awaiting_consent', 'verifying'];
 function mount(container: HTMLElement, context: ControlUiViewContext) {
@@ -600,6 +605,12 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		email.autocomplete = 'email';
 		if (rows) form.append(rows.node);
 		else if (!metadataOnly && ui.consent_note) form.append(el('p', ui.consent_note, 'fl-muted'));
+		const phone = el('input');
+		phone.type = 'tel';
+		phone.maxLength = 32;
+		phone.autocomplete = 'tel';
+		if (!metadataOnly && ui.phone)
+			form.append(field(ui.phone.label, phone), el('p', ui.phone.help, 'fl-muted'));
 		if (!metadataOnly && !rows && ui.technical) {
 			const technical = el('details', undefined, 'fl-technical');
 			technical.append(
@@ -645,7 +656,8 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 						...values,
 						permissions,
 						...(account ? { account_id: account.id } : {}),
-						...(ui.email_required ? { email: email.value.trim() } : {})
+						...(ui.email_required ? { email: email.value.trim() } : {}),
+						...(ui.phone && phone.value.trim() ? { phone: phone.value.trim() } : {})
 					});
 				},
 				undefined,
@@ -744,6 +756,13 @@ function mount(container: HTMLElement, context: ControlUiViewContext) {
 		const warning = login.state === 'verifying' ? null : pasteWarning(login.provider);
 		if (warning) panel.append(warning);
 		if (login.url) panel.append(signInLink(login.provider, login.url));
+		if (login.qr) {
+			// The provider's current QR code, drawn here; a new one replaces it on the next poll.
+			const qr = el('img', undefined, 'fl-qr');
+			qr.src = svg(qrSvg(login.qr));
+			qr.alt = `QR code to scan with ${name(login.provider)}`;
+			panel.append(qr);
+		}
 		if (login.code) panel.append(el('p', login.code, 'fl-device-code'));
 		const problem = formError();
 		if (login.url && login.paste && login.state === 'awaiting_consent') {

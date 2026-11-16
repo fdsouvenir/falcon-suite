@@ -6,6 +6,7 @@ import dropbox from './dropbox/index.js';
 import zoominfo from './zoominfo/index.js';
 import stripeLink from './stripe-link/index.js';
 import googleHealth from './google-health/index.js';
+import wacli from './wacli/index.js';
 import type { ProviderModule } from './types.js';
 
 export const PROVIDERS: ProviderModule[] = [
@@ -15,7 +16,8 @@ export const PROVIDERS: ProviderModule[] = [
 	dropbox,
 	zoominfo,
 	stripeLink,
-	googleHealth
+	googleHealth,
+	wacli
 ];
 export function provider(id: string): ProviderModule {
 	const p = PROVIDERS.find((p) => p.ui.id === id);

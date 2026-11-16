@@ -6,6 +6,7 @@ import dropbox from './dropbox/ui.js';
 import zoominfo from './zoominfo/ui.js';
 import stripeLink from './stripe-link/ui.js';
 import googleHealth from './google-health/ui.js';
+import wacli from './wacli/ui.js';
 import type { ProviderUi } from './types.js';
 
 // Kinds of service, in the order the page shows them. Each integration belongs to one.
@@ -24,7 +25,8 @@ export const PROVIDER_UI: ProviderUi[] = [
 	dropbox,
 	zoominfo,
 	stripeLink,
-	googleHealth
+	googleHealth,
+	wacli
 ];
 export const PROVIDER_IDS = PROVIDER_UI.map((p) => p.id);
 // Groups that have integrations, each with its integrations in page order.
