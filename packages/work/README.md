@@ -36,6 +36,9 @@ write always wins over what Work wrote.
 openclaw plugins install clawhub:@fdsouvenir/falcon-work
 ```
 
+Early builds for testing are on the preview channel of the same listing:
+`openclaw plugins install clawhub:@fdsouvenir/falcon-work@preview`.
+
 Then allow two settings:
 
 - **Reading completed turns** needs conversation access, which OpenClaw requires you to grant to

@@ -101,7 +101,7 @@ test('outcomes are what a turn left outside the chat; reads and unknown calls ar
 	assert.equal(kind('exec', { command: 'clawhub package publish packages/work' }), 'release');
 	assert.equal(
 		kind('exec', {
-			command: "ssh building-902 'podman exec c openclaw plugins update falcon-work-preview'"
+			command: "ssh building-902 'podman exec c openclaw plugins update falcon-work'"
 		}),
 		'deploy'
 	);

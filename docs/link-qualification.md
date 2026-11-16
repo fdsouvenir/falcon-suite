@@ -229,7 +229,9 @@ Gateway, and arm64.
 
 Alpha (Office `bldg006-office-4`, OpenClaw 2026.10.4), HubSpot free developer portal
 `247833836` (verl@fredbot.link, na2 data centre). Plugin installed only from ClawHub with
-`openclaw plugins install clawhub:@fdsouvenir/falcon-link-preview@<version> --force --no-enable --accept-capabilities`.
+`openclaw plugins install clawhub:@fdsouvenir/falcon-link-preview@<version> --force --no-enable --accept-capabilities`
+(the separate preview listing of the time; since 2026-11-16 previews are
+`clawhub:@fdsouvenir/falcon-link@preview` on the one listing).
 Container start time unchanged throughout; Gateway configuration, Google and Microsoft account
 files and the gog/m365cli binaries byte-identical before and after. Evidence:
 `~/repos/artifacts/link-hubspot-alpha-20261029/`.
