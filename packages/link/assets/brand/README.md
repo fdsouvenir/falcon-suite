@@ -42,3 +42,11 @@ These files are the providers' official sign-in artwork, copied unmodified.
   mark only identifies the integration and doesn't imply that Google endorses Falcon Link. Sign-in
   is with a Google account, so the page uses `google-signin-light-square.svg` (above) as its
   sign-in button.
+- `whatsapp-glyph.svg` — the WhatsApp glyph in WhatsApp green (#25D366), unmodified
+  `01_Glyph/01_Digital RGB/03_SVG/Digital_Glyph_Green_RGB_2026.svg` from the logo pack
+  (`WhatsApp-Brand-Resource-Center.zip`, downloaded 2026-11-16) on WhatsApp's brand page at Meta's
+  Brand Resource Center: https://www.meta.com/brand/resources/whatsapp/whatsapp-brand/ (where
+  https://www.whatsapp.com/brand points). WhatsApp is a trademark of WhatsApp LLC; the glyph only
+  identifies the integration and doesn't imply that WhatsApp or Meta endorses Falcon Link or
+  wacli. Linking uses a QR code or pairing code shown on Link's own page, so there is no sign-in
+  button artwork.

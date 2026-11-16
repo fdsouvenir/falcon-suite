@@ -41,6 +41,7 @@ export default defineFeaturePlugin({
 			id: PLUGIN_ID,
 			start(ctx) {
 				link = new LinkService(path.join(ctx.stateDir, PLUGIN_ID));
+				link.resume();
 			},
 			stop() {
 				link?.stop();
@@ -78,7 +79,7 @@ export default defineFeaturePlugin({
 				)
 					throw new Error('Account facts are not available in this conversation.');
 				await l.discover();
-				return input.account_id ? l.invocation(input.account_id) : { accounts: l.accounts() };
+				return input.account_id ? l.invocation(input.account_id) : { accounts: l.report() };
 			},
 			viewer(_input, context) {
 				return { profile_id: person(context) };

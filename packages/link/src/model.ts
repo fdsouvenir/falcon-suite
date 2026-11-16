@@ -26,6 +26,9 @@ export type Account = {
 	checked_at: string | null;
 	created_at: string;
 	connection_error?: { code: string; message: string };
+	// Whether the account's follow process is running (see ProviderModule.follow). Reported in
+	// the account list, never saved.
+	sync?: 'running' | 'stopped';
 };
 // One permission row per service. Levels are a single choice (Off is implicit); an addon
 // is an independent choice in the same row (Microsoft sends email separately). An addon with

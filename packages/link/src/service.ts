@@ -1,3 +1,4 @@
+import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { rmSync, statSync } from 'node:fs';
 import { Registry } from './store.js';
@@ -27,6 +28,15 @@ import {
 } from './providers/types.js';
 
 const ACTIVE = ['starting', 'awaiting_consent', 'verifying'];
+// Delay before a follow process that exited starts again: doubling from the first to the last,
+// and back to the first after a run of at least `reset`.
+const FOLLOW_DELAY = { first: 2000, last: 5 * 60000, reset: 10 * 60000 };
+type Follower = {
+	child?: ChildProcess;
+	timer?: ReturnType<typeof setTimeout>;
+	delay: number;
+	started: number;
+};
 // The executable plus its size and modification time: the same path with a new build is a
 // different tool.
 function toolIdentity(tool: string) {
@@ -42,6 +52,7 @@ export class LinkService implements Host {
 	private logins = new Map<string, Login>();
 	private watchers = new Set<ReturnType<typeof setTimeout>>();
 	private locks = new Set<string>();
+	private followers = new Map<string, Follower>();
 	constructor(readonly dir: string) {
 		this.registry = new Registry(dir);
 		for (const a of this.registry.list())
@@ -56,6 +67,74 @@ export class LinkService implements Host {
 	}
 	accounts() {
 		return this.registry.list();
+	}
+	// The account list with whether each account's follow process is running.
+	report(): Account[] {
+		return this.accounts().map((a) =>
+			provider(a.provider).follow && a.state === 'connected'
+				? { ...a, sync: this.followers.get(a.id)?.child ? 'running' : 'stopped' }
+				: a
+		);
+	}
+	// Starts the follow processes of connected accounts when Link starts.
+	resume() {
+		for (const a of this.accounts()) this.follow(a.id);
+	}
+	// Keeps the account's follow process running while the account is connected.
+	private follow(id: string) {
+		if (this.followers.has(id)) return;
+		const a = this.accounts().find((a) => a.id === id);
+		if (a?.state !== 'connected' || !provider(a.provider).follow) return;
+		const f: Follower = { delay: 0, started: 0 };
+		this.followers.set(id, f);
+		const again = () => {
+			f.child = undefined;
+			if (this.followers.get(id) !== f) return;
+			if (Date.now() - f.started >= FOLLOW_DELAY.reset) f.delay = 0;
+			f.delay = f.delay ? Math.min(f.delay * 2, FOLLOW_DELAY.last) : FOLLOW_DELAY.first;
+			f.timer = setTimeout(launch, f.delay);
+			f.timer.unref?.();
+		};
+		const launch = () => {
+			f.timer = undefined;
+			if (this.followers.get(id) !== f) return;
+			const current = this.accounts().find((a) => a.id === id);
+			if (current?.state !== 'connected') return void this.followers.delete(id);
+			f.started = Date.now();
+			try {
+				const run = provider(current.provider).follow!(this, current);
+				// Its output is never read or kept.
+				const child = spawn(this.tool(current), run.args, { env: run.env, stdio: 'ignore' });
+				f.child = child;
+				let ended = false;
+				const end = () => {
+					if (ended) return;
+					ended = true;
+					if (f.child === child) again();
+				};
+				child.on('error', end);
+				child.on('close', end);
+			} catch {
+				again();
+			}
+		};
+		launch();
+	}
+	async pause(id: string) {
+		const f = this.followers.get(id);
+		if (!f) return;
+		this.followers.delete(id);
+		clearTimeout(f.timer);
+		const child = f.child;
+		if (!child || child.exitCode !== null || child.signalCode !== null) return;
+		await new Promise<void>((resolve) => {
+			const force = setTimeout(() => child.kill('SIGKILL'), 15000);
+			child.once('close', () => {
+				clearTimeout(force);
+				resolve();
+			});
+			child.kill();
+		});
 	}
 	// Permission rows come from each CLI's own catalog, cached until the CLI changes: the cache
 	// is keyed by the executable Link would run, so a replaced or updated CLI is read again
@@ -420,8 +499,10 @@ export class LinkService implements Host {
 			l.paste = undefined;
 			l.message = 'You cancelled sign-in. Nothing changed.';
 			// The account returns to exactly what it was; a new account is not kept.
-			if (l.prior) this.registry.save(l.prior);
-			else {
+			if (l.prior) {
+				this.registry.save(l.prior);
+				this.follow(l.prior.id);
+			} else {
 				this.registry.remove(l.account_id);
 				if (/^acct_[a-f0-9-]{36}$/.test(l.account_id))
 					rmSync(accountHome(this.dir, l.account_id), { recursive: true, force: true });
@@ -443,6 +524,7 @@ export class LinkService implements Host {
 				delete a.connection_error;
 				a.checked_at = new Date().toISOString();
 				this.registry.save(a);
+				this.follow(id);
 				return a;
 			} catch (e) {
 				const known = e instanceof PublicError;
@@ -458,6 +540,7 @@ export class LinkService implements Host {
 						};
 				a.checked_at = new Date().toISOString();
 				this.registry.save(a);
+				await this.pause(id);
 				if (known) throw e;
 				throw new Error(
 					'Live identity check failed. Reconnect if consent has expired or been revoked.'
@@ -479,7 +562,13 @@ export class LinkService implements Host {
 			if (this.active(id))
 				throw new Error('Finish or cancel sign-in before removing this account.');
 			// Only this account's saved sign-in is removed. Never revoke provider-wide consent.
-			await provider(a.provider).remove(this, a);
+			await this.pause(id);
+			try {
+				await provider(a.provider).remove(this, a);
+			} catch (e) {
+				this.follow(id);
+				throw e;
+			}
 			return forget();
 		});
 	}
@@ -605,6 +694,11 @@ export class LinkService implements Host {
 	stop() {
 		for (const t of this.watchers) clearTimeout(t);
 		this.watchers.clear();
+		for (const f of this.followers.values()) {
+			clearTimeout(f.timer);
+			f.child?.kill();
+		}
+		this.followers.clear();
 		for (const l of this.logins.values()) {
 			if (['starting', 'awaiting_consent'].includes(l.state)) {
 				l.state = 'cancelled';

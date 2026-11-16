@@ -1,19 +1,19 @@
 # Falcon Link
 
 A separately installable native OpenClaw page for connecting Google, Microsoft, HubSpot,
-Dropbox, ZoomInfo, Stripe Link and Google Health accounts.
+Dropbox, ZoomInfo, Stripe Link, Google Health and WhatsApp accounts.
 Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 
 ## What it does
 
-- Lists each person's and agent's Google, Microsoft, HubSpot, Dropbox, ZoomInfo, Stripe Link and Google Health accounts with their owner, purpose and
+- Lists each person's and agent's Google, Microsoft, HubSpot, Dropbox, ZoomInfo, Stripe Link, Google Health and WhatsApp accounts with their owner, purpose and
   access in plain words. A connected account shows no status; otherwise it shows Needs
   attention, Signing in… or Not connected.
-- Groups the Integrations sidebar by kind of service: Productivity (Google, Microsoft), CRM &
-  Sales (HubSpot, ZoomInfo), Payments (Stripe Link), Files (Dropbox) and Health (Google
-  Health). Each integration belongs to one group (`group` in its `ui.ts`; the groups and their
-  order are `GROUPS` in `src/providers/ui.ts`). Groups without integrations (Messaging) aren't
-  shown.
+- Groups the Integrations sidebar by kind of service: Productivity (Google, Microsoft),
+  Messaging (WhatsApp), CRM & Sales (HubSpot, ZoomInfo), Payments (Stripe Link), Files (Dropbox)
+  and Health (Google Health). Each integration belongs to one group (`group` in its `ui.ts`; the
+  groups and their order are `GROUPS` in `src/providers/ui.ts`). Groups without integrations
+  aren't shown.
 - Adds accounts, changes their access, checks them and removes them — including accounts
   already present in the CLIs' own stores. Removing an account deletes its saved sign-in from
   the CLI's store and removes it from Link's list.
@@ -22,10 +22,11 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
   [m365cli](https://github.com/fdsouvenir/m365cli) for Microsoft (not the unrelated PnP CLI)
   HubSpot's Agent CLI `hubspot` for HubSpot, Dropbox's
   [dbxcli](https://github.com/dropbox/dbxcli) for Dropbox, ZoomInfo's
-  [gtm](https://github.com/Zoominfo/gtm-ai-cli) for ZoomInfo and Stripe's
-  [link-cli](https://github.com/stripe/link-cli) for Stripe Link and
-  [ghcli](https://github.com/fdsouvenir/ghcli) for Google Health. Link does not implement a
-  second mail, calendar, CRM, file, sales-data, payments or health client.
+  [gtm](https://github.com/Zoominfo/gtm-ai-cli) for ZoomInfo, Stripe's
+  [link-cli](https://github.com/stripe/link-cli) for Stripe Link,
+  [ghcli](https://github.com/fdsouvenir/ghcli) for Google Health and
+  [wacli](https://github.com/openclaw/wacli) for WhatsApp. Link does not implement a
+  second mail, calendar, CRM, file, sales-data, payments, health or messaging client.
 - Installs HubSpot's, ZoomInfo's, Stripe's and ghcli's agent skills for every agent (see below).
 
 ## Permissions
@@ -306,13 +307,50 @@ the hosted callback; without both the page says sign-in isn't set up.
   `ghcli-google-health-local-archive`.
 - Link doesn't list sign-ins in ghcli's own default store.
 
+## WhatsApp
+
+WhatsApp through [wacli](https://github.com/openclaw/wacli) (openclaw/wacli, MIT, 0.26.1 or
+later), which connects as a WhatsApp Web linked device using the unofficial whatsmeow library.
+Link uses it to read WhatsApp. Nothing needs provisioning.
+
+- **Permissions.** Nothing to choose: the Office becomes a linked device of the account, and
+  agents get wacli in read-only mode.
+- **Linking** runs `wacli --store <sign-in store> --events --json auth` and shows the QR code
+  wacli reports (`qr_code` events on stderr) as an image drawn in the page (the qrcode package,
+  bundled). wacli changes the code while it waits (the first after 60 seconds, then every 20,
+  for up to three rounds); each change replaces the image on the page's next refresh. With a phone
+  number on the form Link adds `--phone <digits>` and shows the pairing code wacli reports
+  (`pair_code`) instead, to type in WhatsApp → Linked devices → Link with phone number. Nothing
+  opens a browser on the Office; codes and the phone number are never logged or saved. wacli
+  doesn't report the moment WhatsApp confirms the link, so Link reads the sign-in store
+  (`wacli --read-only --json auth status`) every 2 seconds and then shows that wacli is saving
+  the first messages; `wacli auth` exits after its first sync. WhatsApp asking for a passkey (which
+  wacli can't complete), an account without linked devices, an outdated wacli and a refused phone
+  number each end the sign-in with a plain message; running out of codes expires it.
+- **Storage.** Each account has its own wacli store, `accounts/<id>/wacli/` (`session.db`, the
+  WhatsApp session, and `wacli.db`, the message index; wacli writes them 0600 in a 0700 folder).
+  A sign-in goes to its own store first; once `auth status` gives the linked number (on
+  reconnect: the same number), it replaces the account's store and the store it replaced is signed
+  out with `wacli auth logout`. A store that isn't kept is signed out and deleted the same way.
+- **Sync.** Link keeps `wacli --store <store> sync --follow` running for each connected account
+  while Link runs: started once the account is confirmed and when Link starts, and started again
+  when it exits (after 2 seconds, doubling to at most 5 minutes; back to 2 seconds after a run of
+  10 minutes). It stops when Link stops, when a check finds the account isn't linked, and before
+  removal. Its output isn't read or kept. The card shows Syncing or Sync stopped.
+- **Checks.** `wacli --read-only --json auth status` gives `linked_jid` (`<number>@s.whatsapp.net`);
+  the card shows the number. It reads the store without its lock, so it works while sync runs.
+- **Removing** stops the account's sync (`wacli auth logout` needs the store's lock), runs
+  `wacli auth logout`, which removes the Office from Linked devices on the phone, deletes the
+  store and confirms it's gone.
+- **Skills.** None: the skill in wacli's repository is for working on wacli itself.
+
 ## Command-line tools
 
 Link needs gog 0.44.0 or later, m365cli 2.1.0 or later, hubspot 0.16.0 or later, dbxcli
-3.5.0 or later, gtm 1.0.0 or later, link-cli 1.1.0 or later and ghcli 1.0.6 or later. On Linux x64/arm64 Link installs the latest GitHub
+3.5.0 or later, gtm 1.0.0 or later, link-cli 1.1.0 or later, ghcli 1.0.6 or later and wacli 0.26.1 or later. On Linux x64/arm64 Link installs the latest GitHub
 release of gog, m365cli, dbxcli (whose archive must also be listed in the release's
-`SHA256SUMS`) and ghcli (whose archive must also be listed in the release's `checksums.txt`),
-and of gtm (the single `gtm-linux-x64` binary, checked against GitHub's
+`SHA256SUMS`), ghcli and wacli (whose archives must also be listed in the release's
+`checksums.txt`), and of gtm (the single `gtm-linux-x64` binary, checked against GitHub's
 SHA-256 asset digest; ZoomInfo publishes no Linux arm64 build, and the page says so there), of
 link-cli (the single `link-cli-linux-x64` / `link-cli-linux-arm64` binary from the newest
 release tagged `@stripe/link-cli@<version>`, since the same repository also releases Stripe's
@@ -425,6 +463,13 @@ For a Google Health account it returns the arguments `--store <dir>`, the enviro
 `GHCLI_GOOGLE_CREDENTIALS` (the account's client file) and a `command_prefix`
 (`env GHCLI_GOOGLE_CREDENTIALS='…' '/home/…/ghcli' --store '…'`), plus the requested and granted
 scopes.
+
+For a WhatsApp account it returns `WACLI_STORE_DIR` (the account's store) and
+`WACLI_READONLY=1`, under which wacli rejects commands that send or change anything, and a
+`command_prefix` (`env WACLI_STORE_DIR='…' WACLI_READONLY=1 '/home/…/wacli'`). Link's
+`sync --follow` holds the store's lock; wacli's reading commands (messages, chats, contacts,
+`auth status`) don't take the lock and read the store alongside it. The account list reports
+`sync: running|stopped` for each connected WhatsApp account.
 
 A compact `before_prompt_build` brief lists the same accounts. Account facts are omitted in
 group, channel and room conversations and provided in every other session.
