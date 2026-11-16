@@ -27,7 +27,7 @@ Report to Fred in plain words: recommended method, the problems (with the eviden
 
 ## 2. Spec
 
-Write `~/.cache/link-<id>/SPEC.md` (copy to `~/repos/artifacts/link-<id>-<date>/SPEC.md`). Template: `~/.cache/link-zoominfo/SPEC.md`; the standing ground rules are in `~/.cache/link-p9/SPEC.md` ("Ground rules"): build only what's asked; no invented restrictions, defaults or warnings; facts only for agents (no behavioural instructions); tests only where they protect caller-visible behaviour; implementer lists own choices under "Decisions to confirm". Include Fred's product decisions verbatim, the verified CLI facts with file/line sources, requirements, verification steps, and the report format.
+Write `~/.cache/link-<id>/SPEC.md` (copy to `~/repos/artifacts/link-<id>-<date>/SPEC.md`). Template: `~/migration-20261103-rescue/restore/home/fredbot/repos/artifacts/link-zoominfo-20261030/SPEC.md`; the standing ground rules are in `~/migration-20261103-rescue/restore/home/fredbot/repos/artifacts/link-preview9-20261028/SPEC.md` ("Ground rules (from Fred — follow exactly)"): build only what's asked; no invented restrictions, defaults or warnings; facts only for agents (no behavioural instructions); tests only where they protect caller-visible behaviour; implementer lists own choices under "Decisions to confirm". Include Fred's product decisions verbatim, the verified CLI facts with file/line sources, requirements, verification steps, and the report format.
 
 ## 3. Build (delegate)
 
@@ -50,18 +50,18 @@ From a clean detached worktree at the merge commit:
 git worktree add --detach ~/repos/worktrees/falcon-link-release-<n> origin/main
 cd ~/repos/worktrees/falcon-link-release-<n>
 NODE_ENV=development npm ci --include=dev      # NODE_ENV=production in the shell drops tsc
-node scripts/stage.mjs link preview 0.1.0-preview.<n> --publish > ~/repos/artifacts/link-<id>-<date>/publish-preview<n>.log 2>&1
+node scripts/stage.mjs link preview <X.Y.Z>-preview.<n> --publish > ~/repos/artifacts/link-<id>-<date>/publish-preview<n>.log 2>&1
 ```
 
-Pick `<n>` from `clawhub package inspect @fdsouvenir/falcon-link-preview --versions` **and** earlier publish logs (submitted-but-unpublished versions are taken). Follow the release skill's ClawHub recovery reference: `skillspector failed` / "judge not started" is a scanner-side failure — rescan the same version (`POST /api/v1/packages/<encoded name>/rescan` with `{"version":...}`), never bump to escape it. Done only when the version is public as latest, `clawhub package download` matches the registry SHA-256, and the stored ClawScan verdict (`clawhub scan download ... --kind plugin`) is benign.
+Preview and production are tags on the one `@fdsouvenir/falcon-link` listing: a preview is published with only the `preview` tag and never moves `latest`. Pick `<X.Y.Z>` as the production version it leads to and `<n>` from `clawhub package inspect @fdsouvenir/falcon-link --versions` **and** earlier publish logs (submitted-but-unpublished versions are taken). Preview numbering on this listing started fresh on 2026-11-16 — the retired `@fdsouvenir/falcon-link-preview` listing's numbers don't carry over — but never reuse a version already on the listing. Follow the release skill's ClawHub recovery reference: `skillspector failed` / "judge not started" is a scanner-side failure — rescan the same version (`POST /api/v1/packages/<encoded name>/rescan` with `{"version":...}`), never bump to escape it. Done only when the version is public with the `preview` tag (`clawhub package inspect @fdsouvenir/falcon-link --tag preview`) and `latest` is unchanged, `clawhub package download` matches the registry SHA-256, and the stored ClawScan verdict (`clawhub scan download ... --kind plugin`) is benign.
 
-## 6. Qualify on test Offices
+## 6. Qualify on a test Office
 
-Alpha = `bldg006-office-4`, Bravo = `bldg006-office-5` (scripts in `~/repos/artifacts/link-zoominfo-20261030/`: `install-offices-17.py`, `office-zi.js`, `verify-alpha.js`). Install the verified tgz, have Link install the CLI and skill (`install` session action), start a sign-in and cancel it to prove the URL/flow, then ask Fred for a real sign-in on Alpha and verify: account connected, the CLI's own whoami works, credential file 0600, one harmless read (a free search/list). Record a Falcon Work finding.
+Use the test Office Fred names; ask him if he hasn't named one (the earlier test Offices Alpha and Bravo no longer exist). Earlier qualification scripts to adapt are in `~/migration-20261103-rescue/restore/home/fredbot/repos/artifacts/link-zoominfo-20261030/` (`install-offices-17.py`, `office-zi.js`, `verify-alpha.js`); they target the old Offices and the retired preview listing. Install the preview from ClawHub (`openclaw plugins install clawhub:@fdsouvenir/falcon-link@preview --force --no-enable --accept-capabilities`; an Office still on the old `falcon-link-preview` plugin needs a clean reinstall first — see the repository README's Release section), have Link install the CLI and skill (`install` session action), start a sign-in and cancel it to prove the URL/flow, then ask Fred for a real sign-in on that Office and verify: account connected, the CLI's own whoami works, credential file 0600, one harmless read (a free search/list). Record a Falcon Work finding.
 
 ## 7. Stable release
 
-Only when Fred says so. Same commit, `node scripts/stage.mjs link production <semver> --publish` (new connector → minor bump; check taken versions the same way). Same scan/download checks. Installing on a customer Office (e.g. kimg = `bldg007-office-1`): back up `openclaw.json`, `openclaw plugins install clawhub:@fdsouvenir/falcon-link@<version> --force --accept-capabilities --no-enable` (`plugins update` has kept a stale version), then confirm every existing account is still connected.
+Only when Fred says so. Same commit, `node scripts/stage.mjs link production <semver> --publish` (tagged `latest`; new connector → minor bump; check taken versions the same way). ClawHub cannot move a package tag back, so a bad stable release is fixed by publishing a higher fixed version. Same scan/download checks. Installing on a customer Office (e.g. kimg = `bldg007-office-1`): back up `openclaw.json`, `openclaw plugins install clawhub:@fdsouvenir/falcon-link@<version> --force --accept-capabilities --no-enable` (`plugins update` has kept a stale version), then confirm every existing account is still connected.
 
 ## Report
 

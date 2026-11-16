@@ -47,3 +47,34 @@ npm run format:check
 
 Native plugin UI needs **Settings → Labs → Custom plugin UI**
 (`gateway.controlUi.experimental.customPlugins: true`) on the Gateway.
+
+## Release
+
+Each package is one ClawHub listing with one identity (`falcon-<module>`, **Falcon <Module>**,
+`@fdsouvenir/falcon-<module>`). The release channel is a ClawHub tag on that listing:
+
+```sh
+node scripts/stage.mjs <work|vault|link> preview X.Y.Z-preview.N [--publish]   # tagged `preview`
+node scripts/stage.mjs <work|vault|link> production X.Y.Z [--publish]          # tagged `latest`
+```
+
+Without `--publish` it stages, builds, validates and runs `clawhub package publish --dry-run`.
+A plain `openclaw plugins install clawhub:@fdsouvenir/falcon-<module>` installs `latest`;
+`...@preview` installs the preview, and `openclaw plugins update <plugin-id>` keeps the channel it
+was installed from. Publishing a preview does not move `latest`. ClawHub has no command to move a
+package tag: `latest` only advances when a higher production version is published, so a bad
+production release is fixed by publishing a higher one.
+
+Pick versions from `clawhub package inspect @fdsouvenir/falcon-<module> --versions` (and earlier
+publish logs: submitted-but-unpublished versions are taken). Preview numbering on this listing
+starts fresh; versions on the retired `@fdsouvenir/falcon-<module>-preview` listings don't carry
+over, and a preview must not reuse a version already on the production listing.
+
+Until 2026-11-16 previews were separate listings with their own plugin ids
+(`falcon-<module>-preview`). On a test Office still running one, its config entry
+(`plugins.entries.falcon-<module>-preview`), Work's `falcon-work-preview/work.db` and Link's
+`falcon-link-preview/` accounts and provisioning stay under the old id and don't move to
+`falcon-<module>`; Vault's database is at a fixed location, but a secrets provider naming
+`pluginId: falcon-vault-preview` must name `falcon-vault`. Reinstall cleanly: uninstall the
+`-preview` plugin, install `...@preview`, then redo its settings (for Link, run
+`scripts/provision.mjs` for `falcon-link` and sign in again). Test Offices only; nothing migrates.

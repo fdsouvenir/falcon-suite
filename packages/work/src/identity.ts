@@ -1,5 +1,5 @@
-// The plugin's identity. Production is `falcon-work`; scripts/stage.mjs rewrites this one line for
-// the preview channel (`falcon-work-preview`), so the two can never share an id or a data directory.
+// The plugin's identity, the same on every release channel (preview and production are tags on one
+// ClawHub listing).
 export const PLUGIN_ID = 'falcon-work';
-// Release staging replaces this with the published package version.
+// Release staging (scripts/stage.mjs) replaces this with the published package version.
 export const PLUGIN_VERSION = '2.0.0-dev.0';

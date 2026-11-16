@@ -49,6 +49,9 @@ schema-invalid calls are rejected by OpenClaw before Vault runs.
 openclaw plugins install clawhub:@fdsouvenir/falcon-vault
 ```
 
+Early builds for testing are on the preview channel of the same listing:
+`openclaw plugins install clawhub:@fdsouvenir/falcon-vault@preview`.
+
 The Vault page is native Control UI: turn on **Settings → Labs → Custom plugin UI**
 (`gateway.controlUi.experimental.customPlugins: true`).
 

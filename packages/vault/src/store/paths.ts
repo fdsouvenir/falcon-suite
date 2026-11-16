@@ -11,8 +11,8 @@ export const DEFAULT_PROVIDER_ALIAS = 'falcon-vault';
 
 /**
  * Fixed locations under the Gateway's state directory (spec §3). The database and key are the
- * operator's; the plugin's own data folder is always `falcon-vault`, whatever the plugin id, so a
- * preview build and production share one lock around the one database.
+ * operator's; the plugin's own data folder is always `falcon-vault`, whatever the plugin id, so
+ * every build shares one lock around the one database.
  */
 export const DB_FILE = 'passwords.kdbx';
 export const KEY_FILE = 'vault.key';

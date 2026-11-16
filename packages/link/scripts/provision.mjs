@@ -97,7 +97,7 @@ try {
 		if (e.code !== 'ENOENT') throw e;
 	}
 	const pluginId = path.basename(dir);
-	if (!['falcon-link', 'falcon-link-preview'].includes(pluginId))
+	if (pluginId !== 'falcon-link')
 		throw new Error('Provision the named Falcon Link plugin state directory.');
 	const settings = [];
 	for (const [name, provider, label] of [

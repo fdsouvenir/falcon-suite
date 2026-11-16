@@ -4,6 +4,11 @@ A separately installable native OpenClaw page for connecting Google, Microsoft, 
 Dropbox, ZoomInfo, Stripe Link, Google Health and WhatsApp accounts.
 Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 
+```sh
+openclaw plugins install clawhub:@fdsouvenir/falcon-link           # production
+openclaw plugins install clawhub:@fdsouvenir/falcon-link@preview   # preview: early builds for testing
+```
+
 ## What it does
 
 - Lists each person's and agent's Google, Microsoft, HubSpot, Dropbox, ZoomInfo, Stripe Link, Google Health and WhatsApp accounts with their owner, purpose and
