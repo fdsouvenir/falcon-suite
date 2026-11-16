@@ -4,6 +4,7 @@ import microsoft from './microsoft/ui.js';
 import hubspot from './hubspot/ui.js';
 import dropbox from './dropbox/ui.js';
 import zoominfo from './zoominfo/ui.js';
+import stripeLink from './stripe-link/ui.js';
 import type { ProviderUi } from './types.js';
 
 // Kinds of service, in the order the page shows them. Each integration belongs to one.
@@ -15,7 +16,14 @@ export const GROUPS = [
 	{ id: 'files', name: 'Files' },
 	{ id: 'health', name: 'Health' }
 ] as const;
-export const PROVIDER_UI: ProviderUi[] = [google, microsoft, hubspot, dropbox, zoominfo];
+export const PROVIDER_UI: ProviderUi[] = [
+	google,
+	microsoft,
+	hubspot,
+	dropbox,
+	zoominfo,
+	stripeLink
+];
 export const PROVIDER_IDS = PROVIDER_UI.map((p) => p.id);
 // Groups that have integrations, each with its integrations in page order.
 export const PROVIDER_GROUPS = GROUPS.map((g) => ({

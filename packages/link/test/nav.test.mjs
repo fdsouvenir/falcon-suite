@@ -57,7 +57,7 @@ test('the Integrations nav lists integrations under their group, in group order'
 			heading: g.querySelector('h3')?.textContent,
 			integrations: [...g.querySelectorAll('.fl-integration-name')].map((n) => n.textContent)
 		}));
-		// Groups without integrations (Messaging, Payments, Health) are not shown.
+		// Groups without integrations (Messaging, Health) are not shown.
 		assert.deepEqual(groups, [
 			{
 				name: 'Productivity',
@@ -65,6 +65,7 @@ test('the Integrations nav lists integrations under their group, in group order'
 				integrations: ['Google', 'Microsoft']
 			},
 			{ name: 'CRM & Sales', heading: 'CRM & Sales', integrations: ['HubSpot', 'ZoomInfo'] },
+			{ name: 'Payments', heading: 'Payments', integrations: ['Stripe Link'] },
 			{ name: 'Files', heading: 'Files', integrations: ['Dropbox'] }
 		]);
 		const current = [...document.querySelectorAll('.fl-integration[aria-current="page"]')];
