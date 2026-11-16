@@ -116,7 +116,7 @@ export const contract = defineFeatureContract({
 		remove: {
 			kind: 'action',
 			description:
-				'Remove this account’s saved sign-in from its CLI store and delete it from Link. Does not revoke provider consent, except for Stripe Link: link-cli’s own sign-out also revokes the saved sign-in at Link.',
+				'Remove this account’s saved sign-in from its CLI store and delete it from Link. Does not revoke provider consent, except for Stripe Link: link-cli’s own sign-out also revokes the saved sign-in at Link. For Google Health it also deletes the account’s ghcli archive.',
 			input: obj({ account_id: Type.String({ maxLength: 64 }) }),
 			output: Type.Unknown()
 		},

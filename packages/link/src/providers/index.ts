@@ -5,6 +5,7 @@ import hubspot from './hubspot/index.js';
 import dropbox from './dropbox/index.js';
 import zoominfo from './zoominfo/index.js';
 import stripeLink from './stripe-link/index.js';
+import googleHealth from './google-health/index.js';
 import type { ProviderModule } from './types.js';
 
 export const PROVIDERS: ProviderModule[] = [
@@ -13,7 +14,8 @@ export const PROVIDERS: ProviderModule[] = [
 	hubspot,
 	dropbox,
 	zoominfo,
-	stripeLink
+	stripeLink,
+	googleHealth
 ];
 export function provider(id: string): ProviderModule {
 	const p = PROVIDERS.find((p) => p.ui.id === id);

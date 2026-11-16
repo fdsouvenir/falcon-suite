@@ -24,19 +24,32 @@ import hubspotLogo from '../assets/brand/hubspot-logo.svg' with { type: 'text' }
 import dropboxGlyph from '../assets/brand/dropbox-glyph.svg' with { type: 'text' };
 import zoominfoLogo from '../assets/brand/zoominfo-logomark.svg' with { type: 'text' };
 import stripeLinkLogo from '../assets/brand/stripe-link-logo.svg' with { type: 'text' };
+import googleHealthLogo from '../assets/brand/google-health-heart.png' with { type: 'bytes' };
 
 const svg = (source: string) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
-// Provider artwork by integration ID. Integrations without artwork use a neutral initial.
+const png = (bytes: Uint8Array) => {
+	let binary = '';
+	for (const byte of bytes) binary += String.fromCharCode(byte);
+	return 'data:image/png;base64,' + btoa(binary);
+};
+// Provider artwork by integration ID, as image addresses. Integrations without artwork use a
+// neutral initial.
 const LOGOS: Record<string, string> = {
-	microsoft: microsoftLogo,
-	hubspot: hubspotLogo,
-	dropbox: dropboxGlyph,
-	zoominfo: zoominfoLogo,
-	'stripe-link': stripeLinkLogo
+	microsoft: svg(microsoftLogo),
+	hubspot: svg(hubspotLogo),
+	dropbox: svg(dropboxGlyph),
+	zoominfo: svg(zoominfoLogo),
+	'stripe-link': svg(stripeLinkLogo),
+	'google-health': png(googleHealthLogo)
 };
 // Artwork with built-in clear space is shown larger so the mark matches the others.
 const PADDED = new Set(['dropbox']);
-const SIGN_IN_ART: Record<string, string> = { google: googleSignIn, microsoft: microsoftSignIn };
+// Google Health signs in with a Google account, so it uses Google's own sign-in button.
+const SIGN_IN_ART: Record<string, string> = {
+	google: googleSignIn,
+	microsoft: microsoftSignIn,
+	'google-health': googleSignIn
+};
 // Providers without an official sign-in button: their logo beside Link's own button text.
 const SIGN_IN_LOGO = new Set(['dropbox', 'zoominfo', 'stripe-link']);
 const name = (id: Provider) => uiOf(id).name;
@@ -80,7 +93,7 @@ function mark(provider: Provider, large = false) {
 	const node = el('span', LOGOS[provider] ? undefined : name(provider).slice(0, 1), cls);
 	if (LOGOS[provider]) {
 		const logo = el('img', undefined, PADDED.has(provider) ? 'fl-logo-padded' : undefined);
-		logo.src = svg(LOGOS[provider]);
+		logo.src = LOGOS[provider];
 		logo.alt = '';
 		node.append(logo);
 	}
@@ -98,7 +111,7 @@ function signInAction(provider: Provider, url: string) {
 	if (SIGN_IN_LOGO.has(provider)) {
 		a.className = 'fl-btn fl-btn-provider';
 		const logo = el('img');
-		logo.src = svg(LOGOS[provider]);
+		logo.src = LOGOS[provider];
 		logo.alt = '';
 		a.append(logo, el('span', text));
 		return a;

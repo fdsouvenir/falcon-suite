@@ -33,3 +33,12 @@ These files are the providers' official sign-in artwork, copied unmodified.
   identifies the integration and doesn't imply that Stripe endorses Falcon Link. Stripe publishes
   no sign-in button artwork for link-cli, so the page shows the mark next to its own "Sign in with
   Stripe Link" button.
+- `google-health-heart.png` — the Google Health heart, unmodified `Google_Health_logos/Icon_Rounded.png`
+  (256 × 256, transparent) from Google's Google Health logo pack,
+  https://developers.google.com/static/health/resources/Google_Health_logos.zip, linked as the
+  approved logos from https://developers.google.com/health/promote (downloaded 2026-11-16). That
+  page asks integrations to use the Google Health name and logo, not Fitbit or Google Fit artwork.
+  Google publishes no SVG, so Link bundles the PNG. Google Health is a trademark of Google LLC; the
+  mark only identifies the integration and doesn't imply that Google endorses Falcon Link. Sign-in
+  is with a Google account, so the page uses `google-signin-light-square.svg` (above) as its
+  sign-in button.
