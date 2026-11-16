@@ -222,6 +222,29 @@ like the others."
 - Installed from the newest `@stripe/link-cli@<version>` GitHub release (Linux x64 and arm64
   binaries, GitHub SHA-256 digest); Stripe's three official skills are installed for every agent.
 
+## Google Health (requested by Fred 2026-11-16)
+
+Fred: "yes, google health. and it should use our callback worker"; for the OAuth client:
+"reuse" (Link's existing Google web client and project).
+
+- Seventh integration, in the Health group: the Google Health API through ghcli
+  (fdsouvenir/ghcli, MIT), which archives the account's data in a local SQLite store and answers
+  read-only queries from it.
+- Sign-in uses the Office's Google web client (the Google integration's provisioned
+  `google_credentials_file`) and the sign-in return service
+  (`/oauth2/callback/google-health`, Worker 0.1.3); without them the page says sign-in isn't set
+  up. Link drives Google's sign-in itself and writes ghcli's per-account store (`--store`,
+  `token.json`) and the same client as an `installed` client file for ghcli
+  (`GHCLI_GOOGLE_CREDENTIALS`).
+- Nothing to choose: ghcli's seven read-only Google Health scopes plus `openid email`. Google
+  lets the person withhold scopes; the card shows what Google granted.
+- Check connection: ghcli reads the saved token, then Link refreshes it live at Google and
+  confirms the same account.
+- Removing deletes the account's ghcli store and client file.
+- Installed from ghcli's GitHub release archives (`ghcli_<version>_linux_<arch>.tar.gz`, listed
+  in `checksums.txt`), first published with fdsouvenir/ghcli#1; ghcli's
+  `google-health-local-archive` skill is installed for every agent.
+
 ## Delivery tracking
 
 Parent: [Google and Microsoft onboarding #7](https://github.com/fdsouvenir/falcon-suite/issues/7).

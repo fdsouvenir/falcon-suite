@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3 — 2026-11-16
+
+- Google Health callback routing (`/oauth2/callback/google-health`) and Google Health sessions,
+  with the same Office-bound encrypted code handoff as the other providers.
+
 ## 0.1.2 — 2026-10-29
 
 - Dropbox callback routing (`/oauth2/callback/dropbox`) and Dropbox sessions, with the same

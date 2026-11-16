@@ -1,18 +1,19 @@
 # Falcon Link
 
 A separately installable native OpenClaw page for connecting Google, Microsoft, HubSpot,
-Dropbox, ZoomInfo and Stripe Link accounts.
+Dropbox, ZoomInfo, Stripe Link and Google Health accounts.
 Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 
 ## What it does
 
-- Lists each person's and agent's Google, Microsoft, HubSpot, Dropbox, ZoomInfo and Stripe Link accounts with their owner, purpose and
+- Lists each person's and agent's Google, Microsoft, HubSpot, Dropbox, ZoomInfo, Stripe Link and Google Health accounts with their owner, purpose and
   access in plain words. A connected account shows no status; otherwise it shows Needs
   attention, Signing in… or Not connected.
 - Groups the Integrations sidebar by kind of service: Productivity (Google, Microsoft), CRM &
-  Sales (HubSpot, ZoomInfo), Payments (Stripe Link) and Files (Dropbox). Each integration
-  belongs to one group (`group` in its `ui.ts`; the groups and their order are `GROUPS` in
-  `src/providers/ui.ts`). Groups without integrations (Messaging, Health) aren't shown.
+  Sales (HubSpot, ZoomInfo), Payments (Stripe Link), Files (Dropbox) and Health (Google
+  Health). Each integration belongs to one group (`group` in its `ui.ts`; the groups and their
+  order are `GROUPS` in `src/providers/ui.ts`). Groups without integrations (Messaging) aren't
+  shown.
 - Adds accounts, changes their access, checks them and removes them — including accounts
   already present in the CLIs' own stores. Removing an account deletes its saved sign-in from
   the CLI's store and removes it from Link's list.
@@ -22,9 +23,10 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
   HubSpot's Agent CLI `hubspot` for HubSpot, Dropbox's
   [dbxcli](https://github.com/dropbox/dbxcli) for Dropbox, ZoomInfo's
   [gtm](https://github.com/Zoominfo/gtm-ai-cli) for ZoomInfo and Stripe's
-  [link-cli](https://github.com/stripe/link-cli) for Stripe Link. Link does not implement a
-  second mail, calendar, CRM, file, sales-data or payments client.
-- Installs HubSpot's, ZoomInfo's and Stripe's official agent skills for every agent (see below).
+  [link-cli](https://github.com/stripe/link-cli) for Stripe Link and
+  [ghcli](https://github.com/fdsouvenir/ghcli) for Google Health. Link does not implement a
+  second mail, calendar, CRM, file, sales-data, payments or health client.
+- Installs HubSpot's, ZoomInfo's, Stripe's and ghcli's agent skills for every agent (see below).
 
 ## Permissions
 
@@ -271,12 +273,46 @@ logout`. A sign-in that isn't kept is signed out the same way. `LINK_ACCESS_TOKE
 - **Skills.** Link installs Stripe's `create-payment-credential`, `financial-insights` and
   `use-link-identity` skills from the same repository (`skills/`) as `stripe-link-<name>`.
 
+## Google Health
+
+Google Health (the Google Health API, formerly Fitbit's Web API) through
+[ghcli](https://github.com/fdsouvenir/ghcli) (MIT, 1.0.6 or later), which syncs the account's
+Google Health data into a local SQLite archive and answers read-only queries from it. Sign-in
+uses the Office's Google web client (`google_credentials_file`, the same client as Google) and
+the hosted callback; without both the page says sign-in isn't set up.
+
+- **Permissions.** Nothing to choose. Link asks Google for ghcli's seven read-only Google
+  Health scopes (activity and fitness, health metrics and measurements, location, nutrition,
+  profile, settings, sleep) plus `openid email` to identify the account. Google's consent page
+  lets the person withhold any of the health scopes; the card lists what Google granted, in
+  Google's words.
+- **Sign-in.** Link builds Google's authorization address itself (`access_type=offline`,
+  `prompt=consent`, PKCE) with the redirect `https://<callback>/oauth2/callback/google-health`
+  (Worker 0.1.3), exchanges the returned code at Google, and reads the account (`sub`, email)
+  from Google's OpenID userinfo. A reconnect must be the same Google account.
+- **Storage.** Each account has its own ghcli store, `accounts/<id>/ghcli/` (0700), passed as
+  `--store`: Link writes `token.json` there (golang.org/x/oauth2 token JSON, 0600), and ghcli
+  keeps its archive `ghcli.db` beside it and refreshes and rewrites the token itself. ghcli only
+  accepts a desktop (`installed`) client, so Link also writes the same client ID and secret as
+  `{"installed": …}` to `accounts/<id>/google-oauth-client.json` (0600), passed as
+  `GHCLI_GOOGLE_CREDENTIALS`.
+- **Checks.** `ghcli --json --store <dir> auth status` must find the saved token with a refresh
+  token; then Link refreshes an access token at Google with the stored refresh token and client
+  and reads the account from userinfo (it must be the same `sub`). The scopes Google reports on
+  refresh replace the card's access.
+- **Removing** deletes the account's ghcli store (its sign-in and its archive) and its client
+  file, and confirms both are gone. Google's consent is revoked on Google's app-access page.
+- **Skills.** Link installs ghcli's `google-health-local-archive` skill (`skills/`) as
+  `ghcli-google-health-local-archive`.
+- Link doesn't list sign-ins in ghcli's own default store.
+
 ## Command-line tools
 
 Link needs gog 0.44.0 or later, m365cli 2.1.0 or later, hubspot 0.16.0 or later, dbxcli
-3.5.0 or later, gtm 1.0.0 or later and link-cli 1.1.0 or later. On Linux x64/arm64 Link installs the latest GitHub
-release of gog, m365cli and dbxcli (whose archive must also be listed in the release's
-`SHA256SUMS`), and of gtm (the single `gtm-linux-x64` binary, checked against GitHub's
+3.5.0 or later, gtm 1.0.0 or later, link-cli 1.1.0 or later and ghcli 1.0.6 or later. On Linux x64/arm64 Link installs the latest GitHub
+release of gog, m365cli, dbxcli (whose archive must also be listed in the release's
+`SHA256SUMS`) and ghcli (whose archive must also be listed in the release's `checksums.txt`),
+and of gtm (the single `gtm-linux-x64` binary, checked against GitHub's
 SHA-256 asset digest; ZoomInfo publishes no Linux arm64 build, and the page says so there), of
 link-cli (the single `link-cli-linux-x64` / `link-cli-linux-arm64` binary from the newest
 release tagged `@stripe/link-cli@<version>`, since the same repository also releases Stripe's
@@ -327,13 +363,14 @@ The input JSON supports (placeholders shown):
 		"url": "https://link-callback.example",
 		"office": "office-id",
 		"token_file": "/private/callback-token",
-		"version": "0.1.2"
+		"version": "0.1.3"
 	}
 }
 ```
 
 Google needs the provider's client JSON (0600): a web client when the hosted callback is
-configured, otherwise a desktop client. Microsoft needs an Entra application registration.
+configured, otherwise a desktop client. Google Health uses the same web client and needs the
+hosted callback. Microsoft needs an Entra application registration.
 Dropbox needs its app key.
 The script validates and merges existing provisioning atomically.
 
@@ -349,9 +386,9 @@ Restart the Gateway afterwards.
 ## Hosted sign-in callbacks
 
 An operator can deploy the self-hostable
-[Link Callback Worker](../../workers/link-callback/README.md) (version 0.1.2, protocol 1) and
+[Link Callback Worker](../../workers/link-callback/README.md) (version 0.1.3, protocol 1) and
 set `callback` in provisioning; `callback.version` must match the deployed Worker. Dropbox
-callbacks need Worker 0.1.2. Hosted sign-in is used first when it is configured. Microsoft authorization uses the `common`
+callbacks need Worker 0.1.2 or later, Google Health callbacks 0.1.3. Hosted sign-in is used first when it is configured. Microsoft authorization uses the `common`
 authority unless `microsoft_tenant` is provisioned. Each Office keeps its CLI account
 stores, tokens and refreshes; the Worker only relays short-lived, encrypted authorization
 codes.
@@ -383,6 +420,11 @@ For a Stripe Link account it returns `LINK_AUTH_FILE` and a `command_prefix`
 either variable would take over from the file, plus the requested and granted scopes and,
 separately, the requested and granted source actions. link-cli keeps identity attestations and
 credentials in `~/.link-cli/identity/` of the user running it, whichever account is selected.
+
+For a Google Health account it returns the arguments `--store <dir>`, the environment
+`GHCLI_GOOGLE_CREDENTIALS` (the account's client file) and a `command_prefix`
+(`env GHCLI_GOOGLE_CREDENTIALS='…' '/home/…/ghcli' --store '…'`), plus the requested and granted
+scopes.
 
 A compact `before_prompt_build` brief lists the same accounts. Account facts are omitted in
 group, channel and room conversations and provided in every other session.

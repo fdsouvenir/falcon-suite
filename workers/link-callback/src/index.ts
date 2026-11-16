@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { callbackPage } from './page.js';
 
 // Kept in step with package.json; /health and deployment metadata identify the artifact.
-const VERSION = '0.1.2';
+const VERSION = '0.1.3';
 const TTL = 10 * 60 * 1000;
 const headers = {
 	'Cache-Control': 'no-store',
@@ -26,9 +26,9 @@ function b64(bytes: ArrayBuffer | Uint8Array) {
 		)
 	);
 }
-const PROVIDERS = ['google', 'microsoft', 'dropbox'];
+const PROVIDERS = ['google', 'microsoft', 'dropbox', 'google-health'];
 export type SessionInput = {
-	provider: 'google' | 'microsoft' | 'dropbox';
+	provider: 'google' | 'microsoft' | 'dropbox' | 'google-health';
 	state: string;
 	poll_hash: string;
 	public_key: JsonWebKey;
@@ -197,7 +197,9 @@ export default {
 					? reply({ id, expires_in: TTL / 1000, protocol: 1 }, 201)
 					: reply({ error: 'session_exists' }, 409);
 			}
-			const callback = url.pathname.match(/^\/oauth2\/callback\/(google|microsoft|dropbox)$/);
+			const callback = url.pathname.match(
+				/^\/oauth2\/callback\/(google|microsoft|dropbox|google-health)$/
+			);
 			if (request.method === 'GET' && callback) {
 				const state = url.searchParams.get('state') ?? '';
 				const code = url.searchParams.get('code');

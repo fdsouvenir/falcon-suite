@@ -1,7 +1,7 @@
 # Link Callback Worker
 
-Version **0.1.2**, protocol **1**. Self-hostable callback handoff for Falcon Link's
-Google, Microsoft and Dropbox accounts. No Falcon-operated hostname, Cloudflare account,
+Version **0.1.3**, protocol **1**. Self-hostable callback handoff for Falcon Link's
+Google, Microsoft, Dropbox and Google Health accounts. No Falcon-operated hostname, Cloudflare account,
 provider client ID, or credential is embedded in this package.
 
 ## Boundaries
@@ -62,7 +62,7 @@ argument). Adding an Office merges into the existing map;
 never silently discard other Office entries.
 
 Run `npm run types --workspace workers/link-callback`, the build and tests. Deploy
-with the private config and a release message identifying `0.1.2` plus the source
+with the private config and a release message identifying `0.1.3` plus the source
 commit. Record the returned Cloudflare version ID and `/health` response. Preserve
 both the semver and Cloudflare version ID for rollback. Never roll back a Durable
 Object class migration by deleting its namespace or data. Start with one test
@@ -84,6 +84,9 @@ Register exactly these redirect URIs, substituting the operator's hostname:
 - Dropbox app with **Allow public clients (PKCE)** on:
   `https://<host>/oauth2/callback/dropbox`. Dropbox needs no secret; provision only its
   app key (`dropbox_app_key`).
+- Google Health uses the same Google web-application client as Google: add
+  `https://<host>/oauth2/callback/google-health` to its redirect URIs, enable the Google Health
+  API in its project and add the Google Health read-only scopes to its consent screen.
 
 Use Link's operator-only `scripts/provision.mjs` to merge:
 
@@ -95,7 +98,7 @@ Use Link's operator-only `scripts/provision.mjs` to merge:
 		"url": "https://<your-callback-hostname>",
 		"office": "<permanent-office-id>",
 		"token_file": "/private/link-callback-token",
-		"version": "0.1.2"
+		"version": "0.1.3"
 	}
 }
 ```
