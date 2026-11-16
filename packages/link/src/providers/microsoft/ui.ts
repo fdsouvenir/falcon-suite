@@ -20,6 +20,7 @@ const enterprise = {
 const ui: ProviderUi = {
 	id: 'microsoft',
 	name: 'Microsoft',
+	group: 'productivity',
 	cli: 'm365cli',
 	baseline: ['openid', 'profile', 'offline_access', 'User.Read'],
 	offer: (selected) => selected.flatMap((id) => EQUIVALENTS[id] ?? [id]),

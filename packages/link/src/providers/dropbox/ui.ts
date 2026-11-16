@@ -38,6 +38,7 @@ export function describeDropbox(scopes: string[]) {
 const ui: ProviderUi = {
 	id: 'dropbox',
 	name: 'Dropbox',
+	group: 'files',
 	cli: 'dbxcli',
 	// Link reads the account (users/get_current_account) to confirm who signed in.
 	baseline: ['account_info.read'],

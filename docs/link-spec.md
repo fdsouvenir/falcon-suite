@@ -192,6 +192,19 @@ Decisions (2026-10-30):
   capabilities in plain words. A long list collapses to one line of service names with "+N more"
   and Show all.
 
+## Integration groups (requested by Fred 2026-11-16)
+
+- **The Integrations sidebar is grouped by kind of service.** Groups, in order: Productivity,
+  Messaging, CRM & Sales, Payments, Files, Health. Each group with integrations has a heading,
+  with its integrations beneath in the usual order; a group with none isn't shown.
+- **One group per integration**, a required `group` in each integration's `ui.ts`: Google and
+  Microsoft → Productivity; HubSpot and ZoomInfo → CRM & Sales; Dropbox → Files. Messaging,
+  Payments and Health are ready for the WhatsApp, Stripe Link and Google Health connectors.
+- Nothing else about the sidebar changes: selection, counts, attention dots, the mobile list and
+  the first integration selected on open. Group headings are real headings, and each group is
+  labelled by its heading for screen readers.
+- The group is presentation only; the status and accounts results agents read don't include it.
+
 ## Delivery tracking
 
 Parent: [Google and Microsoft onboarding #7](https://github.com/fdsouvenir/falcon-suite/issues/7).

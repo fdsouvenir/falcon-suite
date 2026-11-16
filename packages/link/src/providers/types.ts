@@ -5,11 +5,15 @@ import type { ChildProcess } from 'node:child_process';
 import type { CallbackHandoff } from '../callback.js';
 import type { Account, Catalog, Owner, Permissions, Purpose } from '../model.js';
 import type { Registry } from '../store.js';
+import type { GROUPS } from './ui.js';
 
+export type GroupId = (typeof GROUPS)[number]['id'];
 export type Revoke = { lead: string; links: { label: string; href: string }[] };
 export type ProviderUi = Permissions & {
 	id: string;
 	name: string;
+	// The kind of service it is; the page lists integrations under their group.
+	group: GroupId;
 	cli: string;
 	// 'catalog': Link offers the CLI's permission rows. 'provider': people choose on the
 	// provider's own consent page and Link reads back what was granted.

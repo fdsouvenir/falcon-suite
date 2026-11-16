@@ -59,6 +59,7 @@ const serviceKey = (a: Account) => a.auth === 'service_key';
 const ui: ProviderUi = {
 	id: 'hubspot',
 	name: 'HubSpot',
+	group: 'crm',
 	cli: 'hubspot',
 	baseline: ['oauth'],
 	permissions: 'provider',

@@ -12,6 +12,7 @@ const ACCESS =
 const ui: ProviderUi = {
 	id: 'zoominfo',
 	name: 'ZoomInfo',
+	group: 'crm',
 	cli: 'gtm',
 	baseline: ['openid', 'offline_access', 'profile', 'email'],
 	permissions: 'provider',
