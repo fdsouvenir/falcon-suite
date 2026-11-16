@@ -107,7 +107,7 @@ export async function overview(dir = ''): Promise<Overview> {
 				latestDigest(id)
 			]);
 			const installed = tool.state === 'installed' ? tool.version : null;
-			const latest = release ? release.tag_name.slice(1) : null;
+			const latest = release?.version ?? null;
 			let changed = false;
 			try {
 				changed = !!installed && !!digest && path.isAbsolute(binary) && digestOf(binary) !== digest;
