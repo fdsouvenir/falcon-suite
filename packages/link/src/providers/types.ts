@@ -60,8 +60,15 @@ export type ToolSource =
 			upgrade: string[];
 	  }
 	// A CLI published as one plain binary per architecture in GitHub releases, checked against
-	// GitHub's per-asset SHA-256. Architectures without an asset have no build.
-	| { kind: 'github_binary'; repo: string; assets: Partial<Record<'x64' | 'arm64', string>> };
+	// GitHub's per-asset SHA-256. Architectures without an asset have no build. Releases are
+	// tagged `v<version>`, or `<tag_prefix><version>` in a repository that also releases other
+	// packages (the newest release with that prefix is used).
+	| {
+			kind: 'github_binary';
+			repo: string;
+			assets: Partial<Record<'x64' | 'arm64', string>>;
+			tag_prefix?: string;
+	  };
 // `version_args` replaces `--version` for CLIs that report their version another way; their
 // version is read from the first line of that output.
 export type Tool = {

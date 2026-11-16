@@ -23,6 +23,7 @@ import microsoftLogo from '../assets/brand/microsoft-logo.svg' with { type: 'tex
 import hubspotLogo from '../assets/brand/hubspot-logo.svg' with { type: 'text' };
 import dropboxGlyph from '../assets/brand/dropbox-glyph.svg' with { type: 'text' };
 import zoominfoLogo from '../assets/brand/zoominfo-logomark.svg' with { type: 'text' };
+import stripeLinkLogo from '../assets/brand/stripe-link-logo.svg' with { type: 'text' };
 
 const svg = (source: string) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
 // Provider artwork by integration ID. Integrations without artwork use a neutral initial.
@@ -30,13 +31,14 @@ const LOGOS: Record<string, string> = {
 	microsoft: microsoftLogo,
 	hubspot: hubspotLogo,
 	dropbox: dropboxGlyph,
-	zoominfo: zoominfoLogo
+	zoominfo: zoominfoLogo,
+	'stripe-link': stripeLinkLogo
 };
 // Artwork with built-in clear space is shown larger so the mark matches the others.
 const PADDED = new Set(['dropbox']);
 const SIGN_IN_ART: Record<string, string> = { google: googleSignIn, microsoft: microsoftSignIn };
 // Providers without an official sign-in button: their logo beside Link's own button text.
-const SIGN_IN_LOGO = new Set(['dropbox', 'zoominfo']);
+const SIGN_IN_LOGO = new Set(['dropbox', 'zoominfo', 'stripe-link']);
 const name = (id: Provider) => uiOf(id).name;
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string) {
 	const n = document.createElement(tag);

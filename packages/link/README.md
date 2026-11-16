@@ -1,18 +1,18 @@
 # Falcon Link
 
 A separately installable native OpenClaw page for connecting Google, Microsoft, HubSpot,
-Dropbox and ZoomInfo accounts.
+Dropbox, ZoomInfo and Stripe Link accounts.
 Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
 
 ## What it does
 
-- Lists each person's and agent's Google, Microsoft, HubSpot, Dropbox and ZoomInfo accounts with their owner, purpose and
+- Lists each person's and agent's Google, Microsoft, HubSpot, Dropbox, ZoomInfo and Stripe Link accounts with their owner, purpose and
   access in plain words. A connected account shows no status; otherwise it shows Needs
   attention, Signing in… or Not connected.
 - Groups the Integrations sidebar by kind of service: Productivity (Google, Microsoft), CRM &
-  Sales (HubSpot, ZoomInfo) and Files (Dropbox). Each integration belongs to one group (`group`
-  in its `ui.ts`; the groups and their order are `GROUPS` in `src/providers/ui.ts`). Groups
-  without integrations (Messaging, Payments, Health) aren't shown.
+  Sales (HubSpot, ZoomInfo), Payments (Stripe Link) and Files (Dropbox). Each integration
+  belongs to one group (`group` in its `ui.ts`; the groups and their order are `GROUPS` in
+  `src/providers/ui.ts`). Groups without integrations (Messaging, Health) aren't shown.
 - Adds accounts, changes their access, checks them and removes them — including accounts
   already present in the CLIs' own stores. Removing an account deletes its saved sign-in from
   the CLI's store and removes it from Link's list.
@@ -20,10 +20,11 @@ Package: `@fdsouvenir/falcon-link`; plugin id: `falcon-link`.
   [gog](https://github.com/openclaw/gogcli) for Google and
   [m365cli](https://github.com/fdsouvenir/m365cli) for Microsoft (not the unrelated PnP CLI)
   HubSpot's Agent CLI `hubspot` for HubSpot, Dropbox's
-  [dbxcli](https://github.com/dropbox/dbxcli) for Dropbox and ZoomInfo's
-  [gtm](https://github.com/Zoominfo/gtm-ai-cli) for ZoomInfo. Link does not implement a second
-  mail, calendar, CRM, file or sales-data client.
-- Installs HubSpot's and ZoomInfo's official agent skills for every agent (see below).
+  [dbxcli](https://github.com/dropbox/dbxcli) for Dropbox, ZoomInfo's
+  [gtm](https://github.com/Zoominfo/gtm-ai-cli) for ZoomInfo and Stripe's
+  [link-cli](https://github.com/stripe/link-cli) for Stripe Link. Link does not implement a
+  second mail, calendar, CRM, file, sales-data or payments client.
+- Installs HubSpot's, ZoomInfo's and Stripe's official agent skills for every agent (see below).
 
 ## Permissions
 
@@ -44,6 +45,8 @@ CLIs themselves, so they follow the installed version:
   preselects the equivalent rows.
 - **Dropbox** — Link's own rows (see Dropbox below): Files, Sharing, File requests, Contacts and
   Account, plus a collapsed team administration section for team admins.
+- **Stripe Link** — one row per option `link-cli auth login` can request (see Stripe Link
+  below): Payments, Link transactions, Bank and card transactions, Balances and Account details.
 
 Provider scope strings appear only under the form's collapsed Technical details. After
 Microsoft sign-in and on Check connection, Link reads `m365cli auth check`'s grant report.
@@ -222,13 +225,62 @@ admin settings decide what it can do. Nothing needs provisioning.
 - **Skills.** Link installs ZoomInfo's official `gtm-ai-cli` skill from the same repository
   (`.claude/skills/`) as `zoominfo-gtm-ai-cli`, the same way as HubSpot's skills.
 
+## Stripe Link
+
+Stripe Link is Stripe's consumer wallet, Link, through Stripe's official CLI,
+[link-cli](https://github.com/stripe/link-cli) (MIT, 1.1.0 or later): payment credentials
+(one-time virtual cards, shared payment tokens and Link Pay Tokens) from the Link wallet,
+machine payments (`mpp pay`), and financial insights (balances, connected accounts,
+transactions). Stripe makes it available to US and Canadian Link accounts. The page calls it
+"Stripe Link" to keep it apart from Falcon Link. Nothing needs provisioning.
+
+- **Permissions.** Every option `link-cli auth login` can request is a row, each Off or On:
+  - Payments — Get payment credentials (`payment_methods.agentic`).
+  - Link transactions (`read_link_transactions`), Bank and card transactions
+    (`read_external_transactions`), Balances (`read_balances`) and Account details
+    (`read_source_details`) — the financial-insights source actions, requested with
+    `--source-actions` (authorization details of type `source`).
+  - `userinfo:read` is always included so Link can confirm the account.
+    Link passes the chosen scopes with `--scope` and the chosen source actions with
+    `--source-actions`; with no financial-data row on it passes `--no-financial-insights`
+    (otherwise link-cli asks for all four).
+- **Sign-in** uses link-cli's own Link app (OAuth device code at `login.link.com`). Link runs
+  `link-cli auth login --client-name "Falcon Link" … --format json` and shows the address and
+  phrase it prints (Sign in with Stripe Link / Copy link); the Link app shows the connection as
+  "Falcon Link on <computer>". Nothing opens a browser on the Office. Link then waits with
+  `link-cli auth status --interval 5 --timeout 900` (15 minutes). If the person declines, sign-in
+  ends as cancelled; if it runs out, it expires; an account Link says isn't eligible for the
+  chosen access is reported as such.
+- **Storage.** Each account has its own link-cli file, `accounts/<id>/link-cli/auth.json`
+  (link-cli writes it 0600, unencrypted, and refreshes it itself), selected with
+  `LINK_AUTH_FILE`. A sign-in is saved to a separate file first; once
+  `link-cli user-info retrieve` confirms the account (on reconnect: the same Link user), it
+  replaces the account's file and the sign-in it replaced is signed out with `link-cli auth
+logout`. A sign-in that isn't kept is signed out the same way. `LINK_ACCESS_TOKEN` and
+  `LINK_REFRESH_TOKEN`, which take over from the file in link-cli, are never passed to Link's own
+  runs.
+- **Checks.** `link-cli user-info retrieve --format json` gives the Link user's id, email and
+  name; `link-cli auth status --format json` gives the granted `scope` and source actions, which
+  the card lists in plain words (and names any chosen access Link didn't grant).
+- **Existing sign-in.** A sign-in in link-cli's own store (`LINK_AUTH_FILE`, otherwise
+  `$XDG_CONFIG_HOME/link-cli-nodejs/config.json`) is listed and can be checked, reconnected and
+  removed. Link reads that file directly, because `link-cli auth status` creates it when missing.
+- **Removing** runs `link-cli auth logout` for the account's file, which revokes that sign-in at
+  Link and deletes the file, then confirms the file is gone. The page says so, and points to
+  Settings → Apps and agents in the Link account at app.link.com.
+- **Skills.** Link installs Stripe's `create-payment-credential`, `financial-insights` and
+  `use-link-identity` skills from the same repository (`skills/`) as `stripe-link-<name>`.
+
 ## Command-line tools
 
 Link needs gog 0.44.0 or later, m365cli 2.1.0 or later, hubspot 0.16.0 or later, dbxcli
-3.5.0 or later and gtm 1.0.0 or later. On Linux x64/arm64 Link installs the latest GitHub
+3.5.0 or later, gtm 1.0.0 or later and link-cli 1.1.0 or later. On Linux x64/arm64 Link installs the latest GitHub
 release of gog, m365cli and dbxcli (whose archive must also be listed in the release's
 `SHA256SUMS`), and of gtm (the single `gtm-linux-x64` binary, checked against GitHub's
-SHA-256 asset digest; ZoomInfo publishes no Linux arm64 build, and the page says so there), and HubSpot's published
+SHA-256 asset digest; ZoomInfo publishes no Linux arm64 build, and the page says so there), of
+link-cli (the single `link-cli-linux-x64` / `link-cli-linux-arm64` binary from the newest
+release tagged `@stripe/link-cli@<version>`, since the same repository also releases Stripe's
+SDKs; checked against GitHub's SHA-256 asset digest), and HubSpot's published
 `hubspot-linux-<arch>.bin` checked against its `hubspot-linux-<arch>.sha256`, as ordinary
 commands in `~/.local/bin` (which must be on the Office PATH). Link never runs HubSpot's
 `install.sh`, which edits shell startup files. Installation checks the known repository, the expected asset name,
@@ -325,6 +377,12 @@ scopes for the person and, separately, for team administration.
 
 For a ZoomInfo account it returns no arguments or environment: `gtm` uses the one sign-in saved
 on the Office.
+
+For a Stripe Link account it returns `LINK_AUTH_FILE` and a `command_prefix`
+(`env -u LINK_ACCESS_TOKEN -u LINK_REFRESH_TOKEN LINK_AUTH_FILE='…' '/home/…/link-cli'`), because
+either variable would take over from the file, plus the requested and granted scopes and,
+separately, the requested and granted source actions. link-cli keeps identity attestations and
+credentials in `~/.link-cli/identity/` of the user running it, whichever account is selected.
 
 A compact `before_prompt_build` brief lists the same accounts. Account facts are omitted in
 group, channel and room conversations and provided in every other session.

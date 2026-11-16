@@ -205,6 +205,23 @@ Decisions (2026-10-30):
   labelled by its heading for screen readers.
 - The group is presentation only; the status and accounts results agents read don't include it.
 
+## Stripe Link (requested by Fred 2026-11-16)
+
+Fred: "support everything that the cli supports and give the available scopes as options just
+like the others."
+
+- Sixth integration, in the Payments group: Stripe's consumer wallet Link, through Stripe's
+  official CLI, link-cli (stripe/link-cli, MIT), and its built-in Link app (OAuth device code).
+  Nothing to provision. Shown as "Stripe Link" to keep it apart from Falcon Link.
+- Every option `link-cli auth login` can request is a permission row, like Dropbox's:
+  Payments (`payment_methods.agentic`) and the four financial-insights source actions (Link
+  transactions, Bank and card transactions, Balances, Account details). `userinfo:read` is always
+  included so Link can confirm the account. No other restrictions or warnings.
+- One link-cli file per account (`LINK_AUTH_FILE`); a sign-in already in link-cli's own store is
+  listed like the other integrations. Removing runs link-cli's own sign-out for that file.
+- Installed from the newest `@stripe/link-cli@<version>` GitHub release (Linux x64 and arm64
+  binaries, GitHub SHA-256 digest); Stripe's three official skills are installed for every agent.
+
 ## Delivery tracking
 
 Parent: [Google and Microsoft onboarding #7](https://github.com/fdsouvenir/falcon-suite/issues/7).

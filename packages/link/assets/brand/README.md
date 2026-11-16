@@ -27,3 +27,9 @@ These files are the providers' official sign-in artwork, copied unmodified.
   ZoomInfo; the mark only identifies the integration and doesn't imply that ZoomInfo
   endorses Falcon Link. ZoomInfo publishes no sign-in button artwork, so the page shows the mark next
   to its own "Sign in with ZoomInfo" button.
+- `stripe-link-logo.svg` — the Link mark (dark arrow on Link green, #00D66F), unmodified
+  `assets/link.svg` from Stripe's link-cli repository (https://github.com/stripe/link-cli,
+  tag `@stripe/link-cli@1.5.1`, MIT). Link is a Stripe product and trademark; the mark only
+  identifies the integration and doesn't imply that Stripe endorses Falcon Link. Stripe publishes
+  no sign-in button artwork for link-cli, so the page shows the mark next to its own "Sign in with
+  Stripe Link" button.

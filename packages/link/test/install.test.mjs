@@ -178,6 +178,52 @@ test(
 	}
 );
 
+// stripe/link-cli also releases its SDKs, which can be GitHub's "latest". Link installs the newest
+// published `@stripe/link-cli@<version>` release, whose download address GitHub encodes.
+test(
+	'link-cli installs from the newest release with its tag prefix, not the repository latest',
+	{ skip: process.platform !== 'linux' || !['x64', 'arm64'].includes(process.arch) },
+	async () => {
+		const home = await mkdtemp(path.join(tmpdir(), 'link-prefix-install-'));
+		try {
+			const bin = path.join(home, '.local', 'bin');
+			await mkdir(bin, { recursive: true });
+			await writeFile(path.join(home, 'link-cli'), '#!/bin/sh\necho 1.5.1\n', { mode: 0o755 });
+			const script = `
+   import fs from 'node:fs';
+   import path from 'node:path';
+   import assert from 'node:assert/strict';
+   import {createHash} from 'node:crypto';
+   import {execFileSync} from 'node:child_process';
+   import {install} from ${JSON.stringify(new URL('../dist/install.js', import.meta.url).href)};
+   import {overview} from ${JSON.stringify(new URL('../dist/status.js', import.meta.url).href)};
+   const home=process.env.HOME, dir=path.join(home,'.openclaw','falcon-link');
+   const bytes=fs.readFileSync(path.join(home,'link-cli')), name='link-cli-linux-'+process.arch;
+   const digest='sha256:'+createHash('sha256').update(bytes).digest('hex');
+   const release=(tag,extra={})=>({tag_name:tag,...extra,assets:[{name,digest,browser_download_url:'https://github.com/stripe/link-cli/releases/download/'+tag.replaceAll('@','%40')+'/'+name}]});
+   const releases=[release('@stripe/link-sdk@3.1.0'),release('@stripe/link-cli@1.6.0',{prerelease:true}),release('@stripe/link-cli@1.7.0',{draft:true}),release('@stripe/link-cli@1.5.1'),release('@stripe/link-cli@1.4.1')];
+   const downloads=[];
+   globalThis.fetch=async url=>{ url=String(url);
+    if(url==='https://api.github.com/repos/stripe/link-cli/releases?per_page=100')return Response.json(releases);
+    if(url.startsWith('https://api.github.com/'))return new Response('',{status:404});
+    downloads.push(url); return new Response(bytes); };
+   const result=await install(dir,'stripe-link');
+   assert.equal(result.version,'1.5.1');
+   assert.deepEqual(downloads,['https://github.com/stripe/link-cli/releases/download/%40stripe/link-cli%401.5.1/'+name]);
+   assert.match(execFileSync('link-cli',['--version'],{encoding:'utf8'}),/1\\.5\\.1/);
+   const status=(await overview(dir)).integrations.find(i=>i.id==='stripe-link');
+   assert.equal(status.latest_version,'1.5.1'); assert.equal(status.update_available,false); assert.equal(status.managed,true);
+  `;
+			execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+				env: { ...process.env, HOME: home, PATH: bin + path.delimiter + process.env.PATH },
+				stdio: 'pipe'
+			});
+		} finally {
+			await rm(home, { recursive: true, force: true });
+		}
+	}
+);
+
 // Reinstall is the person's explicit choice to replace a CLI Link didn't install. The old
 // command is kept as a backup, and accounts found in its own store are signed out (their saved
 // sign-in removed from that store, as Remove does): they keep

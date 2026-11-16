@@ -16,11 +16,16 @@ import { run, runRaw } from './cli.js';
 import { provider as providerOf } from './providers/index.js';
 import type { ToolSource } from './providers/types.js';
 import { toolStatus } from './status.js';
+import { compareVersions } from './versions.js';
 
 type Release = {
 	tag_name: string;
+	draft?: boolean;
+	prerelease?: boolean;
 	assets: { name: string; browser_download_url: string; digest?: string }[];
 };
+// A release with the CLI version its tag names.
+type Versioned = Release & { version: string };
 const HOSTS = ['api.github.com', 'github.com', 'api.hubapi.com'];
 async function get(url: string): Promise<Response> {
 	const u = new URL(url);
@@ -59,23 +64,46 @@ function source<K extends ToolSource['kind']>(provider: string, kind: K) {
 }
 // Release lookups are cached in memory to stay well inside GitHub's unauthenticated limit.
 const HOUR = 60 * 60 * 1000;
-const releases = new Map<string, { at: number; release: Release | null }>();
-const githubRepo = (provider: string) => {
+const releases = new Map<string, { at: number; release: Versioned | null }>();
+const githubSource = (provider: string) => {
 	const s = providerOf(provider).tool.source;
-	return s.kind === 'github' || s.kind === 'github_binary' ? s.repo : null;
+	return s.kind === 'github' || s.kind === 'github_binary' ? s : null;
 };
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// The release's download address for an asset. GitHub encodes each part of the tag's path
+// (`@stripe/link-cli@1.5.1` becomes `%40stripe/link-cli%401.5.1`).
+const downloadURL = (repo: string, tag: string, name: string) =>
+	`https://github.com/${repo}/releases/download/${tag.split('/').map(encodeURIComponent).join('/')}/${name}`;
 export async function latestRelease(provider: string, retryFailure = false) {
-	const repo = githubRepo(provider);
-	if (!repo) return null;
+	const s = githubSource(provider);
+	if (!s) return null;
 	const cached = releases.get(provider);
 	if (cached && Date.now() - cached.at < HOUR && (cached.release || !retryFailure))
 		return cached.release;
-	let release: Release | null = null;
+	const prefix = s.kind === 'github_binary' ? s.tag_prefix : undefined;
+	const tag = new RegExp(`^${escape(prefix ?? 'v')}(\\d+\\.\\d+\\.\\d+)$`);
+	const versioned = (r: Release): Versioned | null => {
+		const m = typeof r?.tag_name === 'string' ? tag.exec(r.tag_name) : null;
+		return m && Array.isArray(r.assets) ? { ...r, version: m[1] } : null;
+	};
+	let release: Versioned | null = null;
 	try {
-		const r = (await (
-			await get(`https://api.github.com/repos/${repo}/releases/latest`)
-		).json()) as Release;
-		if (/^v\d+\.\d+\.\d+$/.test(r.tag_name) && Array.isArray(r.assets)) release = r;
+		if (prefix) {
+			// The repository also releases other packages, so its "latest" release may not be
+			// this CLI: the newest published release with the CLI's tag prefix is used.
+			const list = (await (
+				await get(`https://api.github.com/repos/${s.repo}/releases?per_page=100`)
+			).json()) as Release[];
+			for (const r of Array.isArray(list) ? list : []) {
+				const v = r && !r.draft && !r.prerelease ? versioned(r) : null;
+				if (v && (!release || (compareVersions(v.version, release.version) ?? 0) > 0)) release = v;
+			}
+		} else
+			release = versioned(
+				(await (
+					await get(`https://api.github.com/repos/${s.repo}/releases/latest`)
+				).json()) as Release
+			);
 	} catch {}
 	releases.set(provider, { at: Date.now(), release });
 	return release;
@@ -264,7 +292,7 @@ async function installVendor(provider: string, base: string, replace: boolean) {
 // The release's own SHA-256 sums file (itself checked against GitHub's digest) must list the
 // archive with the same digest.
 async function checkSums(
-	release: Release,
+	release: Versioned,
 	repo: string,
 	file: string,
 	name: string,
@@ -274,8 +302,7 @@ async function checkSums(
 	if (
 		!sums ||
 		!/^sha256:[a-f0-9]{64}$/.test(sums.digest ?? '') ||
-		sums.browser_download_url !==
-			`https://github.com/${repo}/releases/download/${release.tag_name}/${file}`
+		sums.browser_download_url !== downloadURL(repo, release.tag_name, file)
 	)
 		throw new Error('Release checksum or source is unavailable.');
 	const text = await download(sums.browser_download_url, 1024 * 1024);
@@ -300,7 +327,7 @@ async function installRelease(provider: string, base: string, replace: boolean) 
 		const versionArgs = tool.version_args ?? ['--version'];
 		const release = await latestRelease(provider, true);
 		if (!release) throw new Error('Release lookup failed. Try again later.');
-		const version = release.tag_name.slice(1);
+		const version = release.version;
 		const name =
 			s.kind === 'github_binary'
 				? s.assets[arch()]!
@@ -309,8 +336,7 @@ async function installRelease(provider: string, base: string, replace: boolean) 
 		if (
 			!asset ||
 			!/^sha256:[a-f0-9]{64}$/.test(asset.digest ?? '') ||
-			asset.browser_download_url !==
-				`https://github.com/${t.repo}/releases/download/${release.tag_name}/${name}`
+			asset.browser_download_url !== downloadURL(t.repo, release.tag_name, name)
 		)
 			throw new Error('Release checksum or source is unavailable.');
 		// A single binary is the whole executable; archives hold a smaller one.
